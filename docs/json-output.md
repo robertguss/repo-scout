@@ -1,7 +1,8 @@
 # JSON Output Contracts
 
-`repo-scout` supports JSON output for query commands.
+`repo-scout` supports JSON output for query commands, and this document also includes frozen contracts for planned Phase 3 commands.
 
+Available today:
 - `find --json`
 - `refs --json`
 - `impact --json`
@@ -9,12 +10,17 @@
 - `tests-for --json`
 - `verify-plan --json`
 
+Planned (contract-frozen, not yet implemented):
+- `diff-impact --json`
+- `explain --json`
+
 `index` and `status` are terminal-only today.
 
 ## Schema Versions
 
 - `find`, `refs`: `schema_version = 1`
 - `impact`, `context`, `tests-for`, `verify-plan`: `schema_version = 2`
+- `diff-impact`, `explain`: `schema_version = 3` (planned contract freeze)
 
 ## `find --json` and `refs --json` (Schema 1)
 
@@ -205,6 +211,244 @@ Top-level fields:
 - `why_included` (`string`)
 - `confidence` (`string`)
 - `score` (`number`)
+
+## Schema 3 Contract Freeze (Planned, Not Yet Implemented)
+
+The following contracts are frozen for implementation work in Phase 3. They are intentionally additive and do not change schema 1 or schema 2 payloads.
+
+## `diff-impact --json` (Schema 3, Planned)
+
+```json
+{
+  "schema_version": 3,
+  "command": "diff-impact",
+  "changed_files": ["src/query/mod.rs"],
+  "max_distance": 2,
+  "include_tests": true,
+  "results": [
+    {
+      "result_kind": "impacted_symbol",
+      "symbol": "impact_matches",
+      "qualified_symbol": "rust:src/query/mod.rs::impact_matches",
+      "kind": "function",
+      "language": "rust",
+      "file_path": "src/query/mod.rs",
+      "line": 120,
+      "column": 8,
+      "distance": 0,
+      "relationship": "changed_symbol",
+      "why_included": "symbol defined in changed file",
+      "confidence": "graph_exact",
+      "provenance": "ast_definition",
+      "score": 1.0
+    },
+    {
+      "result_kind": "test_target",
+      "target": "tests/milestone10_validation.rs",
+      "target_kind": "integration_test_file",
+      "language": "rust",
+      "why_included": "references impacted symbol 'impact_matches'",
+      "confidence": "graph_likely",
+      "provenance": "call_resolution",
+      "score": 0.86
+    }
+  ]
+}
+```
+
+Top-level fields:
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `schema_version` | `number` | yes | Always `3`. |
+| `command` | `string` | yes | Always `"diff-impact"`. |
+| `changed_files` | `array<string>` | yes | Repo-relative, normalized, sorted, deduplicated. |
+| `max_distance` | `number` | yes | Echoes resolved traversal distance. |
+| `include_tests` | `boolean` | yes | Echoes resolved test-target behavior. |
+| `results` | `array<DiffImpactResult>` | yes | Deterministically ordered (see rules below). |
+
+`DiffImpactResult` union discriminator:
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `result_kind` | `string` | yes | `"impacted_symbol"` or `"test_target"`. |
+
+`DiffImpactResult` when `result_kind = "impacted_symbol"`:
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `symbol` | `string` | yes | Unqualified symbol text. |
+| `qualified_symbol` | `string` | yes | Stable qualified symbol ID. |
+| `kind` | `string` | yes | Symbol kind enum. |
+| `language` | `string` | yes | Language enum. |
+| `file_path` | `string` | yes | Repo-relative path to symbol definition. |
+| `line` | `number` | yes | 1-based start line. |
+| `column` | `number` | yes | 1-based start column. |
+| `distance` | `number` | yes | Graph distance from changed symbol (`0` means changed symbol itself). |
+| `relationship` | `string` | yes | Relationship enum. |
+| `why_included` | `string` | yes | Human-readable deterministic rationale. |
+| `confidence` | `string` | yes | Confidence enum. |
+| `provenance` | `string` | yes | Provenance enum. |
+| `score` | `number` | yes | Ranking score. |
+
+`DiffImpactResult` when `result_kind = "test_target"`:
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `target` | `string` | yes | Test command or test file path. |
+| `target_kind` | `string` | yes | `"integration_test_file"`, `"unit_test"`, or `"command"`. |
+| `language` | `string` | yes | Language enum; `"unknown"` allowed for command-level targets. |
+| `why_included` | `string` | yes | Human-readable deterministic rationale. |
+| `confidence` | `string` | yes | Confidence enum. |
+| `provenance` | `string` | yes | Provenance enum. |
+| `score` | `number` | yes | Ranking score. |
+
+Deterministic ordering rules for `results`:
+
+1. Sort by `score` descending.
+2. Tie-break by `result_kind` (`impacted_symbol` before `test_target`).
+3. For `impacted_symbol`, tie-break by `file_path`, `line`, `column`, `qualified_symbol`.
+4. For `test_target`, tie-break by `target_kind`, then `target`.
+
+## `explain --json` (Schema 3, Planned)
+
+```json
+{
+  "schema_version": 3,
+  "command": "explain",
+  "query": "impact_matches",
+  "include_snippets": false,
+  "results": [
+    {
+      "symbol": "impact_matches",
+      "qualified_symbol": "rust:src/query/mod.rs::impact_matches",
+      "kind": "function",
+      "language": "rust",
+      "file_path": "src/query/mod.rs",
+      "start_line": 120,
+      "start_column": 8,
+      "end_line": 210,
+      "end_column": 2,
+      "signature": "pub fn impact_matches(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<ImpactMatch>>",
+      "inbound": {
+        "called_by": 2,
+        "imported_by": 0,
+        "implemented_by": 0,
+        "contained_by": 1
+      },
+      "outbound": {
+        "calls": 4,
+        "imports": 0,
+        "implements": 0,
+        "contains": 0
+      },
+      "why_included": "exact symbol definition match",
+      "confidence": "graph_exact",
+      "provenance": "ast_definition",
+      "score": 1.0
+    }
+  ]
+}
+```
+
+Top-level fields:
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `schema_version` | `number` | yes | Always `3`. |
+| `command` | `string` | yes | Always `"explain"`. |
+| `query` | `string` | yes | Input symbol/query string. |
+| `include_snippets` | `boolean` | yes | Echoes resolved snippet behavior. |
+| `results` | `array<ExplainMatch>` | yes | Deterministically ordered. |
+
+`ExplainMatch` fields:
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `symbol` | `string` | yes | Unqualified symbol text. |
+| `qualified_symbol` | `string` | yes | Stable qualified symbol ID. |
+| `kind` | `string` | yes | Symbol kind enum. |
+| `language` | `string` | yes | Language enum. |
+| `file_path` | `string` | yes | Repo-relative path. |
+| `start_line` | `number` | yes | 1-based start line. |
+| `start_column` | `number` | yes | 1-based start column. |
+| `end_line` | `number` | yes | 1-based end line. |
+| `end_column` | `number` | yes | 1-based end column. |
+| `signature` | `string` | no | Present when extractor provides one. |
+| `inbound` | `object` | yes | Relationship counters (see below). |
+| `outbound` | `object` | yes | Relationship counters (see below). |
+| `why_included` | `string` | yes | Human-readable deterministic rationale. |
+| `confidence` | `string` | yes | Confidence enum. |
+| `provenance` | `string` | yes | Provenance enum. |
+| `score` | `number` | yes | Ranking score. |
+| `snippet` | `string` | no | Present only when `include_snippets = true` and snippet extraction succeeds. |
+
+`inbound` fields (all required numbers):
+
+- `called_by`
+- `imported_by`
+- `implemented_by`
+- `contained_by`
+
+`outbound` fields (all required numbers):
+
+- `calls`
+- `imports`
+- `implements`
+- `contains`
+
+Deterministic ordering rules for `results`:
+
+1. Sort by `score` descending.
+2. Tie-break by `file_path`, `start_line`, `start_column`, `qualified_symbol`.
+
+## Schema 3 Enumerations (Frozen)
+
+`language` values:
+
+- `rust`
+- `typescript`
+- `python`
+- `unknown`
+
+`kind` values:
+
+- `function`
+- `method`
+- `class`
+- `interface`
+- `trait`
+- `enum`
+- `module`
+- `type_alias`
+- `const`
+- `variable`
+- `import`
+
+`relationship` values:
+
+- `changed_symbol`
+- `called_by`
+- `contained_by`
+- `imported_by`
+- `implemented_by`
+- `tests`
+
+`confidence` values:
+
+- `graph_exact`
+- `graph_likely`
+- `context_high`
+- `context_medium`
+- `context_low`
+
+`provenance` values:
+
+- `ast_definition`
+- `ast_reference`
+- `import_resolution`
+- `call_resolution`
+- `text_fallback`
 
 ## Determinism Expectations
 
