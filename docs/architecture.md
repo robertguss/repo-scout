@@ -1,13 +1,13 @@
 # Architecture
 
-This document describes the current architecture for `repo-scout` after Phase 2 Milestones 6 and 7.
+This document describes the current architecture for `repo-scout` after Phase 2 Milestones 6 through 10.
 
 ## High-Level Flow
 
-1. CLI parses a command (`index`, `status`, `find`, `refs`, `impact`, `context`).
+1. CLI parses a command (`index`, `status`, `find`, `refs`, `impact`, `context`, `tests-for`, `verify-plan`).
 2. Store bootstrap ensures `.repo-scout/index.db` exists and schema is initialized.
 3. `index` performs file discovery + incremental processing.
-4. `find`/`refs` query direct symbol tables; `impact`/`context` query graph + metadata tables.
+4. `find`/`refs` query direct symbol tables; `impact`/`context` query graph + metadata tables; `tests-for`/`verify-plan` query test evidence and validation heuristics.
 5. Output is rendered as human-readable text or JSON.
 
 ## Module Map
@@ -96,6 +96,20 @@ Each file update is transactional.
 2. Match direct symbols in `symbols_v2` and score them highest.
 3. Expand one-hop graph neighbors for additional context.
 4. Sort deterministically and truncate to a fixed budget-derived cap.
+
+### `tests-for`
+
+1. Find exact symbol occurrences in test-like files.
+2. Group by file path and score by evidence count.
+3. Return deduplicated, deterministically ordered target rows.
+
+### `verify-plan`
+
+1. Normalize and deduplicate changed-file arguments.
+2. Resolve changed-file symbols and map them to likely test targets.
+3. Convert runnable top-level integration test targets into `cargo test --test <name>` steps.
+4. Keep highest-confidence evidence for duplicate commands.
+5. Append `cargo test` as a full-suite safety gate.
 
 ## Determinism
 

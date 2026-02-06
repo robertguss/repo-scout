@@ -167,3 +167,31 @@ Copy this template for each new task:
   - fix commit: pending.
   - docs/plan update: updated `README.md`, `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`, and phase-2 ExecPlan living sections.
 - Status: `fixed`
+
+- Date: `2026-02-06`
+- Task: Milestone 10 validation intelligence (`tests-for`, `verify-plan`) plus recommendation hardening.
+- Commands run:
+  - `just dogfood-pre compute_plan`
+  - `just tdd-red milestone10_verify_plan_changed_files`
+  - `just tdd-green milestone10_verify_plan_changed_files`
+  - `just tdd-refactor`
+  - `just tdd-red milestone10_verify_plan_deterministic_recommendations`
+  - `just tdd-green milestone10_verify_plan_deterministic_recommendations`
+  - `just tdd-refactor`
+  - `just tdd-red milestone10_verify_plan_skips_non_runnable_test_modules`
+  - `just tdd-green milestone10_verify_plan_skips_non_runnable_test_modules`
+  - `just tdd-refactor`
+  - `cargo run -- tests-for launch --repo .`
+  - `cargo run -- verify-plan --changed-file src/query/mod.rs --repo .`
+  - `cargo run -- verify-plan --changed-file src/query/mod.rs --repo . --json`
+  - `just dogfood-post compute_plan`
+- What helped:
+  - Existing graph + symbol metadata enabled deterministic recommendation ranking with minimal new storage changes.
+  - The `just` TDD helpers made per-slice red/green/refactor evidence cheap to capture.
+- What failed or felt weak:
+  - Dogfooding initially produced an invalid recommendation (`cargo test --test mod`) from nested `tests/common/mod.rs`.
+- Action taken:
+  - failing test added: `tests/milestone10_validation.rs::milestone10_verify_plan_skips_non_runnable_test_modules`.
+  - fix commit: pending.
+  - docs/plan update: updated Milestone 10 plan progress/decisions and JSON/CLI docs to reflect implemented contracts.
+- Status: `fixed`

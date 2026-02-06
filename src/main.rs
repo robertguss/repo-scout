@@ -8,7 +8,10 @@ use clap::Parser;
 
 use crate::cli::{Cli, Command};
 use crate::indexer::index_repository;
-use crate::query::{context_matches, find_matches, impact_matches, refs_matches};
+use crate::query::{
+    context_matches, find_matches, impact_matches, refs_matches, tests_for_symbol,
+    verify_plan_for_changed_files,
+};
 use crate::store::ensure_store;
 
 fn main() {
@@ -27,6 +30,8 @@ fn run() -> anyhow::Result<()> {
         Command::Refs(args) => run_refs(args),
         Command::Impact(args) => run_impact(args),
         Command::Context(args) => run_context(args),
+        Command::TestsFor(args) => run_tests_for(args),
+        Command::VerifyPlan(args) => run_verify_plan(args),
     }
 }
 
@@ -90,4 +95,52 @@ fn run_context(args: crate::cli::ContextArgs) -> anyhow::Result<()> {
         output::print_context(&args.task, args.budget, &matches);
     }
     Ok(())
+}
+
+fn run_tests_for(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let targets = tests_for_symbol(&store.db_path, &args.symbol)?;
+    if args.json {
+        output::print_tests_for_json(&args.symbol, &targets)?;
+    } else {
+        output::print_tests_for(&args.symbol, &targets);
+    }
+    Ok(())
+}
+
+fn run_verify_plan(args: crate::cli::VerifyPlanArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let mut changed_files = args
+        .changed_files
+        .iter()
+        .map(|path| normalize_changed_file(&args.repo, path))
+        .collect::<Vec<_>>();
+    changed_files.sort();
+    changed_files.dedup();
+
+    let steps = verify_plan_for_changed_files(&store.db_path, &changed_files)?;
+    if args.json {
+        output::print_verify_plan_json(&changed_files, &steps)?;
+    } else {
+        output::print_verify_plan(&changed_files, &steps);
+    }
+    Ok(())
+}
+
+fn normalize_changed_file(repo_root: &std::path::Path, changed_file: &str) -> String {
+    let candidate = std::path::PathBuf::from(changed_file);
+    let normalized = if candidate.is_absolute() {
+        candidate
+            .strip_prefix(repo_root)
+            .map(|path| path.to_path_buf())
+            .unwrap_or(candidate)
+    } else {
+        candidate
+    };
+
+    normalized
+        .to_string_lossy()
+        .trim_start_matches("./")
+        .replace('\\', "/")
+        .to_string()
 }

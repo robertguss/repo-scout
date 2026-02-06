@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use rusqlite::{Connection, params};
@@ -35,6 +35,24 @@ pub struct ContextMatch {
     pub end_line: u32,
     pub symbol: String,
     pub kind: String,
+    pub why_included: String,
+    pub confidence: String,
+    pub score: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TestTarget {
+    pub target: String,
+    pub target_kind: String,
+    pub why_included: String,
+    pub confidence: String,
+    pub score: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct VerificationStep {
+    pub step: String,
+    pub scope: String,
     pub why_included: String,
     pub confidence: String,
     pub score: f64,
@@ -230,6 +248,105 @@ pub fn context_matches(
     Ok(matches)
 }
 
+pub fn tests_for_symbol(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<TestTarget>> {
+    let connection = Connection::open(db_path)?;
+    let mut targets = Vec::new();
+    for (target, hit_count) in test_targets_for_symbol(&connection, symbol)? {
+        targets.push(TestTarget {
+            target: target.clone(),
+            target_kind: "integration_test_file".to_string(),
+            why_included: format!("direct symbol match for '{symbol}' in test file"),
+            confidence: if hit_count > 1 {
+                "graph_likely".to_string()
+            } else {
+                "context_medium".to_string()
+            },
+            score: if hit_count > 1 { 0.9 } else { 0.75 },
+        });
+    }
+
+    Ok(targets)
+}
+
+pub fn verify_plan_for_changed_files(
+    db_path: &Path,
+    changed_files: &[String],
+) -> anyhow::Result<Vec<VerificationStep>> {
+    let connection = Connection::open(db_path)?;
+
+    let mut steps_by_command: HashMap<String, VerificationStep> = HashMap::new();
+
+    for changed_file in changed_files {
+        if let Some(command) = test_command_for_target(changed_file) {
+            upsert_verification_step(
+                &mut steps_by_command,
+                VerificationStep {
+                    step: command,
+                    scope: "targeted".to_string(),
+                    why_included: format!("changed file '{changed_file}' is itself a test target"),
+                    confidence: "context_high".to_string(),
+                    score: 0.95,
+                },
+            );
+        }
+
+        let mut symbols_statement = connection.prepare(
+            "SELECT DISTINCT symbol
+             FROM symbols_v2
+             WHERE file_path = ?1
+             ORDER BY symbol ASC",
+        )?;
+        let symbol_rows =
+            symbols_statement.query_map(params![changed_file], |row| row.get::<_, String>(0))?;
+
+        for symbol_row in symbol_rows {
+            let symbol = symbol_row?;
+            for (target, hit_count) in test_targets_for_symbol(&connection, &symbol)? {
+                if let Some(command) = test_command_for_target(&target) {
+                    let (confidence, score) = if hit_count > 1 {
+                        ("graph_likely", 0.9)
+                    } else {
+                        ("context_medium", 0.8)
+                    };
+                    upsert_verification_step(
+                        &mut steps_by_command,
+                        VerificationStep {
+                            step: command,
+                            scope: "targeted".to_string(),
+                            why_included: format!(
+                                "targeted test references changed symbol '{symbol}'"
+                            ),
+                            confidence: confidence.to_string(),
+                            score,
+                        },
+                    );
+                }
+            }
+        }
+    }
+
+    upsert_verification_step(
+        &mut steps_by_command,
+        VerificationStep {
+            step: "cargo test".to_string(),
+            scope: "full_suite".to_string(),
+            why_included: "required safety gate after refactor".to_string(),
+            confidence: "context_high".to_string(),
+            score: 1.0,
+        },
+    );
+
+    let mut steps = steps_by_command.into_values().collect::<Vec<_>>();
+
+    steps.sort_by(|left, right| {
+        verification_scope_rank(&left.scope)
+            .cmp(&verification_scope_rank(&right.scope))
+            .then(left.step.cmp(&right.step))
+            .then(left.why_included.cmp(&right.why_included))
+    });
+    Ok(steps)
+}
+
 fn ast_definition_matches(
     connection: &Connection,
     symbol: &str,
@@ -360,4 +477,90 @@ fn extract_keywords(task: &str) -> Vec<String> {
     }
 
     keywords
+}
+
+fn test_targets_for_symbol(
+    connection: &Connection,
+    symbol: &str,
+) -> anyhow::Result<Vec<(String, i64)>> {
+    let mut statement = connection.prepare(
+        "SELECT file_path, COUNT(*) AS hit_count
+         FROM text_occurrences
+         WHERE symbol = ?1
+           AND (
+               file_path LIKE 'tests/%'
+               OR file_path LIKE '%/tests/%'
+               OR file_path LIKE '%_test.rs'
+               OR file_path LIKE '%test.rs'
+           )
+         GROUP BY file_path
+         ORDER BY hit_count DESC, file_path ASC",
+    )?;
+
+    let rows = statement.query_map(params![symbol], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+    })?;
+
+    let mut targets = Vec::new();
+    for row in rows {
+        targets.push(row?);
+    }
+    Ok(targets)
+}
+
+fn test_command_for_target(target: &str) -> Option<String> {
+    let file_path = Path::new(target);
+    let mut components = file_path.components();
+    if components.next()?.as_os_str() != "tests" {
+        return None;
+    }
+    let test_file = Path::new(components.next()?.as_os_str());
+    if components.next().is_some() {
+        return None;
+    }
+
+    let stem = test_file.file_stem()?.to_str()?;
+    Some(format!("cargo test --test {stem}"))
+}
+
+fn verification_scope_rank(scope: &str) -> u8 {
+    match scope {
+        "targeted" => 0,
+        "full_suite" => 1,
+        _ => 2,
+    }
+}
+
+fn upsert_verification_step(
+    steps_by_command: &mut HashMap<String, VerificationStep>,
+    candidate: VerificationStep,
+) {
+    let key = candidate.step.clone();
+    match steps_by_command.get_mut(&key) {
+        Some(existing) => {
+            if candidate.score > existing.score
+                || (candidate.score == existing.score
+                    && confidence_rank(&candidate.confidence)
+                        > confidence_rank(&existing.confidence))
+                || (candidate.score == existing.score
+                    && confidence_rank(&candidate.confidence)
+                        == confidence_rank(&existing.confidence)
+                    && candidate.why_included < existing.why_included)
+            {
+                *existing = candidate;
+            }
+        }
+        None => {
+            steps_by_command.insert(key, candidate);
+        }
+    }
+}
+
+fn confidence_rank(confidence: &str) -> u8 {
+    match confidence {
+        "graph_likely" => 3,
+        "context_high" => 2,
+        "context_medium" => 1,
+        _ => 0,
+    }
 }

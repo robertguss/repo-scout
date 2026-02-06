@@ -100,6 +100,37 @@ Example:
 cargo run -- context --task "modify launch flow and update callers" --repo . --budget 1200
 ```
 
+### `tests-for <SYMBOL> --repo <PATH> [--json]`
+
+Find likely test targets for `SYMBOL`.
+
+Current behavior:
+
+- Looks for exact symbol hits in test-like files.
+- Deduplicates targets and applies deterministic confidence tiers.
+
+Example:
+
+```bash
+cargo run -- tests-for launch --repo .
+```
+
+### `verify-plan --changed-file <PATH> [--changed-file <PATH> ...] --repo <PATH> [--json]`
+
+Build a deterministic validation command plan for changed files.
+
+Current behavior:
+
+- Uses changed-file symbol definitions to suggest nearby integration-test commands.
+- Emits runnable top-level integration-test commands only.
+- Always includes `cargo test` as the full-suite safety gate.
+
+Example:
+
+```bash
+cargo run -- verify-plan --changed-file src/query/mod.rs --repo .
+```
+
 ## Output Labels
 
 `why_matched` values currently used:

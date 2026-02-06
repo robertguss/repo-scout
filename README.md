@@ -18,6 +18,8 @@ This is an actively evolving v0. The core workflow is implemented and tested:
 - `refs`: search for likely references.
 - `impact`: inspect one-hop graph impact around a symbol.
 - `context`: build a budgeted context bundle for an editing task.
+- `tests-for`: map a symbol to likely test targets.
+- `verify-plan`: suggest deterministic validation steps for changed files.
 
 ## Quick Start
 
@@ -50,6 +52,8 @@ cargo run -- find launch --repo /path/to/repo
 cargo run -- refs launch --repo /path/to/repo
 cargo run -- impact launch --repo /path/to/repo
 cargo run -- context --task "modify launch flow and update callers" --repo /path/to/repo --budget 1200
+cargo run -- tests-for launch --repo /path/to/repo
+cargo run -- verify-plan --changed-file src/lib.rs --repo /path/to/repo
 ```
 
 JSON output:
@@ -98,9 +102,47 @@ Current behavior:
 - Prefer Rust AST call references (`ast_reference`) when present.
 - Otherwise use the same text fallback ranking as `find`.
 
+### `impact <symbol>`
+
+Returns first-order graph neighbors likely impacted by changing `symbol`.
+
+Current behavior:
+
+- Uses persisted symbol graph edges (`calls`, `contains`, `imports`, `implements`).
+- Emits deterministic one-hop results with relationship labels.
+
+### `context --task <text> --repo <PATH> [--budget <N>]`
+
+Returns a ranked, budget-limited context bundle for a task description.
+
+Current behavior:
+
+- Extracts task keywords and prioritizes direct symbol matches.
+- Expands one graph hop for nearby context.
+- Truncates deterministically based on budget.
+
 ### `--json`
 
-Supported on `find`, `refs`, `impact`, and `context`. Emits deterministic JSON with a stable top-level command schema and ordered results.
+Supported on `find`, `refs`, `impact`, `context`, `tests-for`, and `verify-plan`. Emits deterministic JSON with a stable top-level command schema and ordered results.
+
+### `tests-for <symbol>`
+
+Returns likely test targets for `symbol`.
+
+Current behavior:
+
+- Searches test-like files for exact symbol hits.
+- Deduplicates by test target and applies deterministic confidence tiers.
+
+### `verify-plan --changed-file <path> --repo <PATH> [--json]`
+
+Returns recommended validation commands for changed files.
+
+Current behavior:
+
+- Uses changed-file symbol definitions to find nearby targeted integration tests.
+- Emits only runnable top-level integration test commands (`cargo test --test <name>`).
+- Always includes a full-suite safety gate (`cargo test`).
 
 ## How It Works
 

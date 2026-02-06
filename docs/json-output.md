@@ -1,7 +1,7 @@
 # JSON Output
 
-`find`, `refs`, `impact`, and `context` support `--json` today. This document
-tracks both current contracts and planned Phase 2 extensions still in flight.
+`find`, `refs`, `impact`, `context`, `tests-for`, and `verify-plan` support `--json` today. This document
+tracks the current stable contracts for schema versions 1 and 2.
 
 ## Current Contract (Schema Version 1)
 
@@ -51,8 +51,7 @@ Per-result fields:
 
 ## Phase 2 Contract (Schema Version 2)
 
-Status: `impact` and `context` are implemented. `tests-for` and `verify-plan`
-remain planned and should be treated as forward contract targets.
+Status: all Phase 2 command contracts in this section are implemented.
 
 Current Phase 2 schema version: `2`
 

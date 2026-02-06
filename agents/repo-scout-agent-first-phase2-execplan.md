@@ -21,8 +21,9 @@ A user should be able to see this working through concrete commands: index a rep
 - [x] (2026-02-06 01:40Z) Implemented Milestone 7 richer Rust symbol extraction and metadata persistence (`tests/milestone7_rust_symbols.rs`, `src/indexer/rust_ast.rs`, `src/indexer/mod.rs`) with full-suite green gate.
 - [x] (2026-02-06 02:15Z) Implemented Milestone 8 graph storage primitives with stable symbol IDs and edge persistence (`tests/milestone8_graph.rs`, `src/indexer/mod.rs`, `src/indexer/rust_ast.rs`) with full-suite green gate.
 - [x] (2026-02-06 02:45Z) Implemented Milestone 9 agent-native `impact`/`context` commands with deterministic terminal + JSON contracts (`tests/milestone9_agent_queries.rs`, `src/cli.rs`, `src/main.rs`, `src/query/mod.rs`, `src/output.rs`) and full-suite green gate.
-- [ ] Implement Milestone 10: validation intelligence (`tests-for`, `verify-plan`) and end-to-end acceptance hardening.
-- [ ] Finalize documentation updates, revision notes, and retrospective once implementation completes.
+- [x] (2026-02-06 03:40Z) Implemented Milestone 10 validation intelligence (`tests-for`, `verify-plan`) with deterministic JSON contracts and full-suite green gates (`tests/milestone10_validation.rs`, `src/cli.rs`, `src/main.rs`, `src/query/mod.rs`, `src/output.rs`).
+- [x] (2026-02-06 03:45Z) Completed Milestone 10 hardening after dogfooding surfaced an invalid recommendation path (`cargo test --test mod`) by adding a failing test first and tightening verify-plan command generation to runnable top-level integration tests only.
+- [x] (2026-02-06 03:50Z) Finalized Phase 2 docs/log updates (`README.md`, `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`, `docs/dogfood-log.md`) and updated this plan’s living sections.
 
 ## Surprises & Discoveries
 
@@ -49,6 +50,9 @@ A user should be able to see this working through concrete commands: index a rep
 
 - Observation: Enabling new milestone tests incrementally required temporarily keeping later slice tests ignored; otherwise full-suite refactor gates failed for not-yet-implemented commands.
   Evidence: `milestone9_context_*` tests had to stay ignored until `context` CLI + query plumbing landed; once implemented they were unignored and passed in the same milestone.
+
+- Observation: Naive test-target to command conversion can produce non-runnable commands when nested support modules under `tests/` are treated as integration test crates.
+  Evidence: Dogfood run for `verify-plan --changed-file src/query/mod.rs` initially emitted `cargo test --test mod` from `tests/common/mod.rs`; fixed with `milestone10_verify_plan_skips_non_runnable_test_modules`.
 
 ## Decision Log
 
@@ -92,6 +96,14 @@ A user should be able to see this working through concrete commands: index a rep
   Rationale: Existing v0 consumers remain stable, while Phase 2 agent-native workflows gain graph/context affordances under schema v2 payloads.
   Date/Author: 2026-02-06 / Codex
 
+- Decision: Keep highest-confidence evidence when multiple changed symbols map to the same verify step command.
+  Rationale: Deterministic dedup should not downgrade recommendations when later evidence is stronger; command plans should preserve best available signal.
+  Date/Author: 2026-02-06 / Codex
+
+- Decision: Restrict verify-plan targeted command synthesis to runnable top-level `tests/*.rs` integration test files.
+  Rationale: Nested support modules (for example `tests/common/mod.rs`) are not runnable via `cargo test --test <stem>` and should not be recommended.
+  Date/Author: 2026-02-06 / Codex
+
 ## Outcomes & Retrospective
 
 Initial outcome at planning time: the repository has a solid v0 baseline and deterministic behavior, but no graph-level understanding, no task-shaped commands, and a correctness gap for deleted files. This plan addresses those gaps in an incremental path that preserves existing behavior and test contracts.
@@ -105,6 +117,8 @@ Milestone 7 outcome (2026-02-06): Rust symbol extraction now covers struct/enum/
 Milestone 8 outcome (2026-02-06): graph primitives now persist deterministic `calls`, `contains`, `imports`, and `implements` edges in `symbol_edges_v2`, and symbol IDs remain stable across same-identity reindex updates, enabling graph-backed agent query work in Milestone 9.
 
 Milestone 9 outcome (2026-02-06): `impact` and `context` are now first-class CLI commands with deterministic terminal and JSON output contracts, using graph + symbol metadata while preserving legacy `find`/`refs` behavior.
+
+Milestone 10 outcome (2026-02-06): `tests-for` and `verify-plan` now ship as first-class commands (terminal + JSON schema v2), with deterministic recommendation ordering, duplicate-command confidence upgrades, and hardening that filters invalid non-runnable test commands discovered during dogfooding.
 
 ## Context and Orientation
 
@@ -385,6 +399,7 @@ Strict TDD artifact checklist for each milestone (to be filled during implementa
     - red/green/refactor for milestone10_tests_for_dedup_confidence.
     - red/green/refactor for milestone10_verify_plan_changed_files.
     - red/green/refactor for milestone10_verify_plan_deterministic_recommendations.
+    - red/green/refactor for milestone10_verify_plan_skips_non_runnable_test_modules.
 
 ## Interfaces and Dependencies
 
@@ -411,7 +426,7 @@ Define:
 
     pub struct VerifyPlanArgs {
         #[arg(long = "changed-file")]
-        pub changed_files: Vec<PathBuf>,
+        pub changed_files: Vec<String>,
         #[arg(long)]
         pub repo: PathBuf,
         #[arg(long)]
@@ -427,9 +442,9 @@ In `/Users/robertguss/Projects/experiments/repo-scout/src/query/mod.rs` (or spli
         budget: usize,
     ) -> anyhow::Result<Vec<ContextMatch>>;
     pub fn tests_for_symbol(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<TestTarget>>;
-    pub fn verify_plan_for_changes(
+    pub fn verify_plan_for_changed_files(
         db_path: &Path,
-        changed_files: &[PathBuf],
+        changed_files: &[String],
     ) -> anyhow::Result<Vec<VerificationStep>>;
 
 In `/Users/robertguss/Projects/experiments/repo-scout/src/store/schema.rs`, introduce schema version 2 with additive tables:
@@ -479,3 +494,4 @@ Confidence and provenance vocabulary must remain explicit and finite. Extend exi
 2026-02-06: Updated living sections after Milestone 7 implementation with richer symbol extraction outcomes, metadata persistence decisions, and slice-level test evidence notes.
 2026-02-06: Updated living sections after Milestone 8 implementation with stable symbol-ID strategy, edge-construction decisions, and graph slice evidence notes.
 2026-02-06: Updated living sections after Milestone 9 implementation with agent-query command outcomes, JSON schema decisions, and slice sequencing notes.
+2026-02-06: Updated living sections after Milestone 10 completion with validation-command contracts, dogfood-driven hardening decision notes, and final documentation/log outcomes.
