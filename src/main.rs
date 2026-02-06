@@ -339,9 +339,23 @@ fn normalize_changed_file(repo_root: &std::path::Path, changed_file: &str) -> St
             .unwrap_or_else(|_| repo_root.to_path_buf())
     });
     let normalized = if candidate.is_absolute() {
-        candidate
-            .strip_prefix(&absolute_repo_root)
+        let canonical_candidate = std::fs::canonicalize(&candidate).ok();
+        canonical_candidate
+            .as_deref()
+            .and_then(|path| path.strip_prefix(&absolute_repo_root).ok())
             .map(|path| path.to_path_buf())
+            .or_else(|| {
+                candidate
+                    .strip_prefix(&absolute_repo_root)
+                    .ok()
+                    .map(|path| path.to_path_buf())
+            })
+            .or_else(|| {
+                candidate
+                    .strip_prefix(repo_root)
+                    .ok()
+                    .map(|path| path.to_path_buf())
+            })
             .unwrap_or(candidate)
     } else {
         candidate

@@ -385,6 +385,9 @@ pub fn print_diff_impact(
 ) {
     println!("command: diff-impact");
     println!("changed_files: {}", changed_files.len());
+    for changed_file in changed_files {
+        println!("changed_file: {changed_file}");
+    }
     println!("max_distance: {max_distance}");
     println!("include_tests: {include_tests}");
     println!("results: {}", results.len());

@@ -43,8 +43,19 @@ before agent-facing commands and data contracts are stable.
       `milestone11_explain_json_contract` including optional snippet extraction behavior.
 - [x] (2026-02-06 16:46Z) Milestone 11 contract-freeze implementation complete
       (`diff-impact` and `explain` CLI surfaces, schema v3 JSON contracts, and integration tests).
-- [ ] Milestone 12 feature implementation (`diff-impact` behavior in terminal + JSON with
-      deterministic ranking and confidence/provenance).
+- [x] (2026-02-06 16:57Z) Milestone 12 slice 12A complete: red/green/refactor for
+      `milestone12_diff_impact_changed_files_normalization` plus normalization fix for canonical
+      absolute paths and terminal changed-file listing.
+- [x] (2026-02-06 16:57Z) Milestone 12 slice 12B complete: red/green/refactor for
+      `milestone12_diff_impact_graph_neighbors` with direct inbound graph neighbor expansion
+      (`distance = 1`, relationship mapping, provenance mapping).
+- [x] (2026-02-06 16:57Z) Milestone 12 slice 12C complete: red/green/refactor for
+      `milestone12_diff_impact_includes_tests` with `test_target` emission when tests are enabled.
+- [x] (2026-02-06 16:57Z) Milestone 12 slice 12D complete: red/green/refactor for
+      `milestone12_diff_impact_deterministic_ordering` including `max_distance` enforcement,
+      deterministic ordering tie-breaks, and vocabulary assertions.
+- [x] (2026-02-06 16:57Z) Milestone 12 feature implementation complete (`diff-impact` behavior in
+      terminal + JSON with deterministic ranking and confidence/provenance).
 - [ ] Milestone 13 feature implementation (`explain` behavior in terminal + JSON with symbol dossier
       output).
 - [ ] Milestone 14 refactor: language adapter boundary extraction with Rust adapter migration and no
@@ -77,6 +88,15 @@ before agent-facing commands and data contracts are stable.
   validate required union fields (`result_kind`, `provenance`) in JSON tests. Evidence:
   `milestone11_diff_impact_json_contract` red run failed with `assertion failed: !results.is_empty()`.
 
+- Observation: Absolute changed-file paths under macOS `/var/...` did not deduplicate against repo
+  canonical paths under `/private/var/...`. Evidence:
+  `milestone12_diff_impact_changed_files_normalization` red run showed `changed_files: 2` for the
+  same file before canonicalizing candidate paths.
+
+- Observation: `clap` boolean flags in this CLI shape do not accept explicit `true` literals (for
+  example `--include-tests true`). Evidence: red run produced `error: unexpected argument 'true'
+  found`, so tests use the default-enabled behavior for this flag.
+
 ## Decision Log
 
 - Decision: Sequence Phase 3 as command-first (`diff-impact`, `explain`) before TypeScript/Python
@@ -105,6 +125,14 @@ before agent-facing commands and data contracts are stable.
   signature and satisfies schema v3 optional snippet behavior without adding new CLI plumbing.
   Date/Author: 2026-02-06 / Codex
 
+- Decision: Canonicalize absolute changed-file candidates before prefix stripping to normalize
+  `/var` and `/private/var` path aliases. Rationale: deduplication must be stable across path alias
+  forms to satisfy deterministic `changed_files` contracts. Date/Author: 2026-02-06 / Codex
+
+- Decision: Gate neighbor traversal on `max_distance` and implement full diff-impact tie-break
+  ordering for `test_target` rows. Rationale: this aligns runtime behavior with schema v3 ordering
+  rules and avoids nondeterministic JSON from map iteration order. Date/Author: 2026-02-06 / Codex
+
 ## Outcomes & Retrospective
 
 Planning outcome at this stage: Phase 3 scope is explicitly sequenced around agent-loop value
@@ -115,6 +143,11 @@ Milestone 11 outcome: `diff-impact` and `explain` commands now exist with schema
 and contract tests in `tests/milestone11_contracts.rs`. `diff-impact` currently returns changed-file
 symbol definitions (distance 0), and `explain` returns definition dossiers with optional snippets.
 Milestone 12+ behavior (graph neighbors, test targets, richer relationship counts) remains pending.
+
+Milestone 12 outcome: `diff-impact` now normalizes changed-file inputs deterministically, emits
+distance-1 graph neighbors, optionally includes test targets, honors `max_distance`, and sorts mixed
+result kinds deterministically under schema v3. Remaining scope is `explain` relationship depth and
+language-adapter extraction/migration milestones.
 
 Target completion outcome: `repo-scout` provides deterministic changed-file impact analysis and
 symbol dossier commands, plus a language-neutral extraction pipeline that supports Rust, TypeScript,
@@ -430,7 +463,36 @@ Strict TDD artifact checklist to fill during implementation:
       and post-implementation `cargo run -- find <target_symbol> --repo .`,
       `cargo run -- refs <target_symbol> --repo .`, `cargo test`.
 
-    - red/green/refactor transcripts for all milestone12_* tests (pending).
+    - milestone12_diff_impact_changed_files_normalization
+      red: `cargo test milestone12_diff_impact_changed_files_normalization -- --nocapture`
+      failed with `assertion failed: terminal_out.contains("changed_files: 1")`.
+      green: `cargo test milestone12_diff_impact_changed_files_normalization -- --nocapture`
+      passed after changed-file canonicalization and terminal path output additions.
+      refactor: `cargo test` passed full suite.
+
+    - milestone12_diff_impact_graph_neighbors
+      red: `cargo test milestone12_diff_impact_graph_neighbors -- --nocapture`
+      failed with missing `watcher` `called_by` distance-1 result.
+      green: `cargo test milestone12_diff_impact_graph_neighbors -- --nocapture`
+      passed after incoming-edge neighbor expansion.
+      refactor: `cargo test` passed full suite.
+
+    - milestone12_diff_impact_includes_tests
+      red: `cargo test milestone12_diff_impact_includes_tests -- --nocapture`
+      failed with missing `result_kind = "test_target"` row.
+      green: `cargo test milestone12_diff_impact_includes_tests -- --nocapture`
+      passed after test-target enrichment for impacted symbols.
+      refactor: `cargo test` passed full suite.
+
+    - milestone12_diff_impact_deterministic_ordering
+      red: `cargo test milestone12_diff_impact_deterministic_ordering -- --nocapture`
+      failed because `--max-distance 0` still returned distance-1 results.
+      green: `cargo test milestone12_diff_impact_deterministic_ordering -- --nocapture`
+      passed after `max_distance` gating and deterministic tie-break updates.
+      refactor: `cargo test` passed full suite.
+
+    - dogfood pre/post evidence captured for every milestone12 slice with required commands and
+      milestone-level manual checks (`diff-impact`/`explain` terminal + JSON runs).
     - red/green/refactor transcripts for all milestone13_* tests.
     - red/green/refactor transcripts for all milestone14_* tests.
     - red/green/refactor transcripts for all milestone15_* tests.
@@ -552,3 +614,7 @@ and backward compatibility with existing v1/v2 outputs.
 2026-02-06: Updated the living plan after Milestone 11 implementation to record completed slices,
 strict TDD red/green/refactor evidence, dogfooding transcripts, and decisions to emit changed-symbol
 diff-impact rows and explain snippets in schema v3 outputs.
+
+2026-02-06: Updated the living plan after Milestone 12 implementation to capture changed-file
+normalization fixes, graph-neighbor/test-target expansion, `max_distance` enforcement, deterministic
+ordering rules, and full red/green/refactor transcript evidence for all milestone12 slices.

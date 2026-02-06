@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 
@@ -132,39 +132,42 @@ pub enum DiffImpactMatch {
 pub fn diff_impact_for_changed_files(
     db_path: &Path,
     changed_files: &[String],
-    _max_distance: u32,
-    _include_tests: bool,
+    max_distance: u32,
+    include_tests: bool,
 ) -> anyhow::Result<Vec<DiffImpactMatch>> {
     let connection = Connection::open(db_path)?;
     let mut results = Vec::new();
     let mut seen = HashSet::new();
+    let mut changed_symbol_ids = Vec::new();
 
     for changed_file in changed_files {
         let mut statement = connection.prepare(
-            "SELECT symbol, kind, file_path, start_line, start_column
+            "SELECT symbol_id, symbol, kind, file_path, start_line, start_column
              FROM symbols_v2
              WHERE file_path = ?1
              ORDER BY start_line ASC, start_column ASC, symbol ASC",
         )?;
         let rows = statement.query_map(params![changed_file], |row| {
             Ok((
-                row.get::<_, String>(0)?,
+                row.get::<_, i64>(0)?,
                 row.get::<_, String>(1)?,
                 row.get::<_, String>(2)?,
-                row.get::<_, i64>(3)? as u32,
+                row.get::<_, String>(3)?,
                 row.get::<_, i64>(4)? as u32,
+                row.get::<_, i64>(5)? as u32,
             ))
         })?;
 
         for row in rows {
-            let (symbol, kind, file_path, line, column) = row?;
+            let (symbol_id, symbol, kind, file_path, line, column) = row?;
             let language = language_for_file_path(&file_path).to_string();
             let qualified_symbol = format!("{language}:{file_path}::{symbol}");
-            let key = format!("{file_path}:{line}:{column}:{qualified_symbol}");
+            let key = format!("{file_path}:{line}:{column}:{qualified_symbol}:changed_symbol:0");
             if !seen.insert(key) {
                 continue;
             }
 
+            changed_symbol_ids.push((symbol_id, symbol.clone()));
             results.push(DiffImpactMatch::ImpactedSymbol {
                 symbol,
                 qualified_symbol,
@@ -181,6 +184,111 @@ pub fn diff_impact_for_changed_files(
                 score: 1.0,
             });
         }
+    }
+
+    if max_distance >= 1 {
+        for (changed_symbol_id, changed_symbol) in changed_symbol_ids {
+            let mut incoming_statement = connection.prepare(
+                "SELECT fs.symbol, fs.kind, fs.file_path, fs.start_line, fs.start_column, e.edge_kind, e.confidence
+                 FROM symbol_edges_v2 e
+                 JOIN symbols_v2 fs ON fs.symbol_id = e.from_symbol_id
+                 WHERE e.to_symbol_id = ?1
+                 ORDER BY fs.file_path ASC, fs.start_line ASC, fs.start_column ASC, fs.symbol ASC",
+            )?;
+            let incoming_rows =
+                incoming_statement.query_map(params![changed_symbol_id], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, i64>(3)? as u32,
+                        row.get::<_, i64>(4)? as u32,
+                        row.get::<_, String>(5)?,
+                        row.get::<_, f64>(6)?,
+                    ))
+                })?;
+
+            for incoming in incoming_rows {
+                let (symbol, kind, file_path, line, column, edge_kind, score) = incoming?;
+                let language = language_for_file_path(&file_path).to_string();
+                let qualified_symbol = format!("{language}:{file_path}::{symbol}");
+                let (relationship, provenance) = edge_kind_relationship_and_provenance(&edge_kind);
+                let key = format!(
+                    "{file_path}:{line}:{column}:{qualified_symbol}:{relationship}:distance1"
+                );
+                if !seen.insert(key) {
+                    continue;
+                }
+
+                results.push(DiffImpactMatch::ImpactedSymbol {
+                    symbol,
+                    qualified_symbol,
+                    kind,
+                    language,
+                    file_path,
+                    line,
+                    column,
+                    distance: 1,
+                    relationship: relationship.to_string(),
+                    why_included: format!(
+                        "direct {relationship} neighbor of changed symbol '{changed_symbol}'"
+                    ),
+                    confidence: "graph_likely".to_string(),
+                    provenance: provenance.to_string(),
+                    score,
+                });
+            }
+        }
+    }
+
+    if include_tests {
+        let mut impacted_symbols = results
+            .iter()
+            .filter_map(|item| match item {
+                DiffImpactMatch::ImpactedSymbol { symbol, .. } => Some(symbol.clone()),
+                DiffImpactMatch::TestTarget { .. } => None,
+            })
+            .collect::<Vec<_>>();
+        impacted_symbols.sort();
+        impacted_symbols.dedup();
+
+        let mut selected_test_targets: BTreeMap<String, DiffImpactMatch> = BTreeMap::new();
+        for symbol in impacted_symbols {
+            for (target, hit_count) in test_targets_for_symbol(&connection, &symbol)? {
+                let (confidence, score) = if hit_count > 1 {
+                    ("graph_likely", 0.86)
+                } else {
+                    ("context_medium", 0.72)
+                };
+
+                let key = format!("integration_test_file:{target}");
+                let should_replace = match selected_test_targets.get(&key) {
+                    Some(DiffImpactMatch::TestTarget {
+                        score: existing_score,
+                        ..
+                    }) => score > *existing_score,
+                    _ => true,
+                };
+                if !should_replace {
+                    continue;
+                }
+
+                selected_test_targets.insert(
+                    key,
+                    DiffImpactMatch::TestTarget {
+                        target: target.clone(),
+                        target_kind: "integration_test_file".to_string(),
+                        language: language_for_file_path(&target).to_string(),
+                        why_included: format!("references impacted symbol '{symbol}'"),
+                        confidence: confidence.to_string(),
+                        provenance: "call_resolution".to_string(),
+                        score,
+                    },
+                );
+            }
+        }
+
+        results.extend(selected_test_targets.into_values());
     }
 
     results.sort_by(diff_impact_sort_key);
@@ -266,46 +374,51 @@ pub fn explain_symbol(
 }
 
 fn diff_impact_sort_key(left: &DiffImpactMatch, right: &DiffImpactMatch) -> std::cmp::Ordering {
-    match (left, right) {
-        (
-            DiffImpactMatch::ImpactedSymbol {
-                score: ls,
-                file_path: lf,
-                line: ll,
-                column: lc,
-                qualified_symbol: lq,
-                ..
-            },
-            DiffImpactMatch::ImpactedSymbol {
-                score: rs,
-                file_path: rf,
-                line: rl,
-                column: rc,
-                qualified_symbol: rq,
-                ..
-            },
-        ) => rs
-            .partial_cmp(ls)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then(lf.cmp(rf))
-            .then(ll.cmp(rl))
-            .then(lc.cmp(rc))
-            .then(lq.cmp(rq)),
-        (
-            DiffImpactMatch::ImpactedSymbol { score: ls, .. },
-            DiffImpactMatch::TestTarget { score: rs, .. },
-        )
-        | (
-            DiffImpactMatch::TestTarget { score: ls, .. },
-            DiffImpactMatch::ImpactedSymbol { score: rs, .. },
-        )
-        | (
-            DiffImpactMatch::TestTarget { score: ls, .. },
-            DiffImpactMatch::TestTarget { score: rs, .. },
-        ) => rs
-            .partial_cmp(ls)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then(diff_impact_kind_rank(left).cmp(&diff_impact_kind_rank(right))),
+    diff_impact_score(right)
+        .partial_cmp(&diff_impact_score(left))
+        .unwrap_or(std::cmp::Ordering::Equal)
+        .then(diff_impact_kind_rank(left).cmp(&diff_impact_kind_rank(right)))
+        .then_with(|| match (left, right) {
+            (
+                DiffImpactMatch::ImpactedSymbol {
+                    file_path: lf,
+                    line: ll,
+                    column: lc,
+                    qualified_symbol: lq,
+                    ..
+                },
+                DiffImpactMatch::ImpactedSymbol {
+                    file_path: rf,
+                    line: rl,
+                    column: rc,
+                    qualified_symbol: rq,
+                    ..
+                },
+            ) => lf
+                .cmp(rf)
+                .then(ll.cmp(rl))
+                .then(lc.cmp(rc))
+                .then(lq.cmp(rq)),
+            (
+                DiffImpactMatch::TestTarget {
+                    target_kind: lk,
+                    target: lt,
+                    ..
+                },
+                DiffImpactMatch::TestTarget {
+                    target_kind: rk,
+                    target: rt,
+                    ..
+                },
+            ) => lk.cmp(rk).then(lt.cmp(rt)),
+            _ => std::cmp::Ordering::Equal,
+        })
+}
+
+fn diff_impact_score(item: &DiffImpactMatch) -> f64 {
+    match item {
+        DiffImpactMatch::ImpactedSymbol { score, .. }
+        | DiffImpactMatch::TestTarget { score, .. } => *score,
     }
 }
 
@@ -313,6 +426,16 @@ fn diff_impact_kind_rank(item: &DiffImpactMatch) -> u8 {
     match item {
         DiffImpactMatch::ImpactedSymbol { .. } => 0,
         DiffImpactMatch::TestTarget { .. } => 1,
+    }
+}
+
+fn edge_kind_relationship_and_provenance(edge_kind: &str) -> (&'static str, &'static str) {
+    match edge_kind {
+        "calls" => ("called_by", "call_resolution"),
+        "contains" => ("contained_by", "ast_definition"),
+        "imports" => ("imported_by", "import_resolution"),
+        "implements" => ("implemented_by", "ast_reference"),
+        _ => ("called_by", "ast_reference"),
     }
 }
 
