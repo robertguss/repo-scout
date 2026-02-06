@@ -115,6 +115,7 @@ See detailed docs:
 - [`docs/architecture.md`](docs/architecture.md)
 - [`docs/cli-reference.md`](docs/cli-reference.md)
 - [`docs/json-output.md`](docs/json-output.md)
+- [`docs/dogfood-log.md`](docs/dogfood-log.md)
 
 ## Error Recovery
 
@@ -135,3 +136,30 @@ The suite includes milestone-based integration tests for:
 - Rust AST extraction,
 - deterministic JSON/ranking,
 - end-to-end flow and corruption recovery.
+
+## Dogfood Operating Procedure
+
+`repo-scout` should be used to build `repo-scout`. For every feature or bugfix in this repository, run a dogfood loop before and after edits.
+
+Pre-edit loop:
+
+```bash
+cargo run -- index --repo .
+cargo run -- find <symbol> --repo . --json
+cargo run -- refs <symbol> --repo . --json
+```
+
+Post-edit loop:
+
+```bash
+cargo run -- index --repo .
+cargo run -- find <symbol> --repo .
+cargo run -- refs <symbol> --repo .
+cargo test
+```
+
+Rules:
+
+- If dogfooding exposes incorrect behavior (stale results, missing results, noisy ranking, unstable JSON), add a failing integration test first and then fix it with strict red-green-refactor.
+- Record at least one dogfood transcript in PR notes or in planning artifacts for each milestone.
+- Do not mark a milestone complete unless dogfood commands succeed and all tests pass.

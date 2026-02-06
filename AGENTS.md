@@ -23,6 +23,20 @@
 - Name new tests to match the milestone pattern (e.g., `tests/milestone6_new_behavior.rs`) and prefer end-to-end flows.
 - Run `cargo test` before PRs; add new tests when changing ranking, JSON output, or AST behavior.
 
+## Dogfooding Rules (Codex Enforcement)
+- Treat `repo-scout` as the first navigation/query tool when working in this repository.
+- Before implementing a feature slice, run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find <target_symbol> --repo . --json`
+  - `cargo run -- refs <target_symbol> --repo . --json`
+- After implementing a feature slice, run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find <target_symbol> --repo .`
+  - `cargo run -- refs <target_symbol> --repo .`
+  - `cargo test`
+- If dogfooding reveals a defect, write a failing integration test first, then implement the minimal fix, then refactor with the full suite passing (strict red-green-refactor).
+- Every milestone should include at least one dogfood transcript in planning artifacts or PR notes.
+
 ## Commit & Pull Request Guidelines
 - Commit subjects in this repo are imperative, sentence-case, and unprefixed (e.g., “Implement Milestone 4 ranking and JSON query contract via TDD”).
 - PRs should include a short summary, relevant command output (`cargo test`), and doc updates in `README.md` or `docs/` when CLI or output changes.
