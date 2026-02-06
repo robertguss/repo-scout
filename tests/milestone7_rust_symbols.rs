@@ -2,6 +2,16 @@ mod common;
 
 use rusqlite::Connection;
 
+/// Run the repo-scout command with the given arguments and return its standard output as a `String`.
+///
+/// Panics if the command exits with a non-zero status or if the command's stdout is not valid UTF-8.
+///
+/// # Examples
+///
+/// ```no_run
+/// let out = run_stdout(&["index", "--repo", "path/to/repo"]);
+/// assert!(out.contains("results"));
+/// ```
 fn run_stdout(args: &[&str]) -> String {
     let mut cmd = common::repo_scout_cmd();
     cmd.args(args);
@@ -31,6 +41,16 @@ fn milestone7_struct_enum_trait_defs() {
     }
 }
 
+/// Verifies that an `impl` method is indexed and its containing type is recorded.
+///
+/// Confirms the symbol `run` resolves to a single AST definition and that the persisted index entry for `run` has `kind` equal to `"function"` and `container` equal to `"Launcher"`.
+///
+/// # Examples
+///
+/// ```
+/// // Run via `cargo test` to execute this integration test.
+/// milestone7_impl_method_container();
+/// ```
 #[test]
 fn milestone7_impl_method_container() {
     let repo = common::temp_repo();
@@ -85,6 +105,20 @@ fn milestone7_module_alias_const_use() {
     }
 }
 
+/// Verifies that symbol spans and function signature summaries are persisted in the index database.
+///
+/// This test indexes a fixture Rust crate, opens `.repo-scout/index.db`, then queries `symbols_v2` for
+/// the symbol `start_engine`. It asserts the recorded span extends beyond its start position and that
+/// a function signature containing `fn start_engine` is present.
+///
+/// # Examples
+///
+/// ```
+/// // After indexing a repository, query `symbols_v2` for `start_engine` and assert:
+/// // - end_line >= start_line
+/// // - end_column > start_column
+/// // - signature contains "fn start_engine"
+/// ```
 #[test]
 fn milestone7_spans_and_signatures_persist() {
     let repo = common::temp_repo();

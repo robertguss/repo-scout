@@ -3,6 +3,31 @@ use rusqlite::{Connection, OptionalExtension};
 
 pub const SCHEMA_VERSION: i64 = 2;
 
+/// Creates the database schema and records the current schema version.
+///
+/// This creates the necessary tables (meta, symbols, refs, indexed_files,
+/// text_occurrences, ast_definitions, ast_references, symbols_v2,
+/// symbol_edges_v2) and their associated indices if they do not already
+/// exist, then writes `SCHEMA_VERSION` into the `meta` table under the key
+/// `schema_version`.
+///
+/// # Examples
+///
+/// ```
+/// use rusqlite::Connection;
+/// # use anyhow::Result;
+/// # fn run() -> Result<()> {
+/// let conn = Connection::open_in_memory()?;
+/// bootstrap_schema(&conn)?;
+/// let value: String = conn.query_row(
+///     "SELECT value FROM meta WHERE key = 'schema_version'",
+///     [],
+///     |row| row.get(0),
+/// )?;
+/// assert_eq!(value.parse::<i64>().unwrap(), SCHEMA_VERSION);
+/// # Ok(()) }
+/// # run().unwrap();
+/// ```
 pub fn bootstrap_schema(connection: &Connection) -> anyhow::Result<()> {
     connection.execute_batch(
         r#"

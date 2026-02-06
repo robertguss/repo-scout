@@ -13,6 +13,29 @@ pub struct IndexSummary {
     pub skipped_files: usize,
 }
 
+/// Builds or refreshes an index of source files from `repo` into the SQLite database at `db_path`.
+///
+/// This function discovers source files, prunes database rows for files no longer present, and for
+/// each file that changed it updates token occurrences, AST definitions and references, symbols,
+/// and symbol edges. Processing for each file is performed inside a database transaction so that
+/// the file's related rows are replaced atomically. Rust files receive additional AST parsing and
+/// relation-hint extraction (imports, impls) which are incorporated into symbol edges.
+///
+/// # Returns
+///
+/// An `IndexSummary` containing the number of files that were indexed and the number of files
+/// that were skipped because their content hash did not change.
+///
+/// # Examples
+///
+/// ```
+/// use std::path::Path;
+/// // `repo` should be a path to a source workspace and `db_path` to a writable SQLite file.
+/// let summary = index_repository(Path::new("path/to/repo"), Path::new("path/to/db.sqlite")).unwrap();
+/// // summary contains counts of processed and skipped files
+/// assert!(summary.indexed_files >= 0);
+/// assert!(summary.skipped_files >= 0);
+/// ```
 pub fn index_repository(repo: &Path, db_path: &Path) -> anyhow::Result<IndexSummary> {
     let mut connection = Connection::open(db_path)?;
     let source_files = files::discover_source_files(repo)?;
@@ -207,6 +230,38 @@ pub fn index_repository(repo: &Path, db_path: &Path) -> anyhow::Result<IndexSumm
     })
 }
 
+/// Remove database rows for files that are no longer present in the workspace.
+///
+/// This function deletes all rows associated with any file listed in `indexed_files`
+/// that are not contained in `live_paths`. For each stale file it removes related
+/// rows from `text_occurrences`, `ast_definitions`, `ast_references`, `symbol_edges_v2`,
+/// `symbols_v2`, and `indexed_files`. Deletions are performed inside a single
+/// transaction so each stale file's removals are applied atomically.
+///
+/// # Examples
+///
+/// ```
+/// use rusqlite::Connection;
+/// use std::collections::HashSet;
+///
+/// let mut conn = Connection::open_in_memory().unwrap();
+/// conn.execute_batch(r#"
+/// CREATE TABLE indexed_files(file_path TEXT PRIMARY KEY, content_hash TEXT);
+/// CREATE TABLE text_occurrences(file_path TEXT, symbol TEXT, line INTEGER, column INTEGER);
+/// CREATE TABLE ast_definitions(file_path TEXT);
+/// CREATE TABLE ast_references(file_path TEXT);
+/// CREATE TABLE symbols_v2(symbol_id INTEGER PRIMARY KEY, file_path TEXT);
+/// CREATE TABLE symbol_edges_v2(from_symbol_id INTEGER, to_symbol_id INTEGER, edge_kind TEXT);
+/// "#).unwrap();
+///
+/// conn.execute("INSERT INTO indexed_files(file_path, content_hash) VALUES (?1, ?2)", ["a.rs", "h"]).unwrap();
+/// let mut live = HashSet::new(); // empty => `a.rs` is stale
+///
+/// super::prune_stale_file_rows(&mut conn, &live).unwrap();
+///
+/// let count: i64 = conn.query_row("SELECT COUNT(*) FROM indexed_files", [], |r| r.get(0)).unwrap();
+/// assert_eq!(count, 0);
+/// ```
 fn prune_stale_file_rows(
     connection: &mut Connection,
     live_paths: &HashSet<String>,
@@ -249,6 +304,29 @@ fn prune_stale_file_rows(
     Ok(())
 }
 
+/// Finds the database `symbol_id` for the given symbol name within the provided transaction.
+///
+/// This queries the `symbols_v2` table for rows matching `symbol` and returns the first
+/// `symbol_id` ordered by `file_path`, `start_line`, then `start_column`. Order ties are
+/// resolved by that ordering so the returned ID is the earliest occurrence by location.
+///
+/// # Returns
+///
+/// `Ok(Some(symbol_id))` with the matching symbol ID if one exists, `Ok(None)` if no row matches,
+/// or an `Err` if the database query fails.
+///
+/// # Examples
+///
+/// ```ignore
+/// // Illustrative usage (not compiled in doctest):
+/// let tx: rusqlite::Transaction = /* obtain a transaction */ unimplemented!();
+/// let id = resolve_symbol_id_in_tx(&tx, "my_crate::MyType")?;
+/// if let Some(symbol_id) = id {
+///     println!("Found symbol id: {}", symbol_id);
+/// } else {
+///     println!("Symbol not found");
+/// }
+/// ```
 fn resolve_symbol_id_in_tx(
     tx: &rusqlite::Transaction<'_>,
     symbol: &str,
@@ -267,6 +345,24 @@ fn resolve_symbol_id_in_tx(
     Ok(symbol_id)
 }
 
+/// Builds a mapping from (symbol, kind) to a list of existing `symbol_id`s for a given file.
+///
+/// The returned map groups all rows from `symbols_v2` for `file_path` by the tuple `(symbol, kind)`.
+/// Each vector contains `symbol_id`s in ascending order (by `symbol_id`).
+///
+/// # Examples
+///
+/// ```no_run
+/// # use rusqlite::Connection;
+/// # fn example(conn: &Connection) -> anyhow::Result<()> {
+/// let map = existing_symbol_ids(conn, "src/lib.rs")?;
+/// if let Some(ids) = map.get(&("my_crate::foo".to_string(), "fn".to_string())) {
+///     // ids is a Vec<i64> of symbol_id values ordered ascending
+///     println!("found {} ids", ids.len());
+/// }
+/// # Ok(())
+/// # }
+/// ```
 fn existing_symbol_ids(
     connection: &Connection,
     file_path: &str,
@@ -296,6 +392,29 @@ fn existing_symbol_ids(
     Ok(by_symbol_kind)
 }
 
+/// Compute the next available `symbol_id` for the `symbols_v2` table.
+///
+/// Queries `symbols_v2` for the current maximum `symbol_id` and returns one greater than that
+/// value (or `1` if no rows exist).
+///
+/// # Examples
+///
+/// ```
+/// use rusqlite::Connection;
+///
+/// // create an in-memory DB and the minimal table
+/// let conn = Connection::open_in_memory().unwrap();
+/// conn.execute_batch("CREATE TABLE symbols_v2 (symbol_id INTEGER PRIMARY KEY, symbol TEXT);").unwrap();
+///
+/// // no rows -> next id is 1
+/// let next = next_symbol_id_start(&conn).unwrap();
+/// assert_eq!(next, 1);
+///
+/// // insert a row with symbol_id = 5
+/// conn.execute("INSERT INTO symbols_v2 (symbol_id, symbol) VALUES (?1, ?2);", &[&5i64, &"foo"]).unwrap();
+/// let next = next_symbol_id_start(&conn).unwrap();
+/// assert_eq!(next, 6);
+/// ```
 fn next_symbol_id_start(connection: &Connection) -> anyhow::Result<i64> {
     let max_id: i64 = connection.query_row(
         "SELECT COALESCE(MAX(symbol_id), 0) FROM symbols_v2",
@@ -305,6 +424,33 @@ fn next_symbol_id_start(connection: &Connection) -> anyhow::Result<i64> {
     Ok(max_id + 1)
 }
 
+/// Consume and return a reusable symbol ID for a given `(symbol, kind)` pair if one exists.
+///
+/// Searches `reusable_symbol_ids` for the key `(symbol, kind)`, removes and returns the first
+/// ID from the associated vector if present, and leaves the vector mutated (consuming that ID).
+///
+/// # Parameters
+///
+/// - `reusable_symbol_ids`: mutable map from `(symbol, kind)` to a list of reusable symbol IDs.
+/// - `symbol`: symbol name to look up.
+/// - `kind`: symbol kind to look up.
+///
+/// # Returns
+///
+/// `Some(id)` with the consumed symbol ID if an ID was available for the `(symbol, kind)` key,
+/// `None` otherwise.
+///
+/// # Examples
+///
+/// ```
+/// use std::collections::HashMap;
+///
+/// let mut map: HashMap<(String, String), Vec<i64>> = HashMap::new();
+/// map.insert(("foo".to_string(), "fn".to_string()), vec![42]);
+/// let id = take_reusable_symbol_id(&mut map, "foo", "fn");
+/// assert_eq!(id, Some(42));
+/// assert_eq!(map.get(&("foo".to_string(), "fn".to_string())).unwrap().len(), 0);
+/// ```
 fn take_reusable_symbol_id(
     reusable_symbol_ids: &mut HashMap<(String, String), Vec<i64>>,
     symbol: &str,
@@ -317,6 +463,25 @@ fn take_reusable_symbol_id(
     Some(ids.remove(0))
 }
 
+/// Parse simple relation hints from Rust source into candidate symbol edges.
+///
+/// This scans the given source text for `use ... as ...;` import aliases and `impl ... for ...` blocks,
+/// producing lightweight relation hints of the form `(from_symbol, to_symbol, edge_kind, confidence)`.
+/// - For `use X as Y`, produces an `("Y", "X", "imports", 0.9)` hint when alias differs from target.
+/// - For `impl Trait for Type`, produces a `("Type", "Trait", "implements", 0.95)` hint.
+/// The function only looks at line-level patterns and extracts the last Rust identifier from each segment.
+///
+/// # Examples
+///
+/// ```
+/// let src = r#"
+/// use crate::foo::Bar as Baz;
+/// impl MyTrait for MyType {}
+/// "#;
+/// let hints = extract_relation_hints(src);
+/// assert!(hints.contains(&("Baz".to_string(), "Bar".to_string(), "imports".to_string(), 0.9)));
+/// assert!(hints.contains(&("MyType".to_string(), "MyTrait".to_string(), "implements".to_string(), 0.95)));
+/// ```
 fn extract_relation_hints(content: &str) -> Vec<(String, String, String, f64)> {
     let mut edges = Vec::new();
 
@@ -354,6 +519,20 @@ fn extract_relation_hints(content: &str) -> Vec<(String, String, String, f64)> {
     edges
 }
 
+/// Extracts the last Rust identifier from a string segment.
+///
+/// The identifier consists of ASCII letters, digits, and underscores; non-identifier characters
+/// act as separators.
+///
+/// # Examples
+///
+/// ```
+/// let id = last_rust_identifier("std::collections::HashMap<K, V>");
+/// assert_eq!(id.as_deref(), Some("HashMap"));
+///
+/// let none = last_rust_identifier("::!!");
+/// assert_eq!(none, None);
+/// ```
 fn last_rust_identifier(segment: &str) -> Option<String> {
     segment
         .split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
