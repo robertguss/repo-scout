@@ -1,10 +1,14 @@
 mod cli;
+mod indexer;
 mod output;
+mod query;
 mod store;
 
 use clap::Parser;
 
 use crate::cli::{Cli, Command};
+use crate::indexer::index_repository;
+use crate::query::text_matches;
 use crate::store::ensure_store;
 
 fn main() {
@@ -26,7 +30,13 @@ fn run() -> anyhow::Result<()> {
 
 fn run_index(args: crate::cli::RepoArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
-    output::print_index(&store.db_path, store.schema_version, 0);
+    let summary = index_repository(&args.repo, &store.db_path)?;
+    output::print_index(
+        &store.db_path,
+        store.schema_version,
+        summary.indexed_files,
+        summary.skipped_files,
+    );
     Ok(())
 }
 
@@ -37,7 +47,8 @@ fn run_status(args: crate::cli::RepoArgs) -> anyhow::Result<()> {
 }
 
 fn run_query(command: &str, args: crate::cli::QueryArgs) -> anyhow::Result<()> {
-    let _ = ensure_store(&args.repo)?;
-    output::print_query(command, &args.symbol, 0);
+    let store = ensure_store(&args.repo)?;
+    let matches = text_matches(&store.db_path, &args.symbol)?;
+    output::print_query(command, &args.symbol, &matches);
     Ok(())
 }

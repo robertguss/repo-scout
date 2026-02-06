@@ -16,11 +16,11 @@ This implementation is intentionally strict Test-Driven Development (TDD). Every
 - [x] (2026-02-06 00:00Z) Tightened scope to a v0-only deliverable and encoded strict red-green-refactor workflow.
 - [x] (2026-02-06 01:27Z) Set up dependency baseline and testing harness for CLI and indexing flows (`Cargo.toml` dependencies, `tests/common/mod.rs`, `tests/harness_smoke.rs`).
 - [x] (2026-02-06 01:30Z) Milestone 1 (red-green-refactor): command surface and SQLite schema bootstrap completed with module refactor (`src/cli.rs`, `src/store/mod.rs`, `src/store/schema.rs`, `src/output.rs`, `src/main.rs`, `tests/milestone1_cli.rs`).
-- [ ] Milestone 2 (red-green-refactor): language-agnostic indexing and incremental updates.
+- [x] (2026-02-06 01:36Z) Milestone 2 (red-green-refactor): language-agnostic indexing and incremental updates completed (`src/indexer/mod.rs`, `src/indexer/files.rs`, `src/indexer/text.rs`, `src/query/mod.rs`, schema updates, `tests/milestone2_indexing.rs`).
 - [ ] Milestone 3 (red-green-refactor): Rust Tree-sitter adapter for definitions and references.
 - [ ] Milestone 4 (red-green-refactor): query ranking, deterministic ordering, and JSON contract.
 - [ ] Milestone 5 (red-green-refactor): end-to-end validation, fixtures, and regression hardening.
-- [x] (2026-02-06 01:30Z) Updated living sections with Milestone 1 evidence, decisions, and outcomes.
+- [x] (2026-02-06 01:36Z) Updated living sections with Milestone 2 evidence, decisions, and outcomes.
 
 ## Surprises & Discoveries
 
@@ -29,6 +29,9 @@ This implementation is intentionally strict Test-Driven Development (TDD). Every
 
 - Observation: Refactoring from Hello World to clap CLI changed zero-argument behavior and broke the existing smoke test expectation.
   Evidence: `cargo test` failed because test expected `Hello, world!`, while clap correctly returned usage output and exit code 2; test was updated to assert `--help` output instead.
+
+- Observation: Keeping `ignore::WalkBuilder` standard filters enabled prevented recursive self-indexing of `.repo-scout/index.db`.
+  Evidence: Milestone 2 incremental tests consistently reported `indexed_files: 1` and then `skipped_files: 1` for a single fixture file without counting index artifacts.
 
 ## Decision Log
 
@@ -52,9 +55,15 @@ This implementation is intentionally strict Test-Driven Development (TDD). Every
   Rationale: No-arg behavior is now clap usage/error, so `--help` is the stable command for smoke verification.
   Date/Author: 2026-02-06 / Codex
 
+- Decision: Persist file paths as repository-relative paths and sort query output by file, line, and column.
+  Rationale: Relative paths keep output stable across machines, and sorted output gives deterministic behavior for tests and agents.
+  Date/Author: 2026-02-06 / Codex
+
 ## Outcomes & Retrospective
 
-Milestone 1 outcome: The CLI now supports `index`, `status`, `find`, and `refs`, and bootstraps a SQLite store at `.repo-scout/index.db` with schema metadata. Behavior is currently minimal by design (`find`/`refs` return zero results), but command wiring, schema bootstrap, and output surface are in place for subsequent milestones. The next milestone remains language-agnostic indexing and incremental behavior.
+Milestone 1 outcome: The CLI now supports `index`, `status`, `find`, and `refs`, and bootstraps a SQLite store at `.repo-scout/index.db` with schema metadata.
+
+Milestone 2 outcome: Language-agnostic indexing now stores per-file content hashes and token occurrences, `index` reports both `indexed_files` and `skipped_files`, and `find`/`refs` return text fallback matches from non-Rust files with file:line:column output. The next milestone is Rust AST extraction.
 
 ## Context and Orientation
 
@@ -162,6 +171,35 @@ Milestone 1 refactor transcript:
     test milestone1_find_and_refs_accept_symbol_queries ... ok
     test result: ok. 4 passed; 0 failed
 
+Milestone 2 red transcript:
+
+    $ cargo test milestone2_ -- --nocapture
+    running 2 tests
+    Unexpected stdout ... indexed_files: 0
+    test result: FAILED. 0 passed; 2 failed
+
+Milestone 2 green transcript:
+
+    $ cargo test milestone2_ -- --nocapture
+    running 2 tests
+    test milestone2_second_index_skips_unchanged_files ... ok
+    test milestone2_find_and_refs_use_text_fallback_for_plain_text_files ... ok
+    test result: ok. 2 passed; 0 failed
+
+Milestone 2 refactor transcript:
+
+    $ cargo test
+    running 1 test
+    test harness_can_run_binary_and_create_fixture_files ... ok
+    running 3 tests
+    test milestone1_index_creates_db_and_prints_schema_version ... ok
+    test milestone1_status_reports_schema_after_index_bootstrap ... ok
+    test milestone1_find_and_refs_accept_symbol_queries ... ok
+    running 2 tests
+    test milestone2_second_index_skips_unchanged_files ... ok
+    test milestone2_find_and_refs_use_text_fallback_for_plain_text_files ... ok
+    test result: ok. 6 passed; 0 failed
+
 ## Interfaces and Dependencies
 
 Use `clap` for command parsing, `rusqlite` for storage, `ignore` for repository walking with ignore rules, `tree-sitter` plus `tree-sitter-rust` for Rust AST extraction, `serde` plus `serde_json` for JSON output, and `anyhow` plus `thiserror` for error handling.
@@ -179,3 +217,5 @@ Keep confidence vocabulary fixed in v0 as `ast_exact`, `ast_likely`, and `text_f
 2026-02-06: Completed dependency and test harness setup, added smoke integration test, and updated test helper to avoid deprecated assert_cmd API.
 
 2026-02-06: Completed Milestone 1 with strict red-green-refactor cycle; added command surface tests, implemented SQLite schema bootstrap, refactored CLI/storage/output into modules, and updated smoke test for clap behavior.
+
+2026-02-06: Completed Milestone 2 with strict red-green-refactor cycle; added language-agnostic file/token indexing, incremental skip behavior, and fallback `find`/`refs` query results for non-Rust files.
