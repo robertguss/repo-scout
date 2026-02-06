@@ -56,8 +56,15 @@ before agent-facing commands and data contracts are stable.
       deterministic ordering tie-breaks, and vocabulary assertions.
 - [x] (2026-02-06 16:57Z) Milestone 12 feature implementation complete (`diff-impact` behavior in
       terminal + JSON with deterministic ranking and confidence/provenance).
-- [ ] Milestone 13 feature implementation (`explain` behavior in terminal + JSON with symbol dossier
-      output).
+- [x] (2026-02-06 17:03Z) Milestone 13 slice 13A complete: red/green/refactor for
+      `milestone13_explain_definition_summary` with terminal dossier signature output.
+- [x] (2026-02-06 17:03Z) Milestone 13 slice 13B complete: red/green/refactor for
+      `milestone13_explain_relationship_summary` with inbound/outbound edge-count summaries.
+- [x] (2026-02-06 17:03Z) Milestone 13 slice 13C complete: red/green/refactor for
+      `milestone13_explain_json_determinism` and full-span snippets under
+      `--include-snippets`.
+- [x] (2026-02-06 17:03Z) Milestone 13 feature implementation complete (`explain` behavior in
+      terminal + JSON with symbol dossier output).
 - [ ] Milestone 14 refactor: language adapter boundary extraction with Rust adapter migration and no
       behavior regression.
 - [ ] Milestone 15 TypeScript adapter MVP (definitions, references, imports, calls, containers).
@@ -97,6 +104,11 @@ before agent-facing commands and data contracts are stable.
   example `--include-tests true`). Evidence: red run produced `error: unexpected argument 'true'
   found`, so tests use the default-enabled behavior for this flag.
 
+- Observation: Snippet quality for `explain --include-snippets` depended on stored definition spans;
+  identifier-only spans produced one-token snippets with no body context. Evidence:
+  `milestone13_explain_json_determinism` red run failed on `assertion failed:
+  snippet.contains("leaf();")` until Rust AST spans used full node end positions.
+
 ## Decision Log
 
 - Decision: Sequence Phase 3 as command-first (`diff-impact`, `explain`) before TypeScript/Python
@@ -133,6 +145,15 @@ before agent-facing commands and data contracts are stable.
   ordering for `test_target` rows. Rationale: this aligns runtime behavior with schema v3 ordering
   rules and avoids nondeterministic JSON from map iteration order. Date/Author: 2026-02-06 / Codex
 
+- Decision: Compute explain relationship summaries directly from `symbol_edges_v2` grouped by
+  `edge_kind` and project into fixed inbound/outbound counters. Rationale: deterministic counts are
+  required for agent-readable dossiers and avoid additional graph traversal complexity.
+  Date/Author: 2026-02-06 / Codex
+
+- Decision: Persist Rust definition `end_line`/`end_column` from full AST node spans, not name-node
+  spans. Rationale: snippet extraction should include meaningful code context (for example function
+  body lines), not only identifier text. Date/Author: 2026-02-06 / Codex
+
 ## Outcomes & Retrospective
 
 Planning outcome at this stage: Phase 3 scope is explicitly sequenced around agent-loop value
@@ -148,6 +169,11 @@ Milestone 12 outcome: `diff-impact` now normalizes changed-file inputs determini
 distance-1 graph neighbors, optionally includes test targets, honors `max_distance`, and sorts mixed
 result kinds deterministically under schema v3. Remaining scope is `explain` relationship depth and
 language-adapter extraction/migration milestones.
+
+Milestone 13 outcome: `explain` now provides terminal/JSON dossiers with definition signatures,
+relationship counters (`inbound`/`outbound`), deterministic serialization, and multi-line snippets
+when requested. Remaining work is language-adapter extraction/migration and TypeScript/Python
+indexing rollout.
 
 Target completion outcome: `repo-scout` provides deterministic changed-file impact analysis and
 symbol dossier commands, plus a language-neutral extraction pipeline that supports Rust, TypeScript,
@@ -493,7 +519,30 @@ Strict TDD artifact checklist to fill during implementation:
 
     - dogfood pre/post evidence captured for every milestone12 slice with required commands and
       milestone-level manual checks (`diff-impact`/`explain` terminal + JSON runs).
-    - red/green/refactor transcripts for all milestone13_* tests.
+
+    - milestone13_explain_definition_summary
+      red: `cargo test milestone13_explain_definition_summary -- --nocapture`
+      failed on missing terminal signature output.
+      green: `cargo test milestone13_explain_definition_summary -- --nocapture`
+      passed after adding per-result `signature:` lines in `print_explain`.
+      refactor: `cargo test` passed full suite.
+
+    - milestone13_explain_relationship_summary
+      red: `cargo test milestone13_explain_relationship_summary -- --nocapture`
+      failed with missing `inbound: called_by=1` text.
+      green: `cargo test milestone13_explain_relationship_summary -- --nocapture`
+      passed after grouped inbound/outbound edge counting for explain results.
+      refactor: `cargo test` passed full suite.
+
+    - milestone13_explain_json_determinism
+      red: `cargo test milestone13_explain_json_determinism -- --nocapture`
+      failed on `snippet.contains("leaf();")`.
+      green: `cargo test milestone13_explain_json_determinism -- --nocapture`
+      passed after Rust symbol spans switched to full AST node ranges.
+      refactor: `cargo test` passed full suite.
+
+    - dogfood pre/post evidence captured for every milestone13 slice with required commands and
+      milestone-level manual checks (`diff-impact`/`explain` terminal + JSON runs).
     - red/green/refactor transcripts for all milestone14_* tests.
     - red/green/refactor transcripts for all milestone15_* tests.
     - red/green/refactor transcripts for all milestone16_* tests.
@@ -618,3 +667,7 @@ diff-impact rows and explain snippets in schema v3 outputs.
 2026-02-06: Updated the living plan after Milestone 12 implementation to capture changed-file
 normalization fixes, graph-neighbor/test-target expansion, `max_distance` enforcement, deterministic
 ordering rules, and full red/green/refactor transcript evidence for all milestone12 slices.
+
+2026-02-06: Updated the living plan after Milestone 13 implementation to record explain dossier
+improvements (signature output, inbound/outbound summaries, deterministic JSON snippets) and the
+strict TDD/dogfooding evidence for all milestone13 slices.

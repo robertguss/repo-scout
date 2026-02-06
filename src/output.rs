@@ -428,6 +428,23 @@ pub fn print_explain(symbol: &str, matches: &[ExplainMatch]) {
             result.confidence,
             result.score
         );
+        if let Some(signature) = &result.signature {
+            println!("signature: {signature}");
+        }
+        println!(
+            "inbound: called_by={} imported_by={} implemented_by={} contained_by={}",
+            result.inbound.called_by,
+            result.inbound.imported_by,
+            result.inbound.implemented_by,
+            result.inbound.contained_by
+        );
+        println!(
+            "outbound: calls={} imports={} implements={} contains={}",
+            result.outbound.calls,
+            result.outbound.imports,
+            result.outbound.implements,
+            result.outbound.contains
+        );
     }
 }
 

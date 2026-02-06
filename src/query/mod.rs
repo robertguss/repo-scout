@@ -302,33 +302,44 @@ pub fn explain_symbol(
 ) -> anyhow::Result<Vec<ExplainMatch>> {
     let connection = Connection::open(db_path)?;
     let mut statement = connection.prepare(
-        "SELECT symbol, kind, file_path, start_line, start_column, end_line, end_column, signature
+        "SELECT symbol_id, symbol, kind, file_path, start_line, start_column, end_line, end_column, signature
          FROM symbols_v2
          WHERE symbol = ?1
          ORDER BY file_path ASC, start_line ASC, start_column ASC, kind ASC",
     )?;
     let rows = statement.query_map(params![symbol], |row| {
         Ok((
-            row.get::<_, String>(0)?,
+            row.get::<_, i64>(0)?,
             row.get::<_, String>(1)?,
             row.get::<_, String>(2)?,
-            row.get::<_, i64>(3)? as u32,
+            row.get::<_, String>(3)?,
             row.get::<_, i64>(4)? as u32,
             row.get::<_, i64>(5)? as u32,
             row.get::<_, i64>(6)? as u32,
-            row.get::<_, Option<String>>(7)?,
+            row.get::<_, i64>(7)? as u32,
+            row.get::<_, Option<String>>(8)?,
         ))
     })?;
 
     let mut results = Vec::new();
     for row in rows {
-        let (symbol, kind, file_path, start_line, start_column, end_line, end_column, signature) =
-            row?;
+        let (
+            symbol_id,
+            symbol,
+            kind,
+            file_path,
+            start_line,
+            start_column,
+            end_line,
+            end_column,
+            signature,
+        ) = row?;
         let language = language_for_file_path(&file_path).to_string();
         let qualified_symbol = format!("{language}:{file_path}::{symbol}");
         let snippet = include_snippets
             .then(|| extract_symbol_snippet(db_path, &file_path, start_line, end_line))
             .flatten();
+        let (inbound, outbound) = relationship_summaries_for_symbol_id(&connection, symbol_id)?;
         results.push(ExplainMatch {
             symbol,
             qualified_symbol,
@@ -340,18 +351,8 @@ pub fn explain_symbol(
             end_line,
             end_column,
             signature,
-            inbound: ExplainInboundSummary {
-                called_by: 0,
-                imported_by: 0,
-                implemented_by: 0,
-                contained_by: 0,
-            },
-            outbound: ExplainOutboundSummary {
-                calls: 0,
-                imports: 0,
-                implements: 0,
-                contains: 0,
-            },
+            inbound,
+            outbound,
             why_included: "exact symbol definition match".to_string(),
             confidence: "graph_exact".to_string(),
             provenance: "ast_definition".to_string(),
@@ -371,6 +372,66 @@ pub fn explain_symbol(
             .then(left.qualified_symbol.cmp(&right.qualified_symbol))
     });
     Ok(results)
+}
+
+fn relationship_summaries_for_symbol_id(
+    connection: &Connection,
+    symbol_id: i64,
+) -> anyhow::Result<(ExplainInboundSummary, ExplainOutboundSummary)> {
+    let mut inbound = ExplainInboundSummary {
+        called_by: 0,
+        imported_by: 0,
+        implemented_by: 0,
+        contained_by: 0,
+    };
+    let mut outbound = ExplainOutboundSummary {
+        calls: 0,
+        imports: 0,
+        implements: 0,
+        contains: 0,
+    };
+
+    let mut inbound_statement = connection.prepare(
+        "SELECT edge_kind, COUNT(*)
+         FROM symbol_edges_v2
+         WHERE to_symbol_id = ?1
+         GROUP BY edge_kind",
+    )?;
+    let inbound_rows = inbound_statement.query_map(params![symbol_id], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as u32))
+    })?;
+    for row in inbound_rows {
+        let (edge_kind, count) = row?;
+        match edge_kind.as_str() {
+            "calls" => inbound.called_by = count,
+            "imports" => inbound.imported_by = count,
+            "implements" => inbound.implemented_by = count,
+            "contains" => inbound.contained_by = count,
+            _ => {}
+        }
+    }
+
+    let mut outbound_statement = connection.prepare(
+        "SELECT edge_kind, COUNT(*)
+         FROM symbol_edges_v2
+         WHERE from_symbol_id = ?1
+         GROUP BY edge_kind",
+    )?;
+    let outbound_rows = outbound_statement.query_map(params![symbol_id], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as u32))
+    })?;
+    for row in outbound_rows {
+        let (edge_kind, count) = row?;
+        match edge_kind.as_str() {
+            "calls" => outbound.calls = count,
+            "imports" => outbound.imports = count,
+            "implements" => outbound.implements = count,
+            "contains" => outbound.contains = count,
+            _ => {}
+        }
+    }
+
+    Ok((inbound, outbound))
 }
 
 fn diff_impact_sort_key(left: &DiffImpactMatch, right: &DiffImpactMatch) -> std::cmp::Ordering {
