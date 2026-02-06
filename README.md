@@ -116,6 +116,7 @@ See detailed docs:
 - [`docs/cli-reference.md`](docs/cli-reference.md)
 - [`docs/json-output.md`](docs/json-output.md)
 - [`docs/dogfood-log.md`](docs/dogfood-log.md)
+- [`docs/performance-baseline.md`](docs/performance-baseline.md)
 
 ## Error Recovery
 
@@ -163,3 +164,16 @@ Rules:
 - If dogfooding exposes incorrect behavior (stale results, missing results, noisy ranking, unstable JSON), add a failing integration test first and then fix it with strict red-green-refactor.
 - Record at least one dogfood transcript in PR notes or in planning artifacts for each milestone.
 - Do not mark a milestone complete unless dogfood commands succeed and all tests pass.
+
+## Justfile Shortcuts
+
+Common workflows are available through `just`:
+
+```bash
+just dogfood-pre launch
+just dogfood-post launch
+just tdd-red milestone6_delete_prunes_rows
+just tdd-green milestone6_delete_prunes_rows
+just tdd-refactor
+just perf-baseline launch
+```

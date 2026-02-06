@@ -1,14 +1,15 @@
 # JSON Output
 
-`find` and `refs` support `--json`.
+`find` and `refs` support `--json` today. Phase 2 introduces additional JSON
+commands, and this document freezes the planned contracts before implementation.
+
+## Current Contract (Schema Version 1)
 
 Example:
 
 ```bash
 cargo run -- find orbit --repo . --json
 ```
-
-## Top-Level Schema
 
 Current schema version: `1`
 
@@ -31,8 +32,6 @@ Current schema version: `1`
 }
 ```
 
-## Field Definitions
-
 Top-level fields:
 
 - `schema_version` (`number`): schema contract version.
@@ -50,12 +49,119 @@ Per-result fields:
 - `confidence` (`string`): confidence tier.
 - `score` (`number`): ranking score (higher is better).
 
+## Phase 2 Planned Contract (Frozen Pre-Implementation)
+
+Status: This section is a planning contract and does not imply features already
+exist. Implementation must match these shapes or explicitly revise this doc.
+
+Planned schema version: `2`
+
+### `impact --json`
+
+Example payload shape:
+
+```json
+{
+  "schema_version": 2,
+  "command": "impact",
+  "query": "launch",
+  "results": [
+    {
+      "symbol": "start_engine",
+      "kind": "function",
+      "file_path": "src/runtime.rs",
+      "line": 42,
+      "column": 5,
+      "distance": 1,
+      "relationship": "called_by",
+      "confidence": "graph_likely",
+      "score": 0.91
+    }
+  ]
+}
+```
+
+### `context --json`
+
+Example payload shape:
+
+```json
+{
+  "schema_version": 2,
+  "command": "context",
+  "task": "modify launch flow and update call sites",
+  "budget": 1200,
+  "results": [
+    {
+      "file_path": "src/runtime.rs",
+      "start_line": 30,
+      "end_line": 70,
+      "symbol": "launch",
+      "kind": "function",
+      "why_included": "direct definition match for task keyword 'launch'",
+      "confidence": "context_high",
+      "score": 0.95
+    }
+  ]
+}
+```
+
+### `tests-for --json`
+
+Example payload shape:
+
+```json
+{
+  "schema_version": 2,
+  "command": "tests-for",
+  "query": "launch",
+  "results": [
+    {
+      "target": "tests/launch_flow.rs",
+      "target_kind": "integration_test_file",
+      "why_included": "references launch in nearby module",
+      "confidence": "graph_likely",
+      "score": 0.83
+    }
+  ]
+}
+```
+
+### `verify-plan --json`
+
+Example payload shape:
+
+```json
+{
+  "schema_version": 2,
+  "command": "verify-plan",
+  "changed_files": ["src/query/mod.rs"],
+  "results": [
+    {
+      "step": "cargo test milestone9_ -- --nocapture",
+      "scope": "targeted",
+      "why_included": "changed file participates in impact/context query routing",
+      "confidence": "context_medium",
+      "score": 0.86
+    },
+    {
+      "step": "cargo test",
+      "scope": "full_suite",
+      "why_included": "required safety gate after refactor",
+      "confidence": "context_high",
+      "score": 1.0
+    }
+  ]
+}
+```
+
 ## Determinism Guarantees
 
-The project aims for deterministic JSON output for identical index/query state:
+For identical index and query state, JSON output should be deterministic:
 
-- stable field shapes,
-- deterministic SQL ordering,
-- repository-relative paths.
+- stable field names and ordering,
+- deterministic SQL ordering and tie-break rules,
+- repository-relative paths,
+- finite, documented vocabulary for `why_*`, `relationship`, and `confidence`.
 
-This is important for tooling, scripted checks, and coding-agent workflows.
+Determinism is required for scripting, regression tests, and coding-agent workflows.
