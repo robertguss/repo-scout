@@ -65,6 +65,38 @@ fn milestone10_tests_for_dedup_confidence() {
 }
 
 #[test]
+fn milestone10_tests_for_ignores_non_test_paths_ending_with_test_rs() {
+    let repo = common::temp_repo();
+    common::write_file(
+        repo.path(),
+        "src/lib.rs",
+        include_str!("fixtures/phase2/validation/src/lib.rs"),
+    );
+    common::write_file(
+        repo.path(),
+        "tests/plan_test.rs",
+        "#[test]\nfn compute_plan_smoke_test() {\n    compute_plan();\n}\n",
+    );
+    common::write_file(
+        repo.path(),
+        "src/contest.rs",
+        "fn helper() {\n    compute_plan();\n}\n",
+    );
+
+    run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
+    let out = run_stdout(&[
+        "tests-for",
+        "compute_plan",
+        "--repo",
+        repo.path().to_str().unwrap(),
+    ]);
+
+    assert!(out.contains("results: 1"));
+    assert!(out.contains("tests/plan_test.rs"));
+    assert!(!out.contains("src/contest.rs"));
+}
+
+#[test]
 fn milestone10_verify_plan_changed_files() {
     let repo = common::temp_repo();
     common::write_file(

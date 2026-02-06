@@ -1,11 +1,16 @@
 mod common;
 
+use assert_cmd::prelude::*;
 use serde_json::Value;
 
 fn run_stdout(args: &[&str]) -> String {
     let mut cmd = common::repo_scout_cmd();
     cmd.args(args);
-    let output = cmd.assert().success().get_output().stdout.clone();
+    let output = OutputAssertExt::assert(&mut cmd)
+        .success()
+        .get_output()
+        .stdout
+        .clone();
     String::from_utf8(output).expect("stdout should be utf-8")
 }
 

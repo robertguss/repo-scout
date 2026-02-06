@@ -129,9 +129,14 @@ fn run_verify_plan(args: crate::cli::VerifyPlanArgs) -> anyhow::Result<()> {
 
 fn normalize_changed_file(repo_root: &std::path::Path, changed_file: &str) -> String {
     let candidate = std::path::PathBuf::from(changed_file);
+    let absolute_repo_root = std::fs::canonicalize(repo_root).unwrap_or_else(|_| {
+        std::env::current_dir()
+            .map(|cwd| cwd.join(repo_root))
+            .unwrap_or_else(|_| repo_root.to_path_buf())
+    });
     let normalized = if candidate.is_absolute() {
         candidate
-            .strip_prefix(repo_root)
+            .strip_prefix(&absolute_repo_root)
             .map(|path| path.to_path_buf())
             .unwrap_or(candidate)
     } else {

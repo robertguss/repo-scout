@@ -125,8 +125,8 @@ fn milestone7_spans_and_signatures_persist() {
 
     assert!(end_line >= start_line);
     assert!(
-        end_column > start_column,
-        "span end should extend beyond start column for the function definition"
+        end_line > start_line || end_column > start_column,
+        "span should either end on a later line or extend beyond the start column on the same line"
     );
     let signature = signature.expect("function signature summary should be persisted");
     assert!(signature.contains("fn start_engine"));

@@ -2,9 +2,9 @@
 
 This ExecPlan is a living document. The sections `Progress`, `Surprises & Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-This repository includes `/Users/robertguss/Projects/experiments/repo-scout/agents/PLANS.md`, and this document must be maintained in accordance with that file.
+This repository includes `agents/PLANS.md`, and this document must be maintained in accordance with that file.
 
-This plan builds on `/Users/robertguss/Projects/experiments/repo-scout/agents/repo-scout-hybrid-rust-execplan.md`, which completed v0 (`index`, `status`, `find`, `refs`) and established deterministic JSON output plus baseline Rust AST extraction.
+This plan builds on `agents/repo-scout-hybrid-rust-execplan.md`, which completed v0 (`index`, `status`, `find`, `refs`) and established deterministic JSON output plus baseline Rust AST extraction.
 
 ## Purpose / Big Picture
 
@@ -14,7 +14,7 @@ A user should be able to see this working through concrete commands: index a rep
 
 ## Progress
 
-- [x] (2026-02-06 00:00Z) Reviewed current repository state, prior v0 ExecPlan, and `/Users/robertguss/Projects/experiments/repo-scout/agents/PLANS.md` requirements.
+- [x] (2026-02-06 00:00Z) Reviewed current repository state, prior v0 ExecPlan, and `agents/PLANS.md` requirements.
 - [x] (2026-02-06 00:00Z) Drafted this Phase 2 agent-first ExecPlan with full milestone narrative, validation commands, and interface contracts.
 - [x] (2026-02-06 00:00Z) Added strict per-feature TDD gates (red, green, refactor) and evidence requirements for each milestone.
 - [x] (2026-02-06 01:10Z) Implemented Milestone 6 lifecycle correctness and schema migration guards (`tests/milestone6_lifecycle.rs`, `tests/milestone6_schema_migration.rs`, `src/indexer/mod.rs`, `src/store/schema.rs`) with full-suite green gate.
@@ -122,7 +122,7 @@ Milestone 10 outcome (2026-02-06): `tests-for` and `verify-plan` now ship as fir
 
 ## Context and Orientation
 
-`repo-scout` is a Rust CLI with command parsing in `/Users/robertguss/Projects/experiments/repo-scout/src/cli.rs`, top-level dispatch in `/Users/robertguss/Projects/experiments/repo-scout/src/main.rs`, indexing logic in `/Users/robertguss/Projects/experiments/repo-scout/src/indexer/`, querying in `/Users/robertguss/Projects/experiments/repo-scout/src/query/`, and SQLite schema/store handling in `/Users/robertguss/Projects/experiments/repo-scout/src/store/`. Integration tests live under `/Users/robertguss/Projects/experiments/repo-scout/tests/`.
+`repo-scout` is a Rust CLI with command parsing in `src/cli.rs`, top-level dispatch in `src/main.rs`, indexing logic in `src/indexer/`, querying in `src/query/`, and SQLite schema/store handling in `src/store/`. Integration tests live under `tests/`.
 
 This plan uses several terms that must be explicit. A “symbol” means a named program element such as a function, struct, enum, trait, method, module, or imported name. A “span” means a source range, including where the symbol starts and ends in line/column coordinates. An “edge” means a directional relationship between two symbols, such as “A calls B” or “file X imports symbol Y.” A “symbol graph” means symbols plus edges stored in queryable tables. “Impact analysis” means finding likely downstream symbols/files affected if one symbol changes. A “context bundle” means a capped, ranked set of snippets and metadata selected to help complete a coding task inside a limited token budget.
 
@@ -136,21 +136,21 @@ For each slice, the contributor must record three artifacts in this document: a 
 
 ## Plan of Work
 
-Milestone 6 fixes index lifecycle correctness through three feature slices executed in strict TDD order. Slice 6A proves stale rows are removed when a file is deleted. Slice 6B proves rows migrate correctly when a file is renamed. Slice 6C proves lifecycle counts and output remain deterministic and backward compatible. Add tests first in `/Users/robertguss/Projects/experiments/repo-scout/tests/milestone6_lifecycle.rs`, then implement reconciliation in `/Users/robertguss/Projects/experiments/repo-scout/src/indexer/mod.rs` with transactional pruning across `indexed_files`, `text_occurrences`, `ast_definitions`, and `ast_references`.
+Milestone 6 fixes index lifecycle correctness through three feature slices executed in strict TDD order. Slice 6A proves stale rows are removed when a file is deleted. Slice 6B proves rows migrate correctly when a file is renamed. Slice 6C proves lifecycle counts and output remain deterministic and backward compatible. Add tests first in `tests/milestone6_lifecycle.rs`, then implement reconciliation in `src/indexer/mod.rs` with transactional pruning across `indexed_files`, `text_occurrences`, `ast_definitions`, and `ast_references`.
 
-Milestone 7 expands Rust AST extraction through four slices. Slice 7A adds `struct`, `enum`, and `trait` definitions. Slice 7B adds `impl` and method extraction with container metadata. Slice 7C adds module, alias, constant, and import symbol extraction. Slice 7D adds span and signature metadata storage and output wiring. Tests live in `/Users/robertguss/Projects/experiments/repo-scout/tests/milestone7_rust_symbols.rs`; implementation lives in `/Users/robertguss/Projects/experiments/repo-scout/src/indexer/rust_ast.rs`, `/Users/robertguss/Projects/experiments/repo-scout/src/indexer/mod.rs`, and `/Users/robertguss/Projects/experiments/repo-scout/src/store/schema.rs`.
+Milestone 7 expands Rust AST extraction through four slices. Slice 7A adds `struct`, `enum`, and `trait` definitions. Slice 7B adds `impl` and method extraction with container metadata. Slice 7C adds module, alias, constant, and import symbol extraction. Slice 7D adds span and signature metadata storage and output wiring. Tests live in `tests/milestone7_rust_symbols.rs`; implementation lives in `src/indexer/rust_ast.rs`, `src/indexer/mod.rs`, and `src/store/schema.rs`.
 
-Milestone 8 introduces graph storage through three slices. Slice 8A creates canonical symbol table upserts with stable IDs. Slice 8B stores `calls` and `contains` edges. Slice 8C adds `imports` and `implements` edges and deterministic retrieval ordering. Tests live in `/Users/robertguss/Projects/experiments/repo-scout/tests/milestone8_graph.rs`; implementation lives in new graph modules under `/Users/robertguss/Projects/experiments/repo-scout/src/query/` or `/Users/robertguss/Projects/experiments/repo-scout/src/graph/` plus index-time wiring in `/Users/robertguss/Projects/experiments/repo-scout/src/indexer/mod.rs`.
+Milestone 8 introduces graph storage through three slices. Slice 8A creates canonical symbol table upserts with stable IDs. Slice 8B stores `calls` and `contains` edges. Slice 8C adds `imports` and `implements` edges and deterministic retrieval ordering. Tests live in `tests/milestone8_graph.rs`; implementation lives in new graph modules under `src/query/` or `src/graph/` plus index-time wiring in `src/indexer/mod.rs`.
 
-Milestone 9 adds agent-native task queries through four slices. Slice 9A introduces CLI routing for `impact` and terminal output. Slice 9B adds `impact --json` deterministic schema. Slice 9C introduces `context` ranking with budget enforcement. Slice 9D adds `context --json` with explicit `why_included` reasons. Tests live in `/Users/robertguss/Projects/experiments/repo-scout/tests/milestone9_agent_queries.rs`; routing is in `/Users/robertguss/Projects/experiments/repo-scout/src/cli.rs` and `/Users/robertguss/Projects/experiments/repo-scout/src/main.rs`; query logic and ranking live in `/Users/robertguss/Projects/experiments/repo-scout/src/query/`.
+Milestone 9 adds agent-native task queries through four slices. Slice 9A introduces CLI routing for `impact` and terminal output. Slice 9B adds `impact --json` deterministic schema. Slice 9C introduces `context` ranking with budget enforcement. Slice 9D adds `context --json` with explicit `why_included` reasons. Tests live in `tests/milestone9_agent_queries.rs`; routing is in `src/cli.rs` and `src/main.rs`; query logic and ranking live in `src/query/`.
 
-Milestone 10 adds validation intelligence through four slices. Slice 10A introduces `tests-for` for direct symbol-to-test mapping. Slice 10B improves `tests-for` with confidence tiers and deduplication. Slice 10C introduces `verify-plan` for changed files. Slice 10D refines `verify-plan` into deterministic recommended command sets with rationale strings. Tests live in `/Users/robertguss/Projects/experiments/repo-scout/tests/milestone10_validation.rs`; implementation lives in `/Users/robertguss/Projects/experiments/repo-scout/src/query/`, `/Users/robertguss/Projects/experiments/repo-scout/src/output.rs`, and CLI wiring files.
+Milestone 10 adds validation intelligence through four slices. Slice 10A introduces `tests-for` for direct symbol-to-test mapping. Slice 10B improves `tests-for` with confidence tiers and deduplication. Slice 10C introduces `verify-plan` for changed files. Slice 10D refines `verify-plan` into deterministic recommended command sets with rationale strings. Tests live in `tests/milestone10_validation.rs`; implementation lives in `src/query/`, `src/output.rs`, and CLI wiring files.
 
-Throughout all milestones, preserve current v0 command behavior and JSON schema compatibility for existing fields. If schema version increments are required, implement explicit migration steps in `/Users/robertguss/Projects/experiments/repo-scout/src/store/schema.rs` and maintain readable compatibility notes in docs.
+Throughout all milestones, preserve current v0 command behavior and JSON schema compatibility for existing fields. If schema version increments are required, implement explicit migration steps in `src/store/schema.rs` and maintain readable compatibility notes in docs.
 
 ## Concrete Steps
 
-Run all commands from `/Users/robertguss/Projects/experiments/repo-scout`.
+Run all commands from `.`.
 
 Use this exact loop for every feature slice. The red step must fail before any production edit is allowed for that slice.
 
@@ -288,13 +288,13 @@ After Milestone 9, `impact` and `context` must support `--json` with stable top-
 
 After Milestone 10, `tests-for` and `verify-plan` must recommend a non-empty, deterministic command/file list for fixture changes, and must avoid duplicates. End-to-end tests must show that recommendations include both nearest tests and broader safety checks when confidence is low.
 
-Final acceptance requires evidence of strict TDD for each feature slice: at least one red transcript, one green transcript, and one refactor full-suite transcript per slice in the Artifacts section or linked commit messages. Final acceptance also requires `cargo test` full-suite pass, preservation of existing v0 behavior (`find`, `refs`, `--json`), and updated docs in `/Users/robertguss/Projects/experiments/repo-scout/README.md`, `/Users/robertguss/Projects/experiments/repo-scout/docs/cli-reference.md`, `/Users/robertguss/Projects/experiments/repo-scout/docs/json-output.md`, and `/Users/robertguss/Projects/experiments/repo-scout/docs/architecture.md`.
+Final acceptance requires evidence of strict TDD for each feature slice: at least one red transcript, one green transcript, and one refactor full-suite transcript per slice in the Artifacts section or linked commit messages. Final acceptance also requires `cargo test` full-suite pass, preservation of existing v0 behavior (`find`, `refs`, `--json`), and updated docs in `README.md`, `docs/cli-reference.md`, `docs/json-output.md`, and `docs/architecture.md`.
 
 ## Idempotence and Recovery
 
 Indexing must remain idempotent. Repeated runs with unchanged files must preserve row counts and ordering and must not duplicate symbols or edges. File lifecycle reconciliation in Milestone 6 must be safe to run repeatedly and must converge to the same state.
 
-If schema changes require migration, use additive migration steps keyed by schema version in `/Users/robertguss/Projects/experiments/repo-scout/src/store/schema.rs`. A failed migration should leave the previous schema intact when possible; when not possible, emit an actionable error that names the index file path and recovery steps.
+If schema changes require migration, use additive migration steps keyed by schema version in `src/store/schema.rs`. A failed migration should leave the previous schema intact when possible; when not possible, emit an actionable error that names the index file path and recovery steps.
 
 The existing corruption recovery behavior must remain intact. If the index file is corrupted, the tool must still instruct the user to delete the file and rerun `index`.
 
@@ -403,9 +403,9 @@ Strict TDD artifact checklist for each milestone (to be filled during implementa
 
 ## Interfaces and Dependencies
 
-Use existing dependencies already present in `/Users/robertguss/Projects/experiments/repo-scout/Cargo.toml`: `tree-sitter`, `tree-sitter-rust`, `rusqlite`, `serde`, and `clap`. Add no new runtime dependency unless needed for deterministic ranking or parsing quality; if added, justify it in the decision log.
+Use existing dependencies already present in `Cargo.toml`: `tree-sitter`, `tree-sitter-rust`, `rusqlite`, `serde`, and `clap`. Add no new runtime dependency unless needed for deterministic ranking or parsing quality; if added, justify it in the decision log.
 
-In `/Users/robertguss/Projects/experiments/repo-scout/src/cli.rs`, add command variants and argument structs for:
+In `src/cli.rs`, add command variants and argument structs for:
 
     Impact(QueryArgs)
     Context(ContextArgs)
@@ -433,7 +433,7 @@ Define:
         pub json: bool,
     }
 
-In `/Users/robertguss/Projects/experiments/repo-scout/src/query/mod.rs` (or split submodules), define and expose:
+In `src/query/mod.rs` (or split submodules), define and expose:
 
     pub fn impact_matches(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<ImpactMatch>>;
     pub fn context_matches(
@@ -447,7 +447,7 @@ In `/Users/robertguss/Projects/experiments/repo-scout/src/query/mod.rs` (or spli
         changed_files: &[String],
     ) -> anyhow::Result<Vec<VerificationStep>>;
 
-In `/Users/robertguss/Projects/experiments/repo-scout/src/store/schema.rs`, introduce schema version 2 with additive tables:
+In `src/store/schema.rs`, introduce schema version 2 with additive tables:
 
     symbols_v2(
       symbol_id INTEGER PRIMARY KEY,
@@ -472,7 +472,7 @@ In `/Users/robertguss/Projects/experiments/repo-scout/src/store/schema.rs`, intr
 
 Create indexes on symbol text, file path, and `(from_symbol_id, edge_kind)` plus `(to_symbol_id, edge_kind)`.
 
-In `/Users/robertguss/Projects/experiments/repo-scout/src/output.rs`, preserve existing output functions and add:
+In `src/output.rs`, preserve existing output functions and add:
 
     pub fn print_impact(symbol: &str, matches: &[ImpactMatch]);
     pub fn print_impact_json(symbol: &str, matches: &[ImpactMatch]) -> anyhow::Result<()>;

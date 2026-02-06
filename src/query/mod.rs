@@ -490,8 +490,7 @@ fn test_targets_for_symbol(
            AND (
                file_path LIKE 'tests/%'
                OR file_path LIKE '%/tests/%'
-               OR file_path LIKE '%_test.rs'
-               OR file_path LIKE '%test.rs'
+               OR file_path GLOB '*_test.rs'
            )
          GROUP BY file_path
          ORDER BY hit_count DESC, file_path ASC",
