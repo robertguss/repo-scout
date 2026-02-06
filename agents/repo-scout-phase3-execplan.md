@@ -76,7 +76,7 @@ Strict red-green-refactor applies to every feature slice in this plan. A feature
 
 Each slice must record three artifacts in this file (or linked commit notes): a red failure transcript, a green pass transcript for the targeted test, and a refactor transcript with full suite pass. If scope changes while implementing a slice, split the slice in `Progress` and document the decision in `Decision Log`.
 
-Dogfooding rule for every slice: before implementation and after green/refactor, run `cargo run -- index --repo .`, `cargo run -- find <target_symbol> --repo .`, and `cargo run -- refs <target_symbol> --repo .` with a symbol relevant to that slice.
+Dogfooding rule for every slice must follow `AGENTS.md` exactly. Before implementing the slice, run `cargo run -- index --repo .`, `cargo run -- find <target_symbol> --repo . --json`, and `cargo run -- refs <target_symbol> --repo . --json` with a symbol relevant to that slice. After implementing the slice, run `cargo run -- index --repo .`, `cargo run -- find <target_symbol> --repo .`, `cargo run -- refs <target_symbol> --repo .`, and `cargo test`.
 
 ## Plan of Work
 
