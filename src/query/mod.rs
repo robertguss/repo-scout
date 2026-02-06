@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::fs;
 use std::path::Path;
 
 use rusqlite::{Connection, params};
@@ -56,6 +57,304 @@ pub struct VerificationStep {
     pub why_included: String,
     pub confidence: String,
     pub score: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ExplainInboundSummary {
+    pub called_by: u32,
+    pub imported_by: u32,
+    pub implemented_by: u32,
+    pub contained_by: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ExplainOutboundSummary {
+    pub calls: u32,
+    pub imports: u32,
+    pub implements: u32,
+    pub contains: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ExplainMatch {
+    pub symbol: String,
+    pub qualified_symbol: String,
+    pub kind: String,
+    pub language: String,
+    pub file_path: String,
+    pub start_line: u32,
+    pub start_column: u32,
+    pub end_line: u32,
+    pub end_column: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
+    pub inbound: ExplainInboundSummary,
+    pub outbound: ExplainOutboundSummary,
+    pub why_included: String,
+    pub confidence: String,
+    pub provenance: String,
+    pub score: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snippet: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "result_kind")]
+pub enum DiffImpactMatch {
+    #[serde(rename = "impacted_symbol")]
+    ImpactedSymbol {
+        symbol: String,
+        qualified_symbol: String,
+        kind: String,
+        language: String,
+        file_path: String,
+        line: u32,
+        column: u32,
+        distance: u32,
+        relationship: String,
+        why_included: String,
+        confidence: String,
+        provenance: String,
+        score: f64,
+    },
+    #[serde(rename = "test_target")]
+    TestTarget {
+        target: String,
+        target_kind: String,
+        language: String,
+        why_included: String,
+        confidence: String,
+        provenance: String,
+        score: f64,
+    },
+}
+
+pub fn diff_impact_for_changed_files(
+    db_path: &Path,
+    changed_files: &[String],
+    _max_distance: u32,
+    _include_tests: bool,
+) -> anyhow::Result<Vec<DiffImpactMatch>> {
+    let connection = Connection::open(db_path)?;
+    let mut results = Vec::new();
+    let mut seen = HashSet::new();
+
+    for changed_file in changed_files {
+        let mut statement = connection.prepare(
+            "SELECT symbol, kind, file_path, start_line, start_column
+             FROM symbols_v2
+             WHERE file_path = ?1
+             ORDER BY start_line ASC, start_column ASC, symbol ASC",
+        )?;
+        let rows = statement.query_map(params![changed_file], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, i64>(3)? as u32,
+                row.get::<_, i64>(4)? as u32,
+            ))
+        })?;
+
+        for row in rows {
+            let (symbol, kind, file_path, line, column) = row?;
+            let language = language_for_file_path(&file_path).to_string();
+            let qualified_symbol = format!("{language}:{file_path}::{symbol}");
+            let key = format!("{file_path}:{line}:{column}:{qualified_symbol}");
+            if !seen.insert(key) {
+                continue;
+            }
+
+            results.push(DiffImpactMatch::ImpactedSymbol {
+                symbol,
+                qualified_symbol,
+                kind,
+                language,
+                file_path,
+                line,
+                column,
+                distance: 0,
+                relationship: "changed_symbol".to_string(),
+                why_included: "symbol defined in changed file".to_string(),
+                confidence: "graph_exact".to_string(),
+                provenance: "ast_definition".to_string(),
+                score: 1.0,
+            });
+        }
+    }
+
+    results.sort_by(diff_impact_sort_key);
+    Ok(results)
+}
+
+pub fn explain_symbol(
+    db_path: &Path,
+    symbol: &str,
+    include_snippets: bool,
+) -> anyhow::Result<Vec<ExplainMatch>> {
+    let connection = Connection::open(db_path)?;
+    let mut statement = connection.prepare(
+        "SELECT symbol, kind, file_path, start_line, start_column, end_line, end_column, signature
+         FROM symbols_v2
+         WHERE symbol = ?1
+         ORDER BY file_path ASC, start_line ASC, start_column ASC, kind ASC",
+    )?;
+    let rows = statement.query_map(params![symbol], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, i64>(3)? as u32,
+            row.get::<_, i64>(4)? as u32,
+            row.get::<_, i64>(5)? as u32,
+            row.get::<_, i64>(6)? as u32,
+            row.get::<_, Option<String>>(7)?,
+        ))
+    })?;
+
+    let mut results = Vec::new();
+    for row in rows {
+        let (symbol, kind, file_path, start_line, start_column, end_line, end_column, signature) =
+            row?;
+        let language = language_for_file_path(&file_path).to_string();
+        let qualified_symbol = format!("{language}:{file_path}::{symbol}");
+        let snippet = include_snippets
+            .then(|| extract_symbol_snippet(db_path, &file_path, start_line, end_line))
+            .flatten();
+        results.push(ExplainMatch {
+            symbol,
+            qualified_symbol,
+            kind,
+            language,
+            file_path,
+            start_line,
+            start_column,
+            end_line,
+            end_column,
+            signature,
+            inbound: ExplainInboundSummary {
+                called_by: 0,
+                imported_by: 0,
+                implemented_by: 0,
+                contained_by: 0,
+            },
+            outbound: ExplainOutboundSummary {
+                calls: 0,
+                imports: 0,
+                implements: 0,
+                contains: 0,
+            },
+            why_included: "exact symbol definition match".to_string(),
+            confidence: "graph_exact".to_string(),
+            provenance: "ast_definition".to_string(),
+            score: 1.0,
+            snippet,
+        });
+    }
+
+    results.sort_by(|left, right| {
+        right
+            .score
+            .partial_cmp(&left.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(left.file_path.cmp(&right.file_path))
+            .then(left.start_line.cmp(&right.start_line))
+            .then(left.start_column.cmp(&right.start_column))
+            .then(left.qualified_symbol.cmp(&right.qualified_symbol))
+    });
+    Ok(results)
+}
+
+fn diff_impact_sort_key(left: &DiffImpactMatch, right: &DiffImpactMatch) -> std::cmp::Ordering {
+    match (left, right) {
+        (
+            DiffImpactMatch::ImpactedSymbol {
+                score: ls,
+                file_path: lf,
+                line: ll,
+                column: lc,
+                qualified_symbol: lq,
+                ..
+            },
+            DiffImpactMatch::ImpactedSymbol {
+                score: rs,
+                file_path: rf,
+                line: rl,
+                column: rc,
+                qualified_symbol: rq,
+                ..
+            },
+        ) => rs
+            .partial_cmp(ls)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(lf.cmp(rf))
+            .then(ll.cmp(rl))
+            .then(lc.cmp(rc))
+            .then(lq.cmp(rq)),
+        (
+            DiffImpactMatch::ImpactedSymbol { score: ls, .. },
+            DiffImpactMatch::TestTarget { score: rs, .. },
+        )
+        | (
+            DiffImpactMatch::TestTarget { score: ls, .. },
+            DiffImpactMatch::ImpactedSymbol { score: rs, .. },
+        )
+        | (
+            DiffImpactMatch::TestTarget { score: ls, .. },
+            DiffImpactMatch::TestTarget { score: rs, .. },
+        ) => rs
+            .partial_cmp(ls)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(diff_impact_kind_rank(left).cmp(&diff_impact_kind_rank(right))),
+    }
+}
+
+fn diff_impact_kind_rank(item: &DiffImpactMatch) -> u8 {
+    match item {
+        DiffImpactMatch::ImpactedSymbol { .. } => 0,
+        DiffImpactMatch::TestTarget { .. } => 1,
+    }
+}
+
+fn language_for_file_path(file_path: &str) -> &'static str {
+    if file_path.ends_with(".rs") {
+        "rust"
+    } else if file_path.ends_with(".ts") || file_path.ends_with(".tsx") {
+        "typescript"
+    } else if file_path.ends_with(".py") {
+        "python"
+    } else {
+        "unknown"
+    }
+}
+
+fn extract_symbol_snippet(
+    db_path: &Path,
+    file_path: &str,
+    start_line: u32,
+    end_line: u32,
+) -> Option<String> {
+    let repo_root = db_path.parent()?.parent()?;
+    let absolute_path = repo_root.join(file_path);
+    let source = fs::read_to_string(absolute_path).ok()?;
+    let lines = source.lines().collect::<Vec<_>>();
+    if lines.is_empty() {
+        return None;
+    }
+
+    let start_index = start_line.saturating_sub(1) as usize;
+    if start_index >= lines.len() {
+        return None;
+    }
+
+    let end_index = end_line.max(start_line).saturating_sub(1) as usize;
+    let clamped_end = std::cmp::min(end_index, lines.len().saturating_sub(1));
+    let snippet = lines[start_index..=clamped_end].join("\n");
+    let trimmed = snippet.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    Some(trimmed.to_string())
 }
 
 /// Finds code locations that match `symbol`, preferring exact AST definitions and falling back to text matches.
