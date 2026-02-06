@@ -1,47 +1,50 @@
-# Performance Baseline (Phase 2 Preflight)
+# Performance Baseline
 
-This document defines a lightweight baseline process before major Phase 2
-features land. The goal is to catch obvious regressions in index/query latency
-while contracts and data model are evolving.
+This document defines lightweight, repeatable timing checks for `repo-scout`.
+
+The goal is regression detection, not benchmark-grade precision.
 
 ## Scope
 
-Track wall-clock timing for:
+Track wall-clock timings for:
 
-- `index` on a fixed local fixture repository.
-- one `find` query on that same repository.
-- one `refs` query on that same repository.
-
-This is a guardrail, not a precise benchmark suite.
+- indexing (`index`)
+- core lookup (`find`, `refs`)
+- Phase 2 queries (`impact`, `context`, `tests-for`, `verify-plan`)
 
 ## Commands
 
 From repository root:
 
 ```bash
-just perf-baseline launch
+just perf-baseline-core run
+just perf-baseline-full run src/query/mod.rs "update run and verify refs behavior"
 ```
 
-Or run commands manually:
+Equivalent manual commands:
 
 ```bash
 /usr/bin/time -p cargo run --release -- index --repo .
-/usr/bin/time -p cargo run --release -- find launch --repo . --json
-/usr/bin/time -p cargo run --release -- refs launch --repo . --json
+/usr/bin/time -p cargo run --release -- find run --repo . --json
+/usr/bin/time -p cargo run --release -- refs run --repo . --json
+/usr/bin/time -p cargo run --release -- impact run --repo . --json
+/usr/bin/time -p cargo run --release -- context --task "update run and verify refs behavior" --repo . --budget 1200 --json
+/usr/bin/time -p cargo run --release -- tests-for run --repo . --json
+/usr/bin/time -p cargo run --release -- verify-plan --changed-file src/query/mod.rs --repo . --json
 ```
 
 ## Recording
 
-Record timings in `docs/dogfood-log.md` when:
+Capture results in `docs/dogfood-log.md` when:
 
-- a major milestone starts,
-- a major milestone ends,
-- you notice unexpected slowdowns during dogfooding.
+- starting major work,
+- finishing major work,
+- observing suspicious slowdown.
 
-Recommended log fields:
+Recommended fields:
 
 - date/time,
-- fixture/repo used,
+- machine/load notes,
 - command,
 - elapsed wall time,
-- notes about machine load or unusual conditions.
+- any unusual conditions (cold cache, background workload, etc.).

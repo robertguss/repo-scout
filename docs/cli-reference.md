@@ -1,18 +1,33 @@
 # CLI Reference
 
-All examples below assume invocation via Cargo:
+All examples assume invocation through Cargo:
 
 ```bash
 cargo run -- <command> ...
 ```
 
-If installed as a binary, replace `cargo run --` with your binary invocation.
+## Global Help
+
+```bash
+cargo run -- --help
+```
+
+Current command surface:
+
+- `index`
+- `status`
+- `find`
+- `refs`
+- `impact`
+- `context`
+- `tests-for`
+- `verify-plan`
 
 ## Commands
 
 ### `index --repo <PATH>`
 
-Build or update the repository index in `<PATH>/.repo-scout/index.db`.
+Build or refresh `<PATH>/.repo-scout/index.db`.
 
 Example:
 
@@ -20,14 +35,17 @@ Example:
 cargo run -- index --repo .
 ```
 
-Example output:
+Terminal output fields:
 
-```text
-index_path: /absolute/path/to/repo/.repo-scout/index.db
-schema_version: 2
-indexed_files: 12
-skipped_files: 48
-```
+- `index_path`
+- `schema_version`
+- `indexed_files`
+- `skipped_files`
+
+Notes:
+
+- `indexed_files` counts changed/new files processed in this run.
+- `skipped_files` counts unchanged files skipped by content hash.
 
 ### `status --repo <PATH>`
 
@@ -41,116 +59,119 @@ cargo run -- status --repo .
 
 ### `find <SYMBOL> --repo <PATH> [--json]`
 
-Find likely definitions or matches for `SYMBOL`.
+Find likely symbol definitions.
 
-Behavior:
+Ranking strategy:
 
-- Prefers Rust AST definitions if available (functions, methods, types, modules, consts, and imports).
-- Falls back to ranked text matching (exact token first, substring second).
+1. AST definition matches (`why_matched=ast_definition`, `confidence=ast_exact`, `score=1.0`).
+2. Text exact token fallback (`exact_symbol_name`, `text_fallback`, `0.8`).
+3. Text substring fallback (`text_substring_match`, `text_fallback`, `0.4`).
 
 Example:
 
 ```bash
-cargo run -- find launch --repo .
+cargo run -- find run --repo .
+cargo run -- find run --repo . --json
 ```
 
 ### `refs <SYMBOL> --repo <PATH> [--json]`
 
-Find likely references for `SYMBOL`.
+Find likely references/usages.
 
-Behavior:
+Ranking strategy:
 
-- Prefers Rust AST references if available.
-- Falls back to ranked text matching.
+1. AST reference matches (`why_matched=ast_reference`, `confidence=ast_likely`, `score=0.95`).
+2. Same text fallback sequence as `find`.
 
 Example:
 
 ```bash
-cargo run -- refs launch --repo .
+cargo run -- refs run --repo .
+cargo run -- refs run --repo . --json
 ```
 
 ### `impact <SYMBOL> --repo <PATH> [--json]`
 
-Find first-order graph neighbors impacted by changing `SYMBOL`.
+Return one-hop incoming graph neighbors likely impacted by changing `SYMBOL`.
 
-Current behavior:
+Relationship labels are normalized to:
 
-- Uses graph edges from the local index (`calls`, `contains`, `imports`, `implements`).
-- Returns deterministic one-hop matches with relationship labels such as `called_by`.
+- `called_by`
+- `contained_by`
+- `imported_by`
+- `implemented_by`
 
 Example:
 
 ```bash
-cargo run -- impact launch --repo .
+cargo run -- impact run --repo .
+cargo run -- impact run --repo . --json
 ```
 
 ### `context --task <TEXT> --repo <PATH> [--budget <N>] [--json]`
 
-Build a ranked, budget-limited symbol/snippet bundle for a task description.
+Build a ranked, budgeted context bundle for an editing task.
 
-Current behavior:
+Behavior:
 
-- Extracts task keywords and prioritizes direct symbol matches.
-- Expands one graph hop to include likely neighbor context.
-- Enforces a deterministic budget cap.
+- Extracts deduplicated lowercase keywords from task text.
+- Prioritizes direct symbol definition hits (`confidence=context_high`, `score=0.95`).
+- Adds one-hop graph neighbors (`context_medium`, `0.7`).
+- Truncates to `max(1, budget / 200)` results.
 
 Example:
 
 ```bash
-cargo run -- context --task "modify launch flow and update callers" --repo . --budget 1200
+cargo run -- context --task "update run and verify refs behavior" --repo . --budget 400
+cargo run -- context --task "update run and verify refs behavior" --repo . --budget 400 --json
 ```
 
 ### `tests-for <SYMBOL> --repo <PATH> [--json]`
 
-Find likely test targets for `SYMBOL`.
+Return test targets likely relevant to `SYMBOL`.
 
-Current behavior:
+Current target discovery:
 
-- Looks for exact symbol hits in test-like files.
-- Deduplicates targets and applies deterministic confidence tiers.
+- file path under `tests/`
+- file path containing `/tests/`
+- file name matching `*_test.rs`
+
+Output rows include:
+
+- `target`
+- `target_kind` (currently `integration_test_file`)
+- `why_included`
+- `confidence`
+- `score`
 
 Example:
 
 ```bash
-cargo run -- tests-for launch --repo .
+cargo run -- tests-for run --repo .
+cargo run -- tests-for run --repo . --json
 ```
 
 ### `verify-plan --changed-file <PATH> [--changed-file <PATH> ...] --repo <PATH> [--json]`
 
-Build a deterministic validation command plan for changed files.
+Generate deterministic validation steps for changed files.
 
-Current behavior:
+Behavior:
 
-- Uses changed-file symbol definitions to suggest nearby integration-test commands.
-- Emits runnable top-level integration-test commands only.
-- Always includes `cargo test` as the full-suite safety gate.
+- Normalizes changed-file paths to repo-relative form.
+- Deduplicates repeated changed-file inputs.
+- Suggests runnable targeted commands only (`cargo test --test <name>` for direct `tests/<file>.rs` targets).
+- Always appends a full-suite safety gate: `cargo test`.
 
 Example:
 
 ```bash
 cargo run -- verify-plan --changed-file src/query/mod.rs --repo .
+cargo run -- verify-plan --changed-file src/query/mod.rs --changed-file ./src/query/mod.rs --repo . --json
 ```
 
-## Output Labels
+## Exit Codes
 
-`why_matched` values currently used:
+- Success: `0`
+- Failure: non-zero
 
-- `ast_definition`
-- `ast_reference`
-- `exact_symbol_name`
-- `text_substring_match`
-
-`confidence` values currently used:
-
-- `ast_exact`
-- `ast_likely`
-- `text_fallback`
-- `graph_likely`
-- `context_high`
-- `context_medium`
-
-## Exit Behavior
-
-- Success paths return exit code `0`.
-- Errors return non-zero and print a message to stderr.
-- Corrupt index errors include a recovery hint that points to the index path and suggests deleting it before re-running `index`.
+Corrupt or invalid index DB errors include a hint with the index path and recovery action (`delete file, rerun index`).

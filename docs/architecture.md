@@ -1,124 +1,119 @@
 # Architecture
 
-This document describes the current architecture for `repo-scout` after Phase 2 Milestones 6 through 10.
+This document describes the current `repo-scout` architecture after Phase 2.
 
 ## High-Level Flow
 
-1. CLI parses a command (`index`, `status`, `find`, `refs`, `impact`, `context`, `tests-for`, `verify-plan`).
-2. Store bootstrap ensures `.repo-scout/index.db` exists and schema is initialized.
-3. `index` performs file discovery + incremental processing.
-4. `find`/`refs` query direct symbol tables; `impact`/`context` query graph + metadata tables; `tests-for`/`verify-plan` query test evidence and validation heuristics.
-5. Output is rendered as human-readable text or JSON.
+1. CLI parses a command in `src/cli.rs`.
+2. Store bootstrap (`src/store/mod.rs`) opens `<repo>/.repo-scout/index.db`, ensures schema, and reads schema version.
+3. `index` performs incremental indexing (`src/indexer/mod.rs`).
+4. Query commands read SQLite tables and apply deterministic ranking/ordering (`src/query/mod.rs`).
+5. Output is rendered as terminal text or JSON (`src/output.rs`).
 
-## Module Map
+## Module Responsibilities
 
 - `src/main.rs`
-  - Command dispatch and top-level orchestration.
+  - Command dispatch and command handlers.
 - `src/cli.rs`
-  - clap command/argument definitions.
+  - Clap definitions for command/argument surface.
 - `src/store/mod.rs`
-  - Index database path resolution and bootstrap.
-  - Corruption detection and user-facing recovery hinting.
+  - Index path resolution, DB bootstrap, corruption hinting.
 - `src/store/schema.rs`
-  - SQLite schema creation and schema version metadata.
+  - Schema DDL and schema version metadata (`SCHEMA_VERSION = 2`).
 - `src/indexer/files.rs`
-  - Repository walk and per-file hashing.
+  - Repository discovery and ignore-aware file walking.
 - `src/indexer/text.rs`
-  - Language-agnostic token extraction with line/column locations.
+  - Token occurrence extraction with line/column.
 - `src/indexer/rust_ast.rs`
-  - Rust Tree-sitter parsing for symbol definitions (functions, types, modules, imports) and call references.
+  - Rust AST extraction for definitions/references.
 - `src/indexer/mod.rs`
-  - Incremental indexing coordinator and table upserts.
+  - Incremental indexing coordinator, stale-row pruning, symbol/edge persistence.
 - `src/query/mod.rs`
-  - Query retrieval, ranking, and result labeling.
+  - `find`, `refs`, `impact`, `context`, `tests-for`, `verify-plan` implementations.
 - `src/output.rs`
-  - Terminal and JSON formatting.
+  - Human-readable and JSON serialization paths.
 
-## Storage Model (SQLite)
+## Storage Model
 
-Current tables:
+Primary tables:
 
 - `meta`
-  - Key/value metadata (`schema_version`).
+  - Key/value metadata including `schema_version`.
 - `indexed_files`
-  - `file_path` + `content_hash` for incremental re-index checks.
+  - Per-file hash used for incremental skip decisions.
 - `text_occurrences`
-  - Token-level fallback matches with `line` and `column`.
+  - Token fallback source for text matching and test heuristics.
 - `ast_definitions`
-  - Rust AST definition entries used by `find`.
+  - Rust definition entries (`find` primary path).
 - `ast_references`
-  - Rust AST reference entries (call-site identifiers).
+  - Rust reference entries (`refs` primary path).
 - `symbols_v2`
-  - Rich symbol metadata for Phase 2: kind, container, start/end span, and optional signature summary.
+  - Rich symbol metadata (kind/container/span/signature).
 - `symbol_edges_v2`
-  - Phase 2 graph table for symbol-to-symbol edges (`calls`, `contains`, `imports`, `implements`).
+  - Symbol graph edges (`calls`, `contains`, `imports`, `implements`).
 
-Indexes exist for common symbol lookups in text and AST tables.
+## Incremental Indexing Lifecycle
 
-## Incremental Indexing
+For each indexing run:
 
-For each discovered file:
+1. Discover source files and build live path set.
+2. Prune stale DB rows for deleted files.
+3. For each live file:
+   - compute hash,
+   - skip unchanged files,
+   - otherwise delete existing rows for that file and reinsert fresh text/AST/symbol/edge rows in one transaction.
+4. Upsert file hash into `indexed_files`.
 
-1. Compute BLAKE3 hash.
-2. Compare with `indexed_files.content_hash`.
-3. If unchanged: increment `skipped_files`.
-4. If changed:
-   - delete old occurrences for that file,
-   - insert fresh text occurrences,
-   - insert Rust AST entries when file extension is `.rs`,
-   - upsert the new file hash.
+Lifecycle guarantees covered by integration tests include stale-file pruning, rename handling, and schema migration safety.
 
-Each file update is transactional.
-
-## Query Strategy
+## Query Strategies
 
 ### `find`
 
-1. Return AST definitions when present (`why_matched=ast_definition`, `confidence=ast_exact`).
-2. Else return ranked text fallback:
-   - exact token matches first (`exact_symbol_name`, higher score),
-   - substring token matches next (`text_substring_match`, lower score).
+- Prefer exact AST definitions.
+- Fall back to text exact token, then text substring.
 
 ### `refs`
 
-1. Return AST references when present (`why_matched=ast_reference`, `confidence=ast_likely`).
-2. Else use the same ranked text fallback as `find`.
+- Prefer exact AST references.
+- Fall back to text exact token, then text substring.
 
 ### `impact`
 
-1. Resolve the target symbol in `symbols_v2`.
-2. Traverse incoming graph edges (`symbol_edges_v2`) to collect one-hop impacted neighbors.
-3. Emit deterministic rows with relationship labels such as `called_by`.
+- Resolve all matching symbols in `symbols_v2`.
+- Walk incoming edges in `symbol_edges_v2`.
+- Emit one-hop impacted neighbors with normalized relationship labels.
 
 ### `context`
 
-1. Extract task keywords.
-2. Match direct symbols in `symbols_v2` and score them highest.
-3. Expand one-hop graph neighbors for additional context.
-4. Sort deterministically and truncate to a fixed budget-derived cap.
+- Extract task keywords (ASCII alnum + `_`, lowercased, deduped, min length 3).
+- Add direct symbol definition hits.
+- Expand one-hop neighbors from edges.
+- Sort deterministically and truncate to `max(1, budget / 200)`.
 
 ### `tests-for`
 
-1. Find exact symbol occurrences in test-like files.
-2. Group by file path and score by evidence count.
-3. Return deduplicated, deterministically ordered target rows.
+- Find direct symbol occurrences in test-like files.
+- Group by file path, score by hit count, return deterministic ordering.
 
 ### `verify-plan`
 
-1. Normalize and deduplicate changed-file arguments.
-2. Resolve changed-file symbols and map them to likely test targets.
-3. Convert runnable top-level integration test targets into `cargo test --test <name>` steps.
-4. Keep highest-confidence evidence for duplicate commands.
-5. Append `cargo test` as a full-suite safety gate.
+- Normalize and dedupe `--changed-file` inputs.
+- Suggest targeted test commands from:
+  - changed file itself when it is a runnable test target,
+  - tests referencing symbols defined in changed files.
+- Keep best evidence for duplicate commands.
+- Always append `cargo test` full-suite gate.
 
 ## Determinism
 
-Output determinism is enforced through:
+Determinism is enforced by:
 
-- repository-relative paths,
-- explicit SQL `ORDER BY` clauses,
-- stable JSON field shapes.
+- explicit SQL ordering and tie-breakers,
+- stable confidence/label vocabularies,
+- repository-relative path normalization,
+- fixed JSON field shapes.
 
 ## Corruption Recovery
 
-Store bootstrap maps SQLite corruption signatures (`DatabaseCorrupt`, `NotADatabase`) to an actionable error message with the index path and delete-and-rerun guidance.
+Store bootstrap maps SQLite corruption signatures (`DatabaseCorrupt`, `NotADatabase`) into an actionable error telling users to delete the index DB file and rerun `index`.

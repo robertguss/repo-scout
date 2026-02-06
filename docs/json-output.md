@@ -1,32 +1,39 @@
-# JSON Output
+# JSON Output Contracts
 
-`find`, `refs`, `impact`, `context`, `tests-for`, and `verify-plan` support `--json` today. This document
-tracks the current stable contracts for schema versions 1 and 2.
+`repo-scout` supports JSON output for query commands.
 
-## Current Contract (Schema Version 1)
+- `find --json`
+- `refs --json`
+- `impact --json`
+- `context --json`
+- `tests-for --json`
+- `verify-plan --json`
 
-Example:
+`index` and `status` are terminal-only today.
 
-```bash
-cargo run -- find orbit --repo . --json
-```
+## Schema Versions
 
-Current schema version: `1`
+- `find`, `refs`: `schema_version = 1`
+- `impact`, `context`, `tests-for`, `verify-plan`: `schema_version = 2`
+
+## `find --json` and `refs --json` (Schema 1)
+
+Top-level shape:
 
 ```json
 {
   "schema_version": 1,
   "command": "find",
-  "query": "orbit",
+  "query": "run",
   "results": [
     {
-      "file_path": "docs/rank.txt",
-      "line": 1,
-      "column": 1,
-      "symbol": "orbit",
-      "why_matched": "exact_symbol_name",
-      "confidence": "text_fallback",
-      "score": 0.8
+      "file_path": "src/main.rs",
+      "line": 50,
+      "column": 4,
+      "symbol": "run",
+      "why_matched": "ast_definition",
+      "confidence": "ast_exact",
+      "score": 1.0
     }
   ]
 }
@@ -34,70 +41,85 @@ Current schema version: `1`
 
 Top-level fields:
 
-- `schema_version` (`number`): schema contract version.
-- `command` (`string`): `find` or `refs`.
-- `query` (`string`): symbol argument passed by the user.
-- `results` (`array`): ordered match list.
+- `schema_version` (`number`)
+- `command` (`"find" | "refs"`)
+- `query` (`string`)
+- `results` (`array<QueryMatch>`)
 
-Per-result fields:
+`QueryMatch` fields:
 
-- `file_path` (`string`): repository-relative file path.
-- `line` (`number`): 1-based line.
-- `column` (`number`): 1-based column.
-- `symbol` (`string`): matched symbol/token text.
-- `why_matched` (`string`): match provenance label.
-- `confidence` (`string`): confidence tier.
-- `score` (`number`): ranking score (higher is better).
+- `file_path` (`string`, repo-relative)
+- `line` (`number`, 1-based)
+- `column` (`number`, 1-based)
+- `symbol` (`string`)
+- `why_matched` (`string`)
+- `confidence` (`string`)
+- `score` (`number`)
 
-## Phase 2 Contract (Schema Version 2)
+Observed `why_matched` vocabulary:
 
-Status: all Phase 2 command contracts in this section are implemented.
+- `ast_definition`
+- `ast_reference`
+- `exact_symbol_name`
+- `text_substring_match`
 
-Current Phase 2 schema version: `2`
+Observed `confidence` vocabulary:
 
-### `impact --json`
+- `ast_exact`
+- `ast_likely`
+- `text_fallback`
 
-Example payload shape:
+## `impact --json` (Schema 2)
 
 ```json
 {
   "schema_version": 2,
   "command": "impact",
-  "query": "launch",
+  "query": "run",
   "results": [
     {
-      "symbol": "start_engine",
+      "symbol": "main",
       "kind": "function",
-      "file_path": "src/runtime.rs",
-      "line": 42,
-      "column": 5,
+      "file_path": "src/main.rs",
+      "line": 28,
+      "column": 4,
       "distance": 1,
       "relationship": "called_by",
       "confidence": "graph_likely",
-      "score": 0.91
+      "score": 0.95
     }
   ]
 }
 ```
 
-### `context --json`
+Per-result fields:
 
-Example payload shape:
+- `symbol` (`string`)
+- `kind` (`string`)
+- `file_path` (`string`)
+- `line` (`number`)
+- `column` (`number`)
+- `distance` (`number`, currently `1`)
+- `relationship` (`called_by | contained_by | imported_by | implemented_by | <edge_kind>`)
+- `confidence` (`graph_likely`)
+- `score` (`number`)
+
+## `context --json` (Schema 2)
 
 ```json
 {
   "schema_version": 2,
   "command": "context",
-  "task": "modify launch flow and update call sites",
-  "budget": 1200,
+  "task": "update run and verify refs behavior",
+  "budget": 400,
   "results": [
     {
-      "file_path": "src/runtime.rs",
-      "start_line": 30,
-      "end_line": 70,
-      "symbol": "launch",
+      "file_path": "src/main.rs",
+      "start_line": 50,
+      "end_line": 50,
+      "symbol": "run",
       "kind": "function",
-      "why_included": "direct definition match for task keyword 'launch'",
+      "why_included": "direct definition match for task keyword 'run'",
       "confidence": "context_high",
       "score": 0.95
     }
@@ -105,30 +127,45 @@ Example payload shape:
 }
 ```
 
-### `tests-for --json`
+Per-result fields:
 
-Example payload shape:
+- `file_path` (`string`)
+- `start_line` (`number`)
+- `end_line` (`number`)
+- `symbol` (`string`)
+- `kind` (`string`)
+- `why_included` (`string`)
+- `confidence` (`context_high | context_medium`)
+- `score` (`number`)
+
+## `tests-for --json` (Schema 2)
 
 ```json
 {
   "schema_version": 2,
   "command": "tests-for",
-  "query": "launch",
+  "query": "compute_plan",
   "results": [
     {
-      "target": "tests/launch_flow.rs",
+      "target": "tests/plan_test.rs",
       "target_kind": "integration_test_file",
-      "why_included": "references launch in nearby module",
+      "why_included": "direct symbol match for 'compute_plan' in test file",
       "confidence": "graph_likely",
-      "score": 0.83
+      "score": 0.9
     }
   ]
 }
 ```
 
-### `verify-plan --json`
+Per-result fields:
 
-Example payload shape:
+- `target` (`string`)
+- `target_kind` (`string`)
+- `why_included` (`string`)
+- `confidence` (`graph_likely | context_medium`)
+- `score` (`number`)
+
+## `verify-plan --json` (Schema 2)
 
 ```json
 {
@@ -137,11 +174,11 @@ Example payload shape:
   "changed_files": ["src/query/mod.rs"],
   "results": [
     {
-      "step": "cargo test milestone9_ -- --nocapture",
+      "step": "cargo test --test milestone8_graph",
       "scope": "targeted",
-      "why_included": "changed file participates in impact/context query routing",
-      "confidence": "context_medium",
-      "score": 0.86
+      "why_included": "targeted test references changed symbol 'Path'",
+      "confidence": "graph_likely",
+      "score": 0.9
     },
     {
       "step": "cargo test",
@@ -154,13 +191,26 @@ Example payload shape:
 }
 ```
 
-## Determinism Guarantees
+Top-level fields:
 
-For identical index and query state, JSON output should be deterministic:
+- `schema_version` (`2`)
+- `command` (`"verify-plan"`)
+- `changed_files` (`array<string>`; normalized + deduplicated)
+- `results` (`array<VerificationStep>`)
 
-- stable field names and ordering,
-- deterministic SQL ordering and tie-break rules,
-- repository-relative paths,
-- finite, documented vocabulary for `why_*`, `relationship`, and `confidence`.
+`VerificationStep` fields:
 
-Determinism is required for scripting, regression tests, and coding-agent workflows.
+- `step` (`string`)
+- `scope` (`"targeted" | "full_suite"`)
+- `why_included` (`string`)
+- `confidence` (`string`)
+- `score` (`number`)
+
+## Determinism Expectations
+
+For the same indexed state and same inputs:
+
+- field names stay stable,
+- key ordering is stable,
+- result ordering is deterministic,
+- file paths are repository-relative.

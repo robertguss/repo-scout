@@ -99,7 +99,7 @@ fn milestone9_impact_json_schema() {
 /// ```
 /// // Integration test that exercises the CLI against a temporary repository.
 /// // See `milestone9_context_budgeted_terminal` for the full test.
-—```
+/// ```
 #[test]
 fn milestone9_context_budgeted_terminal() {
     let repo = common::temp_repo();
