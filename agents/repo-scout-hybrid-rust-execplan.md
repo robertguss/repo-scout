@@ -19,8 +19,8 @@ This implementation is intentionally strict Test-Driven Development (TDD). Every
 - [x] (2026-02-06 01:36Z) Milestone 2 (red-green-refactor): language-agnostic indexing and incremental updates completed (`src/indexer/mod.rs`, `src/indexer/files.rs`, `src/indexer/text.rs`, `src/query/mod.rs`, schema updates, `tests/milestone2_indexing.rs`).
 - [x] (2026-02-06 01:43Z) Milestone 3 (red-green-refactor): Rust Tree-sitter adapter for function definitions and call references completed (`src/indexer/rust_ast.rs`, AST schema tables, query routing, `tests/milestone3_rust_ast.rs`).
 - [x] (2026-02-06 01:48Z) Milestone 4 (red-green-refactor): query ranking, deterministic ordering, and JSON contract completed (`--json` flag, `score` field, exact-name-first ranking, deterministic JSON output, `tests/milestone4_ranking_json.rs`).
-- [ ] Milestone 5 (red-green-refactor): end-to-end validation, fixtures, and regression hardening.
-- [x] (2026-02-06 01:48Z) Updated living sections with Milestone 4 evidence, decisions, and outcomes.
+- [x] (2026-02-06 01:51Z) Milestone 5 (red-green-refactor): end-to-end validation, fixtures, and regression hardening completed (`tests/milestone5_e2e.rs`, corruption recovery hint in `src/store/mod.rs`).
+- [x] (2026-02-06 01:51Z) Updated living sections with Milestone 5 evidence, decisions, and outcomes.
 
 ## Surprises & Discoveries
 
@@ -38,6 +38,9 @@ This implementation is intentionally strict Test-Driven Development (TDD). Every
 
 - Observation: Milestone 4 red tests failed at CLI parsing because `--json` was not supported on `find`/`refs`.
   Evidence: clap emitted `unexpected argument '--json' found` for both commands until `QueryArgs` was extended.
+
+- Observation: Corrupt SQLite files produced low-context errors before recovery messaging was added.
+  Evidence: Milestone 5 red test failed until store initialization mapped SQLite corruption codes to a clear delete-and-rerun hint.
 
 ## Decision Log
 
@@ -77,6 +80,10 @@ This implementation is intentionally strict Test-Driven Development (TDD). Every
   Rationale: Structured, deterministic output is required for agent automation and golden-test stability.
   Date/Author: 2026-02-06 / Codex
 
+- Decision: Detect SQLite `DatabaseCorrupt` and `NotADatabase` errors and return an explicit recovery hint containing the index path.
+  Rationale: Corruption recovery is a core acceptance path, so failures must be actionable for novices.
+  Date/Author: 2026-02-06 / Codex
+
 ## Outcomes & Retrospective
 
 Milestone 1 outcome: The CLI now supports `index`, `status`, `find`, and `refs`, and bootstraps a SQLite store at `.repo-scout/index.db` with schema metadata.
@@ -86,6 +93,10 @@ Milestone 2 outcome: Language-agnostic indexing now stores per-file content hash
 Milestone 3 outcome: Rust AST extraction now indexes function definitions (`ast_definition`, `ast_exact`) and call-site references (`ast_reference`, `ast_likely`) via Tree-sitter. Queries now prefer AST results when available and preserve text fallback when AST results are not present. The next milestone is ranking and JSON output contracts.
 
 Milestone 4 outcome: `find` and `refs` now support `--json` output with a stable schema (`schema_version`, `command`, `query`, `results`). Query results now include `score`, and text fallback ranking is exact-name-first (`exact_symbol_name`) followed by substring matches (`text_substring_match`) with deterministic ordering. The next milestone is end-to-end validation and regression hardening.
+
+Milestone 5 outcome: End-to-end regression coverage now validates multi-file indexing, AST query behavior, JSON output, incremental re-indexing after file changes, and the corrupt-index recovery path. Corrupt database failures now produce an actionable message that includes the database path and a delete-and-rerun instruction.
+
+Final retrospective: v0 goals are met. The CLI provides deterministic human and JSON outputs, hybrid indexing (text everywhere plus Rust AST), and resilient recovery guidance. Remaining work is semantic-depth expansion (broader Rust semantics, additional languages) rather than v0 reliability gaps.
 
 ## Context and Orientation
 
@@ -320,6 +331,46 @@ Milestone 4 sample JSON transcript:
       ]
     }
 
+Milestone 5 red transcript:
+
+    $ cargo test milestone5_ -- --nocapture
+    running 2 tests
+    milestone5_end_to_end_flow_and_incremental_reindex_behavior ... ok
+    milestone5_corrupt_index_reports_recovery_hint_and_recovers_after_delete ... FAILED
+    test result: FAILED. 1 passed; 1 failed
+
+Milestone 5 green transcript:
+
+    $ cargo test milestone5_ -- --nocapture
+    running 2 tests
+    test milestone5_corrupt_index_reports_recovery_hint_and_recovers_after_delete ... ok
+    test milestone5_end_to_end_flow_and_incremental_reindex_behavior ... ok
+    test result: ok. 2 passed; 0 failed
+
+Milestone 5 refactor transcript:
+
+    $ cargo fmt && cargo test
+    running 1 test
+    test harness_can_run_binary_and_create_fixture_files ... ok
+    running 3 tests
+    test milestone1_index_creates_db_and_prints_schema_version ... ok
+    test milestone1_status_reports_schema_after_index_bootstrap ... ok
+    test milestone1_find_and_refs_accept_symbol_queries ... ok
+    running 2 tests
+    test milestone2_second_index_skips_unchanged_files ... ok
+    test milestone2_find_and_refs_use_text_fallback_for_plain_text_files ... ok
+    running 2 tests
+    test milestone3_find_reports_rust_ast_definition_match ... ok
+    test milestone3_refs_reports_rust_ast_reference_match ... ok
+    running 3 tests
+    test milestone4_find_json_schema_and_exact_name_first_ranking ... ok
+    test milestone4_find_json_output_is_deterministic_across_runs ... ok
+    test milestone4_refs_json_preserves_ast_labels ... ok
+    running 2 tests
+    test milestone5_corrupt_index_reports_recovery_hint_and_recovers_after_delete ... ok
+    test milestone5_end_to_end_flow_and_incremental_reindex_behavior ... ok
+    test result: ok. 13 passed; 0 failed
+
 ## Interfaces and Dependencies
 
 Use `clap` for command parsing, `rusqlite` for storage, `ignore` for repository walking with ignore rules, `tree-sitter` plus `tree-sitter-rust` for Rust AST extraction, `serde` plus `serde_json` for JSON output, and `anyhow` plus `thiserror` for error handling.
@@ -343,3 +394,5 @@ Keep confidence vocabulary fixed in v0 as `ast_exact`, `ast_likely`, and `text_f
 2026-02-06: Completed Milestone 3 with strict red-green-refactor cycle; added Rust Tree-sitter extraction for function definitions and call references, AST-aware query routing, and milestone-specific AST integration tests.
 
 2026-02-06: Completed Milestone 4 with strict red-green-refactor cycle; added deterministic ranking rules, `--json` query output, stable JSON schema, and score-bearing query results.
+
+2026-02-06: Completed Milestone 5 with strict red-green-refactor cycle; added end-to-end regression coverage and corruption recovery hardening with actionable store bootstrap errors.
