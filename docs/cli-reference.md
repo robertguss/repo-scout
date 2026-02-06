@@ -24,7 +24,7 @@ Example output:
 
 ```text
 index_path: /absolute/path/to/repo/.repo-scout/index.db
-schema_version: 1
+schema_version: 2
 indexed_files: 12
 skipped_files: 48
 ```
@@ -45,7 +45,7 @@ Find likely definitions or matches for `SYMBOL`.
 
 Behavior:
 
-- Prefers Rust AST definitions if available.
+- Prefers Rust AST definitions if available (functions, methods, types, modules, consts, and imports).
 - Falls back to ranked text matching (exact token first, substring second).
 
 Example:
@@ -69,6 +69,68 @@ Example:
 cargo run -- refs launch --repo .
 ```
 
+### `impact <SYMBOL> --repo <PATH> [--json]`
+
+Find first-order graph neighbors impacted by changing `SYMBOL`.
+
+Current behavior:
+
+- Uses graph edges from the local index (`calls`, `contains`, `imports`, `implements`).
+- Returns deterministic one-hop matches with relationship labels such as `called_by`.
+
+Example:
+
+```bash
+cargo run -- impact launch --repo .
+```
+
+### `context --task <TEXT> --repo <PATH> [--budget <N>] [--json]`
+
+Build a ranked, budget-limited symbol/snippet bundle for a task description.
+
+Current behavior:
+
+- Extracts task keywords and prioritizes direct symbol matches.
+- Expands one graph hop to include likely neighbor context.
+- Enforces a deterministic budget cap.
+
+Example:
+
+```bash
+cargo run -- context --task "modify launch flow and update callers" --repo . --budget 1200
+```
+
+### `tests-for <SYMBOL> --repo <PATH> [--json]`
+
+Find likely test targets for `SYMBOL`.
+
+Current behavior:
+
+- Looks for exact symbol hits in test-like files.
+- Deduplicates targets and applies deterministic confidence tiers.
+
+Example:
+
+```bash
+cargo run -- tests-for launch --repo .
+```
+
+### `verify-plan --changed-file <PATH> [--changed-file <PATH> ...] --repo <PATH> [--json]`
+
+Build a deterministic validation command plan for changed files.
+
+Current behavior:
+
+- Uses changed-file symbol definitions to suggest nearby integration-test commands.
+- Emits runnable top-level integration-test commands only.
+- Always includes `cargo test` as the full-suite safety gate.
+
+Example:
+
+```bash
+cargo run -- verify-plan --changed-file src/query/mod.rs --repo .
+```
+
 ## Output Labels
 
 `why_matched` values currently used:
@@ -83,6 +145,9 @@ cargo run -- refs launch --repo .
 - `ast_exact`
 - `ast_likely`
 - `text_fallback`
+- `graph_likely`
+- `context_high`
+- `context_medium`
 
 ## Exit Behavior
 

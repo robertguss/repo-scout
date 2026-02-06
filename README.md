@@ -5,7 +5,7 @@
 This project currently ships a hybrid approach:
 
 - Language-agnostic text indexing for all files.
-- Rust AST extraction (Tree-sitter) for function definitions and call references.
+- Rust AST extraction (Tree-sitter) for definitions (`fn`, `struct`, `enum`, `trait`, `mod`, `const`, `type`, `use`) plus call references.
 - Deterministic terminal and JSON output for scripting and agent use.
 
 ## Status
@@ -16,6 +16,10 @@ This is an actively evolving v0. The core workflow is implemented and tested:
 - `status`: show index location and schema version.
 - `find`: search for likely definitions.
 - `refs`: search for likely references.
+- `impact`: inspect one-hop graph impact around a symbol.
+- `context`: build a budgeted context bundle for an editing task.
+- `tests-for`: map a symbol to likely test targets.
+- `verify-plan`: suggest deterministic validation steps for changed files.
 
 ## Quick Start
 
@@ -46,6 +50,10 @@ Query it:
 ```bash
 cargo run -- find launch --repo /path/to/repo
 cargo run -- refs launch --repo /path/to/repo
+cargo run -- impact launch --repo /path/to/repo
+cargo run -- context --task "modify launch flow and update callers" --repo /path/to/repo --budget 1200
+cargo run -- tests-for launch --repo /path/to/repo
+cargo run -- verify-plan --changed-file src/lib.rs --repo /path/to/repo
 ```
 
 JSON output:
@@ -80,7 +88,7 @@ Returns likely definitions for `symbol`.
 
 Current behavior:
 
-- Prefer Rust AST definitions (`ast_definition`) when present.
+- Prefer Rust AST definitions (`ast_definition`) when present, including methods and non-function item kinds.
 - Otherwise use text fallback ranking:
   - exact token matches first (`exact_symbol_name`)
   - substring matches next (`text_substring_match`)
@@ -94,9 +102,47 @@ Current behavior:
 - Prefer Rust AST call references (`ast_reference`) when present.
 - Otherwise use the same text fallback ranking as `find`.
 
+### `impact <symbol>`
+
+Returns first-order graph neighbors likely impacted by changing `symbol`.
+
+Current behavior:
+
+- Uses persisted symbol graph edges (`calls`, `contains`, `imports`, `implements`).
+- Emits deterministic one-hop results with relationship labels.
+
+### `context --task <text> --repo <PATH> [--budget <N>]`
+
+Returns a ranked, budget-limited context bundle for a task description.
+
+Current behavior:
+
+- Extracts task keywords and prioritizes direct symbol matches.
+- Expands one graph hop for nearby context.
+- Truncates deterministically based on budget.
+
 ### `--json`
 
-Supported on `find` and `refs`. Emits deterministic JSON with `schema_version`, `command`, `query`, and `results`.
+Supported on `find`, `refs`, `impact`, `context`, `tests-for`, and `verify-plan`. Emits deterministic JSON with a stable top-level command schema and ordered results.
+
+### `tests-for <symbol>`
+
+Returns likely test targets for `symbol`.
+
+Current behavior:
+
+- Searches test-like files for exact symbol hits.
+- Deduplicates by test target and applies deterministic confidence tiers.
+
+### `verify-plan --changed-file <path> --repo <PATH> [--json]`
+
+Returns recommended validation commands for changed files.
+
+Current behavior:
+
+- Uses changed-file symbol definitions to find nearby targeted integration tests.
+- Emits only runnable top-level integration test commands (`cargo test --test <name>`).
+- Always includes a full-suite safety gate (`cargo test`).
 
 ## How It Works
 
@@ -115,6 +161,8 @@ See detailed docs:
 - [`docs/architecture.md`](docs/architecture.md)
 - [`docs/cli-reference.md`](docs/cli-reference.md)
 - [`docs/json-output.md`](docs/json-output.md)
+- [`docs/dogfood-log.md`](docs/dogfood-log.md)
+- [`docs/performance-baseline.md`](docs/performance-baseline.md)
 
 ## Error Recovery
 
@@ -135,3 +183,43 @@ The suite includes milestone-based integration tests for:
 - Rust AST extraction,
 - deterministic JSON/ranking,
 - end-to-end flow and corruption recovery.
+
+## Dogfood Operating Procedure
+
+`repo-scout` should be used to build `repo-scout`. For every feature or bugfix in this repository, run a dogfood loop before and after edits.
+
+Pre-edit loop:
+
+```bash
+cargo run -- index --repo .
+cargo run -- find <symbol> --repo . --json
+cargo run -- refs <symbol> --repo . --json
+```
+
+Post-edit loop:
+
+```bash
+cargo run -- index --repo .
+cargo run -- find <symbol> --repo .
+cargo run -- refs <symbol> --repo .
+cargo test
+```
+
+Rules:
+
+- If dogfooding exposes incorrect behavior (stale results, missing results, noisy ranking, unstable JSON), add a failing integration test first and then fix it with strict red-green-refactor.
+- Record at least one dogfood transcript in PR notes or in planning artifacts for each milestone.
+- Do not mark a milestone complete unless dogfood commands succeed and all tests pass.
+
+## Justfile Shortcuts
+
+Common workflows are available through `just`:
+
+```bash
+just dogfood-pre launch
+just dogfood-post launch
+just tdd-red milestone6_delete_prunes_rows
+just tdd-green milestone6_delete_prunes_rows
+just tdd-refactor
+just perf-baseline launch
+```

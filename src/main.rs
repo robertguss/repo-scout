@@ -8,9 +8,23 @@ use clap::Parser;
 
 use crate::cli::{Cli, Command};
 use crate::indexer::index_repository;
-use crate::query::{find_matches, refs_matches};
+use crate::query::{
+    context_matches, find_matches, impact_matches, refs_matches, tests_for_symbol,
+    verify_plan_for_changed_files,
+};
 use crate::store::ensure_store;
 
+/// Program entry point that runs the CLI and exits on failure.
+///
+/// If `run()` returns an error, the error is printed to standard error using
+/// pretty formatting and the process terminates with exit code 1.
+///
+/// # Examples
+///
+/// ```ignore
+/// // Typical binary entry: just call `main()`
+/// main();
+/// ```
 fn main() {
     if let Err(error) = run() {
         eprintln!("{error:#}");
@@ -18,6 +32,21 @@ fn main() {
     }
 }
 
+/// Parses command-line arguments and dispatches to the selected command handler.
+///
+/// Parses program arguments into a `Cli` and invokes the corresponding command implementation
+/// (index, status, find, refs, impact, context, tests-for, or verify-plan).
+///
+/// # Returns
+///
+/// `Ok(())` if the selected command completes successfully, an `Err` if the command fails.
+///
+/// # Examples
+///
+/// ```no_run
+/// // Dispatch based on current process arguments.
+/// let _ = crate::run();
+/// ```
 fn run() -> anyhow::Result<()> {
     let cli = Cli::parse();
     match cli.command {
@@ -25,6 +54,10 @@ fn run() -> anyhow::Result<()> {
         Command::Status(args) => run_status(args),
         Command::Find(args) => run_find(args),
         Command::Refs(args) => run_refs(args),
+        Command::Impact(args) => run_impact(args),
+        Command::Context(args) => run_context(args),
+        Command::TestsFor(args) => run_tests_for(args),
+        Command::VerifyPlan(args) => run_verify_plan(args),
     }
 }
 
@@ -57,6 +90,25 @@ fn run_find(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Run the "refs" query for a symbol and print the results.
+///
+/// Ensures the repository store exists, obtains references for `args.symbol` from the store,
+/// and prints the results as JSON when `args.json` is true or as human-readable output otherwise.
+///
+/// # Returns
+///
+/// `Ok(())` on success; an error if ensuring the store, querying references, or printing the results fails.
+///
+/// # Examples
+///
+/// ```
+/// let args = crate::cli::QueryArgs {
+///     repo: "/path/to/repo".into(),
+///     symbol: "my::Symbol".into(),
+///     json: false,
+/// };
+/// let _ = run_refs(args);
+/// ```
 fn run_refs(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
     let matches = refs_matches(&store.db_path, &args.symbol)?;
@@ -66,4 +118,191 @@ fn run_refs(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
         output::print_query("refs", &args.symbol, &matches);
     }
     Ok(())
+}
+
+/// Runs an impact query for a symbol and prints the results.
+///
+/// Ensures the repository store exists, computes impact matches for `args.symbol`,
+/// and prints the output as JSON when `args.json` is true or as human-readable text otherwise.
+///
+/// # Errors
+///
+/// Returns an error if the store cannot be initialized or if computing or printing matches fails.
+///
+/// # Examples
+///
+/// ```no_run
+/// use crate::cli::QueryArgs;
+///
+/// let args = QueryArgs { repo: ".".into(), symbol: "my_crate::foo".into(), json: false };
+/// run_impact(args).unwrap();
+/// ```
+fn run_impact(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let matches = impact_matches(&store.db_path, &args.symbol)?;
+    if args.json {
+        output::print_impact_json(&args.symbol, &matches)?;
+    } else {
+        output::print_impact(&args.symbol, &matches);
+    }
+    Ok(())
+}
+
+/// Query matches relevant to a task within a repository and print the results.
+///
+/// The function ensures the repository store is available, retrieves context matches for the
+/// provided task and budget, and prints the matches either as JSON (when `args.json` is true)
+/// or as formatted human-readable output.
+///
+/// # Parameters
+///
+/// - `args`: CLI arguments containing the repository root, the task to query, the numeric budget,
+///   and the `json` flag controlling output format.
+///
+/// # Returns
+///
+/// `Ok(())` on success, `Err` if the store cannot be accessed or the query or output formatting fails.
+///
+/// # Examples
+///
+/// ```
+/// use crate::cli::ContextArgs;
+///
+/// // Construct CLI-like args and run the command handler.
+/// let args = ContextArgs {
+///     repo: ".".into(),
+///     task: "build".into(),
+///     budget: 10,
+///     json: false,
+/// };
+/// let _ = crate::run_context(args);
+/// ```
+fn run_context(args: crate::cli::ContextArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let matches = context_matches(&store.db_path, &args.task, args.budget)?;
+    if args.json {
+        output::print_context_json(&args.task, args.budget, &matches)?;
+    } else {
+        output::print_context(&args.task, args.budget, &matches);
+    }
+    Ok(())
+}
+
+/// Query test targets that reference a symbol and print the results.
+///
+/// Ensures the repository store exists, retrieves test targets for `args.symbol`, and prints them
+/// as JSON when `args.json` is true or as human-readable output otherwise.
+///
+/// # Examples
+///
+/// ```no_run
+/// use crate::cli::QueryArgs;
+///
+/// let args = QueryArgs {
+///     repo: "/path/to/repo".into(),
+///     symbol: "my_crate::module::Symbol".into(),
+///     json: false,
+///     ..Default::default()
+/// };
+///
+/// let _ = crate::run_tests_for(args);
+/// ```
+fn run_tests_for(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let targets = tests_for_symbol(&store.db_path, &args.symbol)?;
+    if args.json {
+        output::print_tests_for_json(&args.symbol, &targets)?;
+    } else {
+        output::print_tests_for(&args.symbol, &targets);
+    }
+    Ok(())
+}
+
+/// Computes a verification plan for the given changed files and prints the results.
+///
+/// Ensures the repository store exists, normalizes and deduplicates the provided changed-file
+/// paths, computes the verification steps for those files, and prints the plan either as JSON
+/// (when `args.json` is true) or in a human-readable format.
+///
+/// # Examples
+///
+/// ```
+/// use crate::cli::VerifyPlanArgs;
+///
+/// let args = VerifyPlanArgs {
+///     repo: ".".into(),
+///     changed_files: vec!["src/lib.rs".into()],
+///     json: false,
+/// };
+/// let _ = run_verify_plan(args);
+/// ```
+///
+/// # Returns
+///
+/// `Ok(())` on success, or an error if the store cannot be accessed or the verification plan
+/// cannot be computed or printed.
+fn run_verify_plan(args: crate::cli::VerifyPlanArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let mut changed_files = args
+        .changed_files
+        .iter()
+        .map(|path| normalize_changed_file(&args.repo, path))
+        .collect::<Vec<_>>();
+    changed_files.sort();
+    changed_files.dedup();
+
+    let steps = verify_plan_for_changed_files(&store.db_path, &changed_files)?;
+    if args.json {
+        output::print_verify_plan_json(&changed_files, &steps)?;
+    } else {
+        output::print_verify_plan(&changed_files, &steps);
+    }
+    Ok(())
+}
+
+/// Normalize a changed-file path into a repository-relative, forward-slash string.
+///
+/// The returned string has any leading "./" removed and all backslashes replaced with
+/// forward slashes. If `changed_file` is an absolute path that is inside `repo_root`,
+/// the result will be relative to `repo_root`; otherwise the original path is used
+/// (converted to a string and normalized).
+///
+/// # Examples
+///
+/// ```
+/// use std::path::Path;
+/// // absolute path inside repo becomes relative
+/// let repo = Path::new("/repo");
+/// assert_eq!(
+///     crate::normalize_changed_file(repo, "/repo/src/lib.rs"),
+///     "src/lib.rs"
+/// );
+///
+/// // relative path keeps relative form and normalizes separators / leading ./
+/// assert_eq!(
+///     crate::normalize_changed_file(repo, "./src\\main.rs"),
+///     "src/main.rs"
+/// );
+/// ```
+fn normalize_changed_file(repo_root: &std::path::Path, changed_file: &str) -> String {
+    let candidate = std::path::PathBuf::from(changed_file);
+    let absolute_repo_root = std::fs::canonicalize(repo_root).unwrap_or_else(|_| {
+        std::env::current_dir()
+            .map(|cwd| cwd.join(repo_root))
+            .unwrap_or_else(|_| repo_root.to_path_buf())
+    });
+    let normalized = if candidate.is_absolute() {
+        candidate
+            .strip_prefix(&absolute_repo_root)
+            .map(|path| path.to_path_buf())
+            .unwrap_or(candidate)
+    } else {
+        candidate
+    };
+
+    normalized
+        .to_string_lossy()
+        .trim_start_matches("./")
+        .replace('\\', "/")
+        .to_string()
 }

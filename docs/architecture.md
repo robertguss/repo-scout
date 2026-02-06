@@ -1,13 +1,13 @@
 # Architecture
 
-This document describes the current v0 architecture for `repo-scout`.
+This document describes the current architecture for `repo-scout` after Phase 2 Milestones 6 through 10.
 
 ## High-Level Flow
 
-1. CLI parses a command (`index`, `status`, `find`, `refs`).
+1. CLI parses a command (`index`, `status`, `find`, `refs`, `impact`, `context`, `tests-for`, `verify-plan`).
 2. Store bootstrap ensures `.repo-scout/index.db` exists and schema is initialized.
 3. `index` performs file discovery + incremental processing.
-4. `find`/`refs` query SQLite with deterministic ordering.
+4. `find`/`refs` query direct symbol tables; `impact`/`context` query graph + metadata tables; `tests-for`/`verify-plan` query test evidence and validation heuristics.
 5. Output is rendered as human-readable text or JSON.
 
 ## Module Map
@@ -26,7 +26,7 @@ This document describes the current v0 architecture for `repo-scout`.
 - `src/indexer/text.rs`
   - Language-agnostic token extraction with line/column locations.
 - `src/indexer/rust_ast.rs`
-  - Rust Tree-sitter parsing for function definitions and call references.
+  - Rust Tree-sitter parsing for symbol definitions (functions, types, modules, imports) and call references.
 - `src/indexer/mod.rs`
   - Incremental indexing coordinator and table upserts.
 - `src/query/mod.rs`
@@ -45,9 +45,13 @@ Current tables:
 - `text_occurrences`
   - Token-level fallback matches with `line` and `column`.
 - `ast_definitions`
-  - Rust AST definition entries (currently function definitions).
+  - Rust AST definition entries used by `find`.
 - `ast_references`
-  - Rust AST reference entries (currently call-site identifiers).
+  - Rust AST reference entries (call-site identifiers).
+- `symbols_v2`
+  - Rich symbol metadata for Phase 2: kind, container, start/end span, and optional signature summary.
+- `symbol_edges_v2`
+  - Phase 2 graph table for symbol-to-symbol edges (`calls`, `contains`, `imports`, `implements`).
 
 Indexes exist for common symbol lookups in text and AST tables.
 
@@ -79,6 +83,33 @@ Each file update is transactional.
 
 1. Return AST references when present (`why_matched=ast_reference`, `confidence=ast_likely`).
 2. Else use the same ranked text fallback as `find`.
+
+### `impact`
+
+1. Resolve the target symbol in `symbols_v2`.
+2. Traverse incoming graph edges (`symbol_edges_v2`) to collect one-hop impacted neighbors.
+3. Emit deterministic rows with relationship labels such as `called_by`.
+
+### `context`
+
+1. Extract task keywords.
+2. Match direct symbols in `symbols_v2` and score them highest.
+3. Expand one-hop graph neighbors for additional context.
+4. Sort deterministically and truncate to a fixed budget-derived cap.
+
+### `tests-for`
+
+1. Find exact symbol occurrences in test-like files.
+2. Group by file path and score by evidence count.
+3. Return deduplicated, deterministically ordered target rows.
+
+### `verify-plan`
+
+1. Normalize and deduplicate changed-file arguments.
+2. Resolve changed-file symbols and map them to likely test targets.
+3. Convert runnable top-level integration test targets into `cargo test --test <name>` steps.
+4. Keep highest-confidence evidence for duplicate commands.
+5. Append `cargo test` as a full-suite safety gate.
 
 ## Determinism
 

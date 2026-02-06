@@ -1,0 +1,197 @@
+# Dogfood Log
+
+This log captures real usage of `repo-scout` while building `repo-scout`.
+Each entry should describe what task we attempted, what worked, what failed, and what follow-up action we took (especially new failing tests and fixes).
+
+## Entry Template
+
+Copy this template for each new task:
+
+- Date: `YYYY-MM-DD`
+- Task:
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find <symbol> --repo . --json`
+  - `cargo run -- refs <symbol> --repo . --json`
+- What helped:
+- What failed or felt weak:
+- Action taken:
+  - failing test added:
+  - fix commit:
+  - docs/plan update:
+- Status: `open` | `fixed` | `deferred`
+
+## Entries
+
+- Date: `2026-02-06`
+- Task: Verify index freshness when files are removed.
+- Commands run:
+  - `cargo run -- index --repo <tmp-repo>`
+  - `cargo run -- find alpha --repo <tmp-repo>`
+  - delete `a.txt`
+  - `cargo run -- index --repo <tmp-repo>`
+  - `cargo run -- find alpha --repo <tmp-repo>`
+- What helped:
+  - Query output was deterministic and easy to compare before/after deletion.
+- What failed or felt weak:
+  - `find` still returned a deleted file (`a.txt`) after reindex.
+- Action taken:
+  - failing test added: planned for Phase 2 Milestone 6 lifecycle correctness.
+  - fix commit: pending.
+  - docs/plan update: added lifecycle-pruning milestone in `agents/repo-scout-agent-first-phase2-execplan.md`.
+- Status: `open`
+
+- Date: `2026-02-06`
+- Task: Ensure planning process itself is dogfooded and strict-TDD by default.
+- Commands run:
+  - review and update planning docs
+- What helped:
+  - Existing ExecPlan structure made it straightforward to add per-slice TDD gates.
+- What failed or felt weak:
+  - Base template (`agents/PLANS.md`) did not explicitly enforce strict red-green-refactor per feature slice.
+- Action taken:
+  - failing test added: not applicable (process/documentation change).
+  - fix commit: pending.
+  - docs/plan update: updated `agents/PLANS.md` with strict TDD requirements and updated phase-2 plan accordingly.
+- Status: `fixed`
+
+- Date: `2026-02-06`
+- Task: Milestone 6 lifecycle correctness and schema migration guardrails.
+- Commands run:
+  - `just dogfood-pre launch`
+  - `just tdd-red milestone6_delete_prunes_rows`
+  - `just tdd-green milestone6_delete_prunes_rows`
+  - `just tdd-refactor`
+  - `just dogfood-pre rename_symbol`
+  - `just tdd-red milestone6_rename_prunes_old_path`
+  - `just tdd-red milestone6_lifecycle_counts_are_deterministic`
+  - `just tdd-red milestone6_schema_v1_upgrades_to_v2_without_data_loss`
+  - `just tdd-green milestone6_schema_v1_upgrades_to_v2_without_data_loss`
+  - `just tdd-refactor`
+  - `just dogfood-post deletable_symbol`
+- What helped:
+  - Existing `just` workflows made per-slice red/green/refactor and dogfood loops fast to repeat.
+  - A single stale-path pruning path in `src/indexer/mod.rs` fixed delete and rename lifecycle defects.
+- What failed or felt weak:
+  - Slice-level red for rename/deterministic-count checks was already green once delete pruning landed, so the primitive had broader coverage than initially expected.
+  - Schema version bump required touching old milestone assertions for `index/status` output.
+- Action taken:
+  - failing test added: `tests/milestone6_lifecycle.rs` and `tests/milestone6_schema_migration.rs`.
+  - fix commit: pending.
+  - docs/plan update: updated `agents/repo-scout-agent-first-phase2-execplan.md` Progress/Decision Log/Outcomes.
+- Status: `fixed`
+
+- Date: `2026-02-06`
+- Task: Milestone 7 richer Rust symbol extraction and metadata persistence.
+- Commands run:
+  - `just dogfood-pre Launcher`
+  - `just tdd-red milestone7_struct_enum_trait_defs`
+  - `just tdd-green milestone7_struct_enum_trait_defs`
+  - `just tdd-refactor`
+  - `just dogfood-pre run`
+  - `just tdd-red milestone7_impl_method_container`
+  - `just tdd-green milestone7_impl_method_container`
+  - `just tdd-refactor`
+  - `just dogfood-pre LocalLauncher`
+  - `just tdd-red milestone7_module_alias_const_use`
+  - `just tdd-green milestone7_module_alias_const_use`
+  - `just dogfood-pre start_engine`
+  - `just tdd-red milestone7_spans_and_signatures_persist`
+  - `just tdd-green milestone7_spans_and_signatures_persist`
+  - `just tdd-refactor`
+  - `just dogfood-post start_engine`
+- What helped:
+  - Existing Tree-sitter integration allowed additive symbol-kind extraction with small parser changes.
+  - `symbols_v2` table made it straightforward to persist richer metadata without changing `find` output schema.
+- What failed or felt weak:
+  - Import extraction caused valid duplicate AST hits for `Launcher`, so count-based assertions needed to be relaxed.
+- Action taken:
+  - failing test added: `tests/milestone7_rust_symbols.rs`.
+  - fix commit: pending.
+  - docs/plan update: updated `README.md`, `docs/cli-reference.md`, `docs/architecture.md`, and phase-2 ExecPlan living sections.
+- Status: `fixed`
+
+- Date: `2026-02-06`
+- Task: Milestone 8 graph model and stable symbol identity.
+- Commands run:
+  - `just dogfood-pre start_engine`
+  - `just tdd-red milestone8_symbol_upsert_stable_ids`
+  - `just tdd-green milestone8_symbol_upsert_stable_ids`
+  - `just tdd-refactor`
+  - `just dogfood-pre run`
+  - `just tdd-red milestone8_call_and_contains_edges`
+  - `just tdd-green milestone8_call_and_contains_edges`
+  - `just tdd-refactor`
+  - `just dogfood-pre LocalLauncher`
+  - `just tdd-red milestone8_imports_and_implements_edges`
+  - `just tdd-green milestone8_imports_and_implements_edges`
+  - `just tdd-refactor`
+  - `just dogfood-post run`
+- What helped:
+  - Existing `symbols_v2` metadata made `calls`/`contains` edge derivation straightforward.
+  - Keeping edge insertions deterministic (sorted ID resolution + unique upsert) kept outputs stable.
+- What failed or felt weak:
+  - Initial symbol-ID reuse strategy collided with auto-assigned IDs for new symbols after reindex (`UNIQUE constraint failed`).
+- Action taken:
+  - failing test added: `tests/milestone8_graph.rs`.
+  - fix commit: pending.
+  - docs/plan update: updated `docs/architecture.md` and phase-2 ExecPlan living sections.
+- Status: `fixed`
+
+- Date: `2026-02-06`
+- Task: Milestone 9 agent-native `impact` and `context` query commands.
+- Commands run:
+  - `just dogfood-pre validate`
+  - `just tdd-red milestone9_impact_terminal`
+  - `just tdd-green milestone9_impact_terminal`
+  - `just tdd-refactor`
+  - `just dogfood-pre persist`
+  - `just tdd-red milestone9_impact_json_schema`
+  - `just tdd-green milestone9_impact_json_schema`
+  - `just tdd-refactor`
+  - `just dogfood-pre start_engine`
+  - `just tdd-red milestone9_context_budgeted_terminal`
+  - `just tdd-green milestone9_context_budgeted_terminal`
+  - `just tdd-refactor`
+  - `just tdd-red milestone9_context_json_schema`
+  - `just tdd-green milestone9_context_json_schema`
+  - `just tdd-refactor`
+  - `just dogfood-post start_engine`
+- What helped:
+  - Existing symbol/edge persistence made `impact` mostly a query/output integration milestone.
+  - Budgeted context ranking stayed deterministic by using explicit tie-break sorting and fixed budget slicing.
+- What failed or felt weak:
+  - Enabling all milestone tests at once caused premature refactor-gate failures before each command slice was implemented.
+- Action taken:
+  - failing test added: `tests/milestone9_agent_queries.rs`.
+  - fix commit: pending.
+  - docs/plan update: updated `README.md`, `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`, and phase-2 ExecPlan living sections.
+- Status: `fixed`
+
+- Date: `2026-02-06`
+- Task: Milestone 10 validation intelligence (`tests-for`, `verify-plan`) plus recommendation hardening.
+- Commands run:
+  - `just dogfood-pre compute_plan`
+  - `just tdd-red milestone10_verify_plan_changed_files`
+  - `just tdd-green milestone10_verify_plan_changed_files`
+  - `just tdd-refactor`
+  - `just tdd-red milestone10_verify_plan_deterministic_recommendations`
+  - `just tdd-green milestone10_verify_plan_deterministic_recommendations`
+  - `just tdd-refactor`
+  - `just tdd-red milestone10_verify_plan_skips_non_runnable_test_modules`
+  - `just tdd-green milestone10_verify_plan_skips_non_runnable_test_modules`
+  - `just tdd-refactor`
+  - `cargo run -- tests-for launch --repo .`
+  - `cargo run -- verify-plan --changed-file src/query/mod.rs --repo .`
+  - `cargo run -- verify-plan --changed-file src/query/mod.rs --repo . --json`
+  - `just dogfood-post compute_plan`
+- What helped:
+  - Existing graph + symbol metadata enabled deterministic recommendation ranking with minimal new storage changes.
+  - The `just` TDD helpers made per-slice red/green/refactor evidence cheap to capture.
+- What failed or felt weak:
+  - Dogfooding initially produced an invalid recommendation (`cargo test --test mod`) from nested `tests/common/mod.rs`.
+- Action taken:
+  - failing test added: `tests/milestone10_validation.rs::milestone10_verify_plan_skips_non_runnable_test_modules`.
+  - fix commit: pending.
+  - docs/plan update: updated Milestone 10 plan progress/decisions and JSON/CLI docs to reflect implemented contracts.
+- Status: `fixed`
