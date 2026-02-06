@@ -1,7 +1,7 @@
 use anyhow::Context;
 use rusqlite::{Connection, OptionalExtension};
 
-pub const SCHEMA_VERSION: i64 = 1;
+pub const SCHEMA_VERSION: i64 = 2;
 
 pub fn bootstrap_schema(connection: &Connection) -> anyhow::Result<()> {
     connection.execute_batch(
@@ -46,6 +46,27 @@ pub fn bootstrap_schema(connection: &Connection) -> anyhow::Result<()> {
             line INTEGER NOT NULL,
             column INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS symbols_v2 (
+            symbol_id INTEGER PRIMARY KEY,
+            file_path TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            container TEXT,
+            start_line INTEGER NOT NULL,
+            start_column INTEGER NOT NULL,
+            end_line INTEGER NOT NULL,
+            end_column INTEGER NOT NULL,
+            signature TEXT,
+            UNIQUE(file_path, symbol, kind, start_line, start_column)
+        );
+        CREATE TABLE IF NOT EXISTS symbol_edges_v2 (
+            edge_id INTEGER PRIMARY KEY,
+            from_symbol_id INTEGER NOT NULL,
+            to_symbol_id INTEGER NOT NULL,
+            edge_kind TEXT NOT NULL,
+            confidence REAL NOT NULL,
+            UNIQUE(from_symbol_id, to_symbol_id, edge_kind)
+        );
         CREATE INDEX IF NOT EXISTS idx_text_occurrences_symbol
             ON text_occurrences(symbol);
         CREATE INDEX IF NOT EXISTS idx_text_occurrences_file
@@ -54,6 +75,14 @@ pub fn bootstrap_schema(connection: &Connection) -> anyhow::Result<()> {
             ON ast_definitions(symbol);
         CREATE INDEX IF NOT EXISTS idx_ast_references_symbol
             ON ast_references(symbol);
+        CREATE INDEX IF NOT EXISTS idx_symbols_v2_symbol
+            ON symbols_v2(symbol);
+        CREATE INDEX IF NOT EXISTS idx_symbols_v2_file
+            ON symbols_v2(file_path);
+        CREATE INDEX IF NOT EXISTS idx_edges_v2_from_kind
+            ON symbol_edges_v2(from_symbol_id, edge_kind);
+        CREATE INDEX IF NOT EXISTS idx_edges_v2_to_kind
+            ON symbol_edges_v2(to_symbol_id, edge_kind);
         "#,
     )?;
 

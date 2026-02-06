@@ -54,3 +54,29 @@ Copy this template for each new task:
   - fix commit: pending.
   - docs/plan update: updated `agents/PLANS.md` with strict TDD requirements and updated phase-2 plan accordingly.
 - Status: `fixed`
+
+- Date: `2026-02-06`
+- Task: Milestone 6 lifecycle correctness and schema migration guardrails.
+- Commands run:
+  - `just dogfood-pre launch`
+  - `just tdd-red milestone6_delete_prunes_rows`
+  - `just tdd-green milestone6_delete_prunes_rows`
+  - `just tdd-refactor`
+  - `just dogfood-pre rename_symbol`
+  - `just tdd-red milestone6_rename_prunes_old_path`
+  - `just tdd-red milestone6_lifecycle_counts_are_deterministic`
+  - `just tdd-red milestone6_schema_v1_upgrades_to_v2_without_data_loss`
+  - `just tdd-green milestone6_schema_v1_upgrades_to_v2_without_data_loss`
+  - `just tdd-refactor`
+  - `just dogfood-post deletable_symbol`
+- What helped:
+  - Existing `just` workflows made per-slice red/green/refactor and dogfood loops fast to repeat.
+  - A single stale-path pruning path in `src/indexer/mod.rs` fixed delete and rename lifecycle defects.
+- What failed or felt weak:
+  - Slice-level red for rename/deterministic-count checks was already green once delete pruning landed, so the primitive had broader coverage than initially expected.
+  - Schema version bump required touching old milestone assertions for `index/status` output.
+- Action taken:
+  - failing test added: `tests/milestone6_lifecycle.rs` and `tests/milestone6_schema_migration.rs`.
+  - fix commit: pending.
+  - docs/plan update: updated `agents/repo-scout-agent-first-phase2-execplan.md` Progress/Decision Log/Outcomes.
+- Status: `fixed`

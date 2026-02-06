@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::Path;
 
 use rusqlite::{Connection, OptionalExtension, params};
@@ -15,6 +16,12 @@ pub struct IndexSummary {
 pub fn index_repository(repo: &Path, db_path: &Path) -> anyhow::Result<IndexSummary> {
     let mut connection = Connection::open(db_path)?;
     let source_files = files::discover_source_files(repo)?;
+    let live_paths: HashSet<String> = source_files
+        .iter()
+        .map(|file| file.relative_path.clone())
+        .collect();
+
+    prune_stale_file_rows(&mut connection, &live_paths)?;
 
     let mut indexed_files = 0usize;
     let mut skipped_files = 0usize;
@@ -115,4 +122,39 @@ pub fn index_repository(repo: &Path, db_path: &Path) -> anyhow::Result<IndexSumm
         indexed_files,
         skipped_files,
     })
+}
+
+fn prune_stale_file_rows(
+    connection: &mut Connection,
+    live_paths: &HashSet<String>,
+) -> anyhow::Result<()> {
+    let stale_paths = {
+        let mut statement =
+            connection.prepare("SELECT file_path FROM indexed_files ORDER BY file_path ASC")?;
+        let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
+
+        let mut stale_paths = Vec::new();
+        for row in rows {
+            let path = row?;
+            if !live_paths.contains(&path) {
+                stale_paths.push(path);
+            }
+        }
+        stale_paths
+    };
+
+    if stale_paths.is_empty() {
+        return Ok(());
+    }
+
+    let tx = connection.transaction()?;
+    for path in stale_paths {
+        tx.execute("DELETE FROM text_occurrences WHERE file_path = ?1", [&path])?;
+        tx.execute("DELETE FROM ast_definitions WHERE file_path = ?1", [&path])?;
+        tx.execute("DELETE FROM ast_references WHERE file_path = ?1", [&path])?;
+        tx.execute("DELETE FROM indexed_files WHERE file_path = ?1", [&path])?;
+    }
+    tx.commit()?;
+
+    Ok(())
 }

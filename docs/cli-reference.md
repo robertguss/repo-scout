@@ -24,7 +24,7 @@ Example output:
 
 ```text
 index_path: /absolute/path/to/repo/.repo-scout/index.db
-schema_version: 1
+schema_version: 2
 indexed_files: 12
 skipped_files: 48
 ```
