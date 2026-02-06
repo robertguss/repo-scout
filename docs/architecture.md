@@ -51,7 +51,7 @@ Current tables:
 - `symbols_v2`
   - Rich symbol metadata for Phase 2: kind, container, start/end span, and optional signature summary.
 - `symbol_edges_v2`
-  - Reserved Phase 2 graph table for symbol-to-symbol edges (populated in Milestone 8).
+  - Phase 2 graph table for symbol-to-symbol edges (`calls`, `contains`, `imports`, `implements`).
 
 Indexes exist for common symbol lookups in text and AST tables.
 

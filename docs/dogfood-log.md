@@ -110,3 +110,30 @@ Copy this template for each new task:
   - fix commit: pending.
   - docs/plan update: updated `README.md`, `docs/cli-reference.md`, `docs/architecture.md`, and phase-2 ExecPlan living sections.
 - Status: `fixed`
+
+- Date: `2026-02-06`
+- Task: Milestone 8 graph model and stable symbol identity.
+- Commands run:
+  - `just dogfood-pre start_engine`
+  - `just tdd-red milestone8_symbol_upsert_stable_ids`
+  - `just tdd-green milestone8_symbol_upsert_stable_ids`
+  - `just tdd-refactor`
+  - `just dogfood-pre run`
+  - `just tdd-red milestone8_call_and_contains_edges`
+  - `just tdd-green milestone8_call_and_contains_edges`
+  - `just tdd-refactor`
+  - `just dogfood-pre LocalLauncher`
+  - `just tdd-red milestone8_imports_and_implements_edges`
+  - `just tdd-green milestone8_imports_and_implements_edges`
+  - `just tdd-refactor`
+  - `just dogfood-post run`
+- What helped:
+  - Existing `symbols_v2` metadata made `calls`/`contains` edge derivation straightforward.
+  - Keeping edge insertions deterministic (sorted ID resolution + unique upsert) kept outputs stable.
+- What failed or felt weak:
+  - Initial symbol-ID reuse strategy collided with auto-assigned IDs for new symbols after reindex (`UNIQUE constraint failed`).
+- Action taken:
+  - failing test added: `tests/milestone8_graph.rs`.
+  - fix commit: pending.
+  - docs/plan update: updated `docs/architecture.md` and phase-2 ExecPlan living sections.
+- Status: `fixed`

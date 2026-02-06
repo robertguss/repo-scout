@@ -19,7 +19,7 @@ A user should be able to see this working through concrete commands: index a rep
 - [x] (2026-02-06 00:00Z) Added strict per-feature TDD gates (red, green, refactor) and evidence requirements for each milestone.
 - [x] (2026-02-06 01:10Z) Implemented Milestone 6 lifecycle correctness and schema migration guards (`tests/milestone6_lifecycle.rs`, `tests/milestone6_schema_migration.rs`, `src/indexer/mod.rs`, `src/store/schema.rs`) with full-suite green gate.
 - [x] (2026-02-06 01:40Z) Implemented Milestone 7 richer Rust symbol extraction and metadata persistence (`tests/milestone7_rust_symbols.rs`, `src/indexer/rust_ast.rs`, `src/indexer/mod.rs`) with full-suite green gate.
-- [ ] Implement Milestone 8: symbol relationship graph storage and query primitives.
+- [x] (2026-02-06 02:15Z) Implemented Milestone 8 graph storage primitives with stable symbol IDs and edge persistence (`tests/milestone8_graph.rs`, `src/indexer/mod.rs`, `src/indexer/rust_ast.rs`) with full-suite green gate.
 - [ ] Implement Milestone 9: agent-native commands (`impact`, `context`) with deterministic JSON contracts.
 - [ ] Implement Milestone 10: validation intelligence (`tests-for`, `verify-plan`) and end-to-end acceptance hardening.
 - [ ] Finalize documentation updates, revision notes, and retrospective once implementation completes.
@@ -43,6 +43,9 @@ A user should be able to see this working through concrete commands: index a rep
 
 - Observation: Import extraction introduces legitimate multiple AST definitions for some symbols (for example a local struct plus a `use` import of the same name), so tests should assert non-zero AST results rather than hard-coding single-result counts.
   Evidence: `milestone7_struct_enum_trait_defs` initially expected `results: 1` for `Launcher` and failed once `use` extraction was added in slice 7C.
+
+- Observation: Stable symbol IDs required explicit ID reuse plus deterministic allocation for newly introduced symbols in a changed file.
+  Evidence: `milestone8_symbol_upsert_stable_ids` initially failed with `left: 9 right: 10`, and a naive ID-reuse pass hit `UNIQUE constraint failed: symbols_v2.symbol_id` until new symbols were assigned IDs above current max.
 
 ## Decision Log
 
@@ -78,6 +81,10 @@ A user should be able to see this working through concrete commands: index a rep
   Rationale: Phase 2 needs container/span/signature data for new graph/query commands, but preserving existing `find` behavior avoids destabilizing earlier milestone contracts.
   Date/Author: 2026-02-06 / Codex
 
+- Decision: Build `imports` and `implements` edges from lightweight source-line relation hints during indexing, while deriving `calls` and `contains` from AST-extracted metadata.
+  Rationale: This keeps Milestone 8 additive and testable without destabilizing `find`/`refs` data paths, while still producing deterministic edge coverage needed by Milestone 9 queries.
+  Date/Author: 2026-02-06 / Codex
+
 ## Outcomes & Retrospective
 
 Initial outcome at planning time: the repository has a solid v0 baseline and deterministic behavior, but no graph-level understanding, no task-shaped commands, and a correctness gap for deleted files. This plan addresses those gaps in an incremental path that preserves existing behavior and test contracts.
@@ -87,6 +94,8 @@ Target completion outcome: `repo-scout` becomes a dependable local intelligence 
 Milestone 6 outcome (2026-02-06): lifecycle correctness is now enforced for file deletion and rename scenarios, and schema migration guards validate upgrade from v1 to v2 without losing query behavior. Remaining work is entirely Phase 2 intelligence expansion (Milestones 7-10).
 
 Milestone 7 outcome (2026-02-06): Rust symbol extraction now covers struct/enum/trait/module/type-alias/const/import plus impl-method container metadata, and `symbols_v2` now persists container/span/signature summaries for downstream graph and agent-query milestones.
+
+Milestone 8 outcome (2026-02-06): graph primitives now persist deterministic `calls`, `contains`, `imports`, and `implements` edges in `symbol_edges_v2`, and symbol IDs remain stable across same-identity reindex updates, enabling graph-backed agent query work in Milestone 9.
 
 ## Context and Orientation
 
@@ -459,3 +468,4 @@ Confidence and provenance vocabulary must remain explicit and finite. Extend exi
 2026-02-06: Revised the plan to enforce strict per-feature red-green-refactor workflow, added explicit feature slices per milestone, and added mandatory TDD evidence requirements so implementation mirrors the rigor of the prior v0 plan.
 2026-02-06: Updated living sections after Milestone 6 implementation with lifecycle/migration outcomes, schema-version compatibility decisions, and TDD evidence notes for restartability.
 2026-02-06: Updated living sections after Milestone 7 implementation with richer symbol extraction outcomes, metadata persistence decisions, and slice-level test evidence notes.
+2026-02-06: Updated living sections after Milestone 8 implementation with stable symbol-ID strategy, edge-construction decisions, and graph slice evidence notes.

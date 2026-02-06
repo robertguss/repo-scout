@@ -18,6 +18,7 @@ pub struct AstReference {
     pub symbol: String,
     pub line: u32,
     pub column: u32,
+    pub caller: Option<String>,
 }
 
 pub fn extract_rust_items(source: &str) -> anyhow::Result<(Vec<AstDefinition>, Vec<AstReference>)> {
@@ -81,8 +82,14 @@ pub fn extract_rust_items(source: &str) -> anyhow::Result<(Vec<AstDefinition>, V
                 }
             }
             "call_expression" => {
+                let caller = enclosing_function_name(node, source);
                 if let Some(function_node) = node.child_by_field_name("function") {
-                    collect_call_identifiers(function_node, source, &mut references);
+                    collect_call_identifiers(
+                        function_node,
+                        source,
+                        caller.as_deref(),
+                        &mut references,
+                    );
                 }
             }
             _ => {}
@@ -108,7 +115,12 @@ pub fn extract_rust_items(source: &str) -> anyhow::Result<(Vec<AstDefinition>, V
     Ok((definitions, references))
 }
 
-fn collect_call_identifiers(node: Node<'_>, source: &str, output: &mut Vec<AstReference>) {
+fn collect_call_identifiers(
+    node: Node<'_>,
+    source: &str,
+    caller: Option<&str>,
+    output: &mut Vec<AstReference>,
+) {
     if node.kind() == "identifier" {
         if let Some(symbol) = node_text(node, source) {
             let (line, column) = start_position(node);
@@ -116,6 +128,7 @@ fn collect_call_identifiers(node: Node<'_>, source: &str, output: &mut Vec<AstRe
                 symbol,
                 line,
                 column,
+                caller: caller.map(str::to_string),
             });
         }
         return;
@@ -123,7 +136,7 @@ fn collect_call_identifiers(node: Node<'_>, source: &str, output: &mut Vec<AstRe
 
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        collect_call_identifiers(child, source, output);
+        collect_call_identifiers(child, source, caller, output);
     }
 }
 
@@ -212,6 +225,18 @@ fn signature_summary(node: Node<'_>, source: &str) -> Option<String> {
         return None;
     }
     Some(head.to_string())
+}
+
+fn enclosing_function_name(node: Node<'_>, source: &str) -> Option<String> {
+    let mut current = node.parent();
+    while let Some(parent) = current {
+        if parent.kind() == "function_item" {
+            let name_node = parent.child_by_field_name("name")?;
+            return node_text(name_node, source);
+        }
+        current = parent.parent();
+    }
+    None
 }
 
 trait FileOrderKey {
