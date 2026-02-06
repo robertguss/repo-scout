@@ -69,6 +69,37 @@ Example:
 cargo run -- refs launch --repo .
 ```
 
+### `impact <SYMBOL> --repo <PATH> [--json]`
+
+Find first-order graph neighbors impacted by changing `SYMBOL`.
+
+Current behavior:
+
+- Uses graph edges from the local index (`calls`, `contains`, `imports`, `implements`).
+- Returns deterministic one-hop matches with relationship labels such as `called_by`.
+
+Example:
+
+```bash
+cargo run -- impact launch --repo .
+```
+
+### `context --task <TEXT> --repo <PATH> [--budget <N>] [--json]`
+
+Build a ranked, budget-limited symbol/snippet bundle for a task description.
+
+Current behavior:
+
+- Extracts task keywords and prioritizes direct symbol matches.
+- Expands one graph hop to include likely neighbor context.
+- Enforces a deterministic budget cap.
+
+Example:
+
+```bash
+cargo run -- context --task "modify launch flow and update callers" --repo . --budget 1200
+```
+
 ## Output Labels
 
 `why_matched` values currently used:
@@ -83,6 +114,9 @@ cargo run -- refs launch --repo .
 - `ast_exact`
 - `ast_likely`
 - `text_fallback`
+- `graph_likely`
+- `context_high`
+- `context_medium`
 
 ## Exit Behavior
 

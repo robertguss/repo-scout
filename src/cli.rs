@@ -16,6 +16,8 @@ pub enum Command {
     Status(RepoArgs),
     Find(QueryArgs),
     Refs(QueryArgs),
+    Impact(QueryArgs),
+    Context(ContextArgs),
 }
 
 #[derive(Debug, Args)]
@@ -31,4 +33,16 @@ pub struct QueryArgs {
     pub repo: PathBuf,
     #[arg(long)]
     pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct ContextArgs {
+    #[arg(long)]
+    pub task: String,
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long, default_value_t = 1200)]
+    pub budget: usize,
 }

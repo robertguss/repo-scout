@@ -4,10 +4,10 @@ This document describes the current architecture for `repo-scout` after Phase 2 
 
 ## High-Level Flow
 
-1. CLI parses a command (`index`, `status`, `find`, `refs`).
+1. CLI parses a command (`index`, `status`, `find`, `refs`, `impact`, `context`).
 2. Store bootstrap ensures `.repo-scout/index.db` exists and schema is initialized.
 3. `index` performs file discovery + incremental processing.
-4. `find`/`refs` query SQLite with deterministic ordering.
+4. `find`/`refs` query direct symbol tables; `impact`/`context` query graph + metadata tables.
 5. Output is rendered as human-readable text or JSON.
 
 ## Module Map
@@ -83,6 +83,19 @@ Each file update is transactional.
 
 1. Return AST references when present (`why_matched=ast_reference`, `confidence=ast_likely`).
 2. Else use the same ranked text fallback as `find`.
+
+### `impact`
+
+1. Resolve the target symbol in `symbols_v2`.
+2. Traverse incoming graph edges (`symbol_edges_v2`) to collect one-hop impacted neighbors.
+3. Emit deterministic rows with relationship labels such as `called_by`.
+
+### `context`
+
+1. Extract task keywords.
+2. Match direct symbols in `symbols_v2` and score them highest.
+3. Expand one-hop graph neighbors for additional context.
+4. Sort deterministically and truncate to a fixed budget-derived cap.
 
 ## Determinism
 

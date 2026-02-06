@@ -137,3 +137,33 @@ Copy this template for each new task:
   - fix commit: pending.
   - docs/plan update: updated `docs/architecture.md` and phase-2 ExecPlan living sections.
 - Status: `fixed`
+
+- Date: `2026-02-06`
+- Task: Milestone 9 agent-native `impact` and `context` query commands.
+- Commands run:
+  - `just dogfood-pre validate`
+  - `just tdd-red milestone9_impact_terminal`
+  - `just tdd-green milestone9_impact_terminal`
+  - `just tdd-refactor`
+  - `just dogfood-pre persist`
+  - `just tdd-red milestone9_impact_json_schema`
+  - `just tdd-green milestone9_impact_json_schema`
+  - `just tdd-refactor`
+  - `just dogfood-pre start_engine`
+  - `just tdd-red milestone9_context_budgeted_terminal`
+  - `just tdd-green milestone9_context_budgeted_terminal`
+  - `just tdd-refactor`
+  - `just tdd-red milestone9_context_json_schema`
+  - `just tdd-green milestone9_context_json_schema`
+  - `just tdd-refactor`
+  - `just dogfood-post start_engine`
+- What helped:
+  - Existing symbol/edge persistence made `impact` mostly a query/output integration milestone.
+  - Budgeted context ranking stayed deterministic by using explicit tie-break sorting and fixed budget slicing.
+- What failed or felt weak:
+  - Enabling all milestone tests at once caused premature refactor-gate failures before each command slice was implemented.
+- Action taken:
+  - failing test added: `tests/milestone9_agent_queries.rs`.
+  - fix commit: pending.
+  - docs/plan update: updated `README.md`, `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`, and phase-2 ExecPlan living sections.
+- Status: `fixed`

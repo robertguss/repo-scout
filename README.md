@@ -16,6 +16,8 @@ This is an actively evolving v0. The core workflow is implemented and tested:
 - `status`: show index location and schema version.
 - `find`: search for likely definitions.
 - `refs`: search for likely references.
+- `impact`: inspect one-hop graph impact around a symbol.
+- `context`: build a budgeted context bundle for an editing task.
 
 ## Quick Start
 
@@ -46,6 +48,8 @@ Query it:
 ```bash
 cargo run -- find launch --repo /path/to/repo
 cargo run -- refs launch --repo /path/to/repo
+cargo run -- impact launch --repo /path/to/repo
+cargo run -- context --task "modify launch flow and update callers" --repo /path/to/repo --budget 1200
 ```
 
 JSON output:
@@ -96,7 +100,7 @@ Current behavior:
 
 ### `--json`
 
-Supported on `find` and `refs`. Emits deterministic JSON with `schema_version`, `command`, `query`, and `results`.
+Supported on `find`, `refs`, `impact`, and `context`. Emits deterministic JSON with a stable top-level command schema and ordered results.
 
 ## How It Works
 

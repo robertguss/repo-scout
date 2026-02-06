@@ -8,7 +8,7 @@ use clap::Parser;
 
 use crate::cli::{Cli, Command};
 use crate::indexer::index_repository;
-use crate::query::{find_matches, refs_matches};
+use crate::query::{context_matches, find_matches, impact_matches, refs_matches};
 use crate::store::ensure_store;
 
 fn main() {
@@ -25,6 +25,8 @@ fn run() -> anyhow::Result<()> {
         Command::Status(args) => run_status(args),
         Command::Find(args) => run_find(args),
         Command::Refs(args) => run_refs(args),
+        Command::Impact(args) => run_impact(args),
+        Command::Context(args) => run_context(args),
     }
 }
 
@@ -64,6 +66,28 @@ fn run_refs(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
         output::print_query_json("refs", &args.symbol, &matches)?;
     } else {
         output::print_query("refs", &args.symbol, &matches);
+    }
+    Ok(())
+}
+
+fn run_impact(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let matches = impact_matches(&store.db_path, &args.symbol)?;
+    if args.json {
+        output::print_impact_json(&args.symbol, &matches)?;
+    } else {
+        output::print_impact(&args.symbol, &matches);
+    }
+    Ok(())
+}
+
+fn run_context(args: crate::cli::ContextArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let matches = context_matches(&store.db_path, &args.task, args.budget)?;
+    if args.json {
+        output::print_context_json(&args.task, args.budget, &matches)?;
+    } else {
+        output::print_context(&args.task, args.budget, &matches);
     }
     Ok(())
 }

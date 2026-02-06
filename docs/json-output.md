@@ -1,7 +1,7 @@
 # JSON Output
 
-`find` and `refs` support `--json` today. Phase 2 introduces additional JSON
-commands, and this document freezes the planned contracts before implementation.
+`find`, `refs`, `impact`, and `context` support `--json` today. This document
+tracks both current contracts and planned Phase 2 extensions still in flight.
 
 ## Current Contract (Schema Version 1)
 
@@ -49,12 +49,12 @@ Per-result fields:
 - `confidence` (`string`): confidence tier.
 - `score` (`number`): ranking score (higher is better).
 
-## Phase 2 Planned Contract (Frozen Pre-Implementation)
+## Phase 2 Contract (Schema Version 2)
 
-Status: This section is a planning contract and does not imply features already
-exist. Implementation must match these shapes or explicitly revise this doc.
+Status: `impact` and `context` are implemented. `tests-for` and `verify-plan`
+remain planned and should be treated as forward contract targets.
 
-Planned schema version: `2`
+Current Phase 2 schema version: `2`
 
 ### `impact --json`
 
