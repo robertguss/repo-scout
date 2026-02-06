@@ -3,6 +3,7 @@ use std::path::Path;
 use rusqlite::{Connection, OptionalExtension, params};
 
 pub mod files;
+pub mod rust_ast;
 pub mod text;
 
 #[derive(Debug)]
@@ -36,10 +37,26 @@ pub fn index_repository(repo: &Path, db_path: &Path) -> anyhow::Result<IndexSumm
         let token_occurrences = text_content
             .map(text::extract_token_occurrences)
             .unwrap_or_default();
+        let ast_items = if file.relative_path.ends_with(".rs") {
+            text_content
+                .map(rust_ast::extract_rust_items)
+                .transpose()?
+                .unwrap_or_default()
+        } else {
+            (Vec::new(), Vec::new())
+        };
 
         let tx = connection.transaction()?;
         tx.execute(
             "DELETE FROM text_occurrences WHERE file_path = ?1",
+            [&file.relative_path],
+        )?;
+        tx.execute(
+            "DELETE FROM ast_definitions WHERE file_path = ?1",
+            [&file.relative_path],
+        )?;
+        tx.execute(
+            "DELETE FROM ast_references WHERE file_path = ?1",
             [&file.relative_path],
         )?;
 
@@ -52,6 +69,33 @@ pub fn index_repository(repo: &Path, db_path: &Path) -> anyhow::Result<IndexSumm
                     occurrence.symbol,
                     i64::from(occurrence.line),
                     i64::from(occurrence.column)
+                ],
+            )?;
+        }
+
+        for definition in ast_items.0 {
+            tx.execute(
+                "INSERT INTO ast_definitions(file_path, symbol, kind, line, column)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    file.relative_path,
+                    definition.symbol,
+                    definition.kind,
+                    i64::from(definition.line),
+                    i64::from(definition.column)
+                ],
+            )?;
+        }
+
+        for reference in ast_items.1 {
+            tx.execute(
+                "INSERT INTO ast_references(file_path, symbol, line, column)
+                 VALUES (?1, ?2, ?3, ?4)",
+                params![
+                    file.relative_path,
+                    reference.symbol,
+                    i64::from(reference.line),
+                    i64::from(reference.column)
                 ],
             )?;
         }

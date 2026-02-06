@@ -31,10 +31,29 @@ pub fn bootstrap_schema(connection: &Connection) -> anyhow::Result<()> {
             line INTEGER NOT NULL,
             column INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS ast_definitions (
+            id INTEGER PRIMARY KEY,
+            file_path TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            line INTEGER NOT NULL,
+            column INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS ast_references (
+            id INTEGER PRIMARY KEY,
+            file_path TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            line INTEGER NOT NULL,
+            column INTEGER NOT NULL
+        );
         CREATE INDEX IF NOT EXISTS idx_text_occurrences_symbol
             ON text_occurrences(symbol);
         CREATE INDEX IF NOT EXISTS idx_text_occurrences_file
             ON text_occurrences(file_path);
+        CREATE INDEX IF NOT EXISTS idx_ast_definitions_symbol
+            ON ast_definitions(symbol);
+        CREATE INDEX IF NOT EXISTS idx_ast_references_symbol
+            ON ast_references(symbol);
         "#,
     )?;
 

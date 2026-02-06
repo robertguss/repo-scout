@@ -8,7 +8,7 @@ use clap::Parser;
 
 use crate::cli::{Cli, Command};
 use crate::indexer::index_repository;
-use crate::query::text_matches;
+use crate::query::{find_matches, refs_matches};
 use crate::store::ensure_store;
 
 fn main() {
@@ -23,8 +23,8 @@ fn run() -> anyhow::Result<()> {
     match cli.command {
         Command::Index(args) => run_index(args),
         Command::Status(args) => run_status(args),
-        Command::Find(args) => run_query("find", args),
-        Command::Refs(args) => run_query("refs", args),
+        Command::Find(args) => run_find(args),
+        Command::Refs(args) => run_refs(args),
     }
 }
 
@@ -46,9 +46,16 @@ fn run_status(args: crate::cli::RepoArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn run_query(command: &str, args: crate::cli::QueryArgs) -> anyhow::Result<()> {
+fn run_find(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
-    let matches = text_matches(&store.db_path, &args.symbol)?;
-    output::print_query(command, &args.symbol, &matches);
+    let matches = find_matches(&store.db_path, &args.symbol)?;
+    output::print_query("find", &args.symbol, &matches);
+    Ok(())
+}
+
+fn run_refs(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let matches = refs_matches(&store.db_path, &args.symbol)?;
+    output::print_query("refs", &args.symbol, &matches);
     Ok(())
 }

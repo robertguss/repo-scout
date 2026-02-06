@@ -25,8 +25,13 @@ pub fn print_query(command: &str, symbol: &str, matches: &[QueryMatch]) {
     println!("results: {}", matches.len());
     for result in matches {
         println!(
-            "{}:{}:{} {} [text_identifier_match text_fallback]",
-            result.file_path, result.line, result.column, result.symbol
+            "{}:{}:{} {} [{} {}]",
+            result.file_path,
+            result.line,
+            result.column,
+            result.symbol,
+            result.why_matched,
+            result.confidence
         );
     }
 }
