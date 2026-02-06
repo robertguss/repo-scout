@@ -3,7 +3,11 @@ use std::path::Path;
 
 use rusqlite::{Connection, OptionalExtension, params};
 
+use crate::indexer::languages::LanguageAdapter;
+use crate::indexer::languages::rust::RustLanguageAdapter;
+
 pub mod files;
+pub mod languages;
 pub mod rust_ast;
 pub mod text;
 
@@ -67,19 +71,15 @@ pub fn index_repository(repo: &Path, db_path: &Path) -> anyhow::Result<IndexSumm
         let token_occurrences = text_content
             .map(text::extract_token_occurrences)
             .unwrap_or_default();
-        let (ast_definitions, ast_references) = if file.relative_path.ends_with(".rs") {
-            text_content
-                .map(rust_ast::extract_rust_items)
-                .transpose()?
-                .unwrap_or_default()
-        } else {
-            (Vec::new(), Vec::new())
-        };
-        let relation_hints = if file.relative_path.ends_with(".rs") {
-            text_content.map(extract_relation_hints).unwrap_or_default()
-        } else {
-            Vec::new()
-        };
+        let extraction_unit = text_content
+            .map(|source| extract_with_adapter(&file.relative_path, source))
+            .transpose()?
+            .unwrap_or_default();
+        let languages::ExtractionUnit {
+            symbols: extracted_symbols,
+            references: extracted_references,
+            edges: extracted_edges,
+        } = extraction_unit;
         let mut reusable_symbol_ids = existing_symbol_ids(&connection, &file.relative_path)?;
         let mut next_symbol_id = next_symbol_id_start(&connection)?;
 
@@ -120,14 +120,29 @@ pub fn index_repository(repo: &Path, db_path: &Path) -> anyhow::Result<IndexSumm
             )?;
         }
 
-        let mut pending_edges: Vec<(String, String, String, f64)> = relation_hints;
+        let pending_edges: Vec<(String, String, String, f64, String)> = extracted_edges
+            .into_iter()
+            .map(|edge| {
+                (
+                    edge.from_symbol_key.symbol,
+                    edge.to_symbol_key.symbol,
+                    edge.edge_kind,
+                    edge.confidence,
+                    edge.provenance,
+                )
+            })
+            .collect();
 
-        for definition in ast_definitions {
+        for definition in extracted_symbols {
             let symbol = definition.symbol;
             let kind = definition.kind;
+            let language = definition.language;
+            let qualified_symbol = definition
+                .qualified_symbol
+                .unwrap_or_else(|| format!("{language}:{}::{symbol}", file.relative_path));
             let container = definition.container;
-            let start_line = i64::from(definition.line);
-            let start_column = i64::from(definition.column);
+            let start_line = i64::from(definition.start_line);
+            let start_column = i64::from(definition.start_column);
             let end_line = i64::from(definition.end_line);
             let end_column = i64::from(definition.end_column);
             let signature = definition.signature;
@@ -151,13 +166,15 @@ pub fn index_repository(repo: &Path, db_path: &Path) -> anyhow::Result<IndexSumm
             )?;
             tx.execute(
                 "INSERT INTO symbols_v2(
-                    symbol_id, file_path, symbol, kind, container, start_line, start_column, end_line, end_column, signature
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                    symbol_id, file_path, symbol, kind, language, qualified_symbol, container, start_line, start_column, end_line, end_column, signature
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
                 params![
                     symbol_id,
                     &file.relative_path,
                     &symbol,
                     &kind,
+                    &language,
+                    &qualified_symbol,
                     container.as_deref(),
                     start_line,
                     start_column,
@@ -166,19 +183,9 @@ pub fn index_repository(repo: &Path, db_path: &Path) -> anyhow::Result<IndexSumm
                     signature.as_deref()
                 ],
             )?;
-
-            if let Some(container_symbol) = container.as_deref() {
-                pending_edges.push((
-                    container_symbol.to_string(),
-                    symbol.clone(),
-                    "contains".to_string(),
-                    1.0,
-                ));
-            }
         }
 
-        for reference in ast_references {
-            let caller = reference.caller;
+        for reference in extracted_references {
             let symbol = reference.symbol;
             tx.execute(
                 "INSERT INTO ast_references(file_path, symbol, line, column)
@@ -190,13 +197,9 @@ pub fn index_repository(repo: &Path, db_path: &Path) -> anyhow::Result<IndexSumm
                     i64::from(reference.column)
                 ],
             )?;
-
-            if let Some(caller_symbol) = caller {
-                pending_edges.push((caller_symbol, symbol, "calls".to_string(), 0.95));
-            }
         }
 
-        for (from_symbol, to_symbol, edge_kind, confidence) in pending_edges {
+        for (from_symbol, to_symbol, edge_kind, confidence, provenance) in pending_edges {
             let Some(from_symbol_id) = resolve_symbol_id_in_tx(&tx, &from_symbol)? else {
                 continue;
             };
@@ -205,11 +208,11 @@ pub fn index_repository(repo: &Path, db_path: &Path) -> anyhow::Result<IndexSumm
             };
 
             tx.execute(
-                "INSERT INTO symbol_edges_v2(from_symbol_id, to_symbol_id, edge_kind, confidence)
-                 VALUES (?1, ?2, ?3, ?4)
+                "INSERT INTO symbol_edges_v2(from_symbol_id, to_symbol_id, edge_kind, confidence, provenance)
+                 VALUES (?1, ?2, ?3, ?4, ?5)
                  ON CONFLICT(from_symbol_id, to_symbol_id, edge_kind)
-                 DO UPDATE SET confidence = excluded.confidence",
-                params![from_symbol_id, to_symbol_id, edge_kind, confidence],
+                 DO UPDATE SET confidence = excluded.confidence, provenance = excluded.provenance",
+                params![from_symbol_id, to_symbol_id, edge_kind, confidence, provenance],
             )?;
         }
 
@@ -463,80 +466,18 @@ fn take_reusable_symbol_id(
     Some(ids.remove(0))
 }
 
-/// Parse simple relation hints from Rust source into candidate symbol edges.
-///
-/// This scans the given source text for `use ... as ...;` import aliases and `impl ... for ...` blocks,
-/// producing lightweight relation hints of the form `(from_symbol, to_symbol, edge_kind, confidence)`.
-/// - For `use X as Y`, produces an `("Y", "X", "imports", 0.9)` hint when alias differs from target.
-/// - For `impl Trait for Type`, produces a `("Type", "Trait", "implements", 0.95)` hint.
-/// The function only looks at line-level patterns and extracts the last Rust identifier from each segment.
-///
-/// # Examples
-///
-/// ```
-/// let src = r#"
-/// use crate::foo::Bar as Baz;
-/// impl MyTrait for MyType {}
-/// "#;
-/// let hints = extract_relation_hints(src);
-/// assert!(hints.contains(&("Baz".to_string(), "Bar".to_string(), "imports".to_string(), 0.9)));
-/// assert!(hints.contains(&("MyType".to_string(), "MyTrait".to_string(), "implements".to_string(), 0.95)));
-/// ```
-fn extract_relation_hints(content: &str) -> Vec<(String, String, String, f64)> {
-    let mut edges = Vec::new();
-
-    for line in content.lines() {
-        let trimmed = line.trim();
-
-        if let Some(rest) = trimmed.strip_prefix("use ") {
-            let statement = rest.trim().trim_end_matches(';').trim();
-            if let Some((left, right)) = statement.split_once(" as ") {
-                let Some(target_symbol) = last_rust_identifier(left) else {
-                    continue;
-                };
-                let Some(alias_symbol) = last_rust_identifier(right) else {
-                    continue;
-                };
-                if alias_symbol != target_symbol {
-                    edges.push((alias_symbol, target_symbol, "imports".to_string(), 0.9));
-                }
-            }
-        }
-
-        if let Some(rest) = trimmed.strip_prefix("impl ") {
-            if let Some((trait_part, type_part)) = rest.split_once(" for ") {
-                let Some(trait_symbol) = last_rust_identifier(trait_part) else {
-                    continue;
-                };
-                let Some(type_symbol) = last_rust_identifier(type_part) else {
-                    continue;
-                };
-                edges.push((type_symbol, trait_symbol, "implements".to_string(), 0.95));
-            }
-        }
+fn extract_with_adapter(
+    file_path: &str,
+    source: &str,
+) -> anyhow::Result<languages::ExtractionUnit> {
+    let rust_adapter = RustLanguageAdapter;
+    if rust_adapter
+        .file_extensions()
+        .iter()
+        .any(|extension| file_path.ends_with(&format!(".{extension}")))
+    {
+        return rust_adapter.extract(file_path, source);
     }
 
-    edges
-}
-
-/// Extracts the last Rust identifier from a string segment.
-///
-/// The identifier consists of ASCII letters, digits, and underscores; non-identifier characters
-/// act as separators.
-///
-/// # Examples
-///
-/// ```
-/// let id = last_rust_identifier("std::collections::HashMap<K, V>");
-/// assert_eq!(id.as_deref(), Some("HashMap"));
-///
-/// let none = last_rust_identifier("::!!");
-/// assert_eq!(none, None);
-/// ```
-fn last_rust_identifier(segment: &str) -> Option<String> {
-    segment
-        .split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
-        .filter(|part| !part.is_empty())
-        .last()
-        .map(str::to_string)
+    Ok(languages::ExtractionUnit::default())
 }

@@ -12,7 +12,7 @@ fn milestone1_index_creates_db_and_prints_schema_version() {
     cmd.assert()
         .success()
         .stdout(contains("index_path: "))
-        .stdout(contains("schema_version: 2"));
+        .stdout(contains("schema_version: 3"));
 
     assert!(
         db_path.exists(),
@@ -34,7 +34,7 @@ fn milestone1_status_reports_schema_after_index_bootstrap() {
         .assert()
         .success()
         .stdout(contains("index_path: "))
-        .stdout(contains("schema_version: 2"));
+        .stdout(contains("schema_version: 3"));
 }
 
 #[test]

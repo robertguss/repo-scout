@@ -65,8 +65,17 @@ before agent-facing commands and data contracts are stable.
       `--include-snippets`.
 - [x] (2026-02-06 17:03Z) Milestone 13 feature implementation complete (`explain` behavior in
       terminal + JSON with symbol dossier output).
-- [ ] Milestone 14 refactor: language adapter boundary extraction with Rust adapter migration and no
-      behavior regression.
+- [x] (2026-02-06 17:18Z) Milestone 14 slice 14A complete: red/green/refactor for
+      `milestone14_language_adapter_trait_migration`, replacing direct indexer parser dependency
+      assertions with adapter-boundary checks.
+- [x] (2026-02-06 17:18Z) Milestone 14 slice 14B complete: red/green/refactor for
+      `milestone14_rust_behavior_unchanged_through_adapter` by restoring `ast_references`
+      persistence through adapter-provided reference extraction.
+- [x] (2026-02-06 17:18Z) Milestone 14 slice 14C complete: red/green/refactor for
+      `milestone14_schema_language_metadata_migration` with additive schema v3 migration for
+      `language`, `qualified_symbol`, `provenance`, and new indices.
+- [x] (2026-02-06 17:18Z) Milestone 14 feature implementation complete (adapter extraction boundary
+      stabilized, Rust behavior preserved, and schema migration upgraded to v3 metadata contracts).
 - [ ] Milestone 15 TypeScript adapter MVP (definitions, references, imports, calls, containers).
 - [ ] Milestone 16 Python adapter MVP (definitions, references, imports, calls, containers).
 - [ ] Milestone 17 documentation and dogfood transcript updates (`README.md`,
@@ -108,6 +117,17 @@ before agent-facing commands and data contracts are stable.
   identifier-only spans produced one-token snippets with no body context. Evidence:
   `milestone13_explain_json_determinism` red run failed on `assertion failed:
   snippet.contains("leaf();")` until Rust AST spans used full node end positions.
+
+- Observation: Removing direct Rust parser calls from `indexer/mod.rs` without an adapter reference
+  channel immediately regressed `refs` behavior to non-AST fallbacks. Evidence:
+  `milestone14_rust_behavior_unchanged_through_adapter` red run failed on
+  `assertion failed: refs_out.contains("[ast_reference ast_likely]")` until
+  `ExtractionUnit.references` was added and persisted.
+
+- Observation: Creating new schema-v3 indexes before adding missing columns on migrated v2 tables
+  causes bootstrap failure. Evidence: `milestone14_schema_language_metadata_migration` green attempt
+  failed with `no such column: language` during `CREATE INDEX ... symbols_v2(language, symbol)` and
+  required moving metadata index creation after additive column migration.
 
 ## Decision Log
 
@@ -154,6 +174,17 @@ before agent-facing commands and data contracts are stable.
   spans. Rationale: snippet extraction should include meaningful code context (for example function
   body lines), not only identifier text. Date/Author: 2026-02-06 / Codex
 
+- Decision: Extend the language adapter extraction payload with explicit references
+  (`ExtractionUnit.references`) so `ast_references` can be persisted through the adapter boundary
+  instead of direct parser calls in `indexer/mod.rs`. Rationale: Milestone 14 requires parser
+  abstraction without regressing existing `refs` behavior. Date/Author: 2026-02-06 / Codex
+
+- Decision: Upgrade store schema metadata to `SCHEMA_VERSION = 3` and perform additive migration for
+  `symbols_v2.language`, `symbols_v2.qualified_symbol`, and `symbol_edges_v2.provenance` with
+  deterministic backfill. Rationale: adapter contracts in Milestone 14 depend on persisted language
+  identifiers and stable qualified/provenance values while keeping v1/v2 query behavior intact.
+  Date/Author: 2026-02-06 / Codex
+
 ## Outcomes & Retrospective
 
 Planning outcome at this stage: Phase 3 scope is explicitly sequenced around agent-loop value
@@ -174,6 +205,12 @@ Milestone 13 outcome: `explain` now provides terminal/JSON dossiers with definit
 relationship counters (`inbound`/`outbound`), deterministic serialization, and multi-line snippets
 when requested. Remaining work is language-adapter extraction/migration and TypeScript/Python
 indexing rollout.
+
+Milestone 14 outcome: indexing now consumes Rust extraction through the language-adapter boundary,
+including adapter-provided references so legacy `find`/`refs` behavior remains intact. Store schema
+is upgraded additively to version 3 with persisted `language`, `qualified_symbol`, and
+`provenance` metadata plus migration-safe index creation/backfill. Remaining work is TypeScript and
+Python adapter rollout plus documentation updates.
 
 Target completion outcome: `repo-scout` provides deterministic changed-file impact analysis and
 symbol dossier commands, plus a language-neutral extraction pipeline that supports Rust, TypeScript,

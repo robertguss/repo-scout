@@ -142,7 +142,7 @@ pub fn diff_impact_for_changed_files(
 
     for changed_file in changed_files {
         let mut statement = connection.prepare(
-            "SELECT symbol_id, symbol, kind, file_path, start_line, start_column
+            "SELECT symbol_id, symbol, kind, file_path, start_line, start_column, language, qualified_symbol
              FROM symbols_v2
              WHERE file_path = ?1
              ORDER BY start_line ASC, start_column ASC, symbol ASC",
@@ -155,13 +155,17 @@ pub fn diff_impact_for_changed_files(
                 row.get::<_, String>(3)?,
                 row.get::<_, i64>(4)? as u32,
                 row.get::<_, i64>(5)? as u32,
+                row.get::<_, String>(6)?,
+                row.get::<_, Option<String>>(7)?,
             ))
         })?;
 
         for row in rows {
-            let (symbol_id, symbol, kind, file_path, line, column) = row?;
-            let language = language_for_file_path(&file_path).to_string();
-            let qualified_symbol = format!("{language}:{file_path}::{symbol}");
+            let (symbol_id, symbol, kind, file_path, line, column, language, qualified_symbol) =
+                row?;
+            let language = normalized_language(&language, &file_path).to_string();
+            let qualified_symbol =
+                qualified_symbol.unwrap_or_else(|| format!("{language}:{file_path}::{symbol}"));
             let key = format!("{file_path}:{line}:{column}:{qualified_symbol}:changed_symbol:0");
             if !seen.insert(key) {
                 continue;
@@ -189,7 +193,7 @@ pub fn diff_impact_for_changed_files(
     if max_distance >= 1 {
         for (changed_symbol_id, changed_symbol) in changed_symbol_ids {
             let mut incoming_statement = connection.prepare(
-                "SELECT fs.symbol, fs.kind, fs.file_path, fs.start_line, fs.start_column, e.edge_kind, e.confidence
+                "SELECT fs.symbol, fs.kind, fs.file_path, fs.start_line, fs.start_column, fs.language, fs.qualified_symbol, e.edge_kind, e.confidence, e.provenance
                  FROM symbol_edges_v2 e
                  JOIN symbols_v2 fs ON fs.symbol_id = e.from_symbol_id
                  WHERE e.to_symbol_id = ?1
@@ -204,15 +208,31 @@ pub fn diff_impact_for_changed_files(
                         row.get::<_, i64>(3)? as u32,
                         row.get::<_, i64>(4)? as u32,
                         row.get::<_, String>(5)?,
-                        row.get::<_, f64>(6)?,
+                        row.get::<_, Option<String>>(6)?,
+                        row.get::<_, String>(7)?,
+                        row.get::<_, f64>(8)?,
+                        row.get::<_, String>(9)?,
                     ))
                 })?;
 
             for incoming in incoming_rows {
-                let (symbol, kind, file_path, line, column, edge_kind, score) = incoming?;
-                let language = language_for_file_path(&file_path).to_string();
-                let qualified_symbol = format!("{language}:{file_path}::{symbol}");
-                let (relationship, provenance) = edge_kind_relationship_and_provenance(&edge_kind);
+                let (
+                    symbol,
+                    kind,
+                    file_path,
+                    line,
+                    column,
+                    language,
+                    qualified_symbol,
+                    edge_kind,
+                    score,
+                    provenance,
+                ) = incoming?;
+                let language = normalized_language(&language, &file_path).to_string();
+                let qualified_symbol =
+                    qualified_symbol.unwrap_or_else(|| format!("{language}:{file_path}::{symbol}"));
+                let relationship = edge_kind_relationship(&edge_kind);
+                let provenance = normalized_provenance(&provenance, &edge_kind);
                 let key = format!(
                     "{file_path}:{line}:{column}:{qualified_symbol}:{relationship}:distance1"
                 );
@@ -234,7 +254,7 @@ pub fn diff_impact_for_changed_files(
                         "direct {relationship} neighbor of changed symbol '{changed_symbol}'"
                     ),
                     confidence: "graph_likely".to_string(),
-                    provenance: provenance.to_string(),
+                    provenance,
                     score,
                 });
             }
@@ -302,7 +322,7 @@ pub fn explain_symbol(
 ) -> anyhow::Result<Vec<ExplainMatch>> {
     let connection = Connection::open(db_path)?;
     let mut statement = connection.prepare(
-        "SELECT symbol_id, symbol, kind, file_path, start_line, start_column, end_line, end_column, signature
+        "SELECT symbol_id, symbol, kind, file_path, start_line, start_column, end_line, end_column, signature, language, qualified_symbol
          FROM symbols_v2
          WHERE symbol = ?1
          ORDER BY file_path ASC, start_line ASC, start_column ASC, kind ASC",
@@ -318,6 +338,8 @@ pub fn explain_symbol(
             row.get::<_, i64>(6)? as u32,
             row.get::<_, i64>(7)? as u32,
             row.get::<_, Option<String>>(8)?,
+            row.get::<_, String>(9)?,
+            row.get::<_, Option<String>>(10)?,
         ))
     })?;
 
@@ -333,9 +355,12 @@ pub fn explain_symbol(
             end_line,
             end_column,
             signature,
+            language,
+            qualified_symbol,
         ) = row?;
-        let language = language_for_file_path(&file_path).to_string();
-        let qualified_symbol = format!("{language}:{file_path}::{symbol}");
+        let language = normalized_language(&language, &file_path).to_string();
+        let qualified_symbol =
+            qualified_symbol.unwrap_or_else(|| format!("{language}:{file_path}::{symbol}"));
         let snippet = include_snippets
             .then(|| extract_symbol_snippet(db_path, &file_path, start_line, end_line))
             .flatten();
@@ -490,13 +515,27 @@ fn diff_impact_kind_rank(item: &DiffImpactMatch) -> u8 {
     }
 }
 
-fn edge_kind_relationship_and_provenance(edge_kind: &str) -> (&'static str, &'static str) {
+fn edge_kind_relationship(edge_kind: &str) -> &'static str {
     match edge_kind {
-        "calls" => ("called_by", "call_resolution"),
-        "contains" => ("contained_by", "ast_definition"),
-        "imports" => ("imported_by", "import_resolution"),
-        "implements" => ("implemented_by", "ast_reference"),
-        _ => ("called_by", "ast_reference"),
+        "calls" => "called_by",
+        "contains" => "contained_by",
+        "imports" => "imported_by",
+        "implements" => "implemented_by",
+        _ => "called_by",
+    }
+}
+
+fn normalized_provenance(provenance: &str, edge_kind: &str) -> String {
+    match provenance {
+        "ast_definition" | "ast_reference" | "import_resolution" | "call_resolution"
+        | "text_fallback" => provenance.to_string(),
+        _ => match edge_kind {
+            "calls" => "call_resolution".to_string(),
+            "imports" => "import_resolution".to_string(),
+            "contains" => "ast_definition".to_string(),
+            "implements" => "ast_reference".to_string(),
+            _ => "ast_reference".to_string(),
+        },
     }
 }
 
@@ -509,6 +548,16 @@ fn language_for_file_path(file_path: &str) -> &'static str {
         "python"
     } else {
         "unknown"
+    }
+}
+
+fn normalized_language(language: &str, file_path: &str) -> &'static str {
+    match language {
+        "rust" => "rust",
+        "typescript" => "typescript",
+        "python" => "python",
+        "unknown" => "unknown",
+        _ => language_for_file_path(file_path),
     }
 }
 

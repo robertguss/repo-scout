@@ -92,14 +92,14 @@ fn build_v1_index(repo_path: &std::path::Path) -> std::path::PathBuf {
 }
 
 #[test]
-fn milestone6_schema_v1_upgrades_to_v2_without_data_loss() {
+fn milestone6_schema_v1_upgrades_to_v3_without_data_loss() {
     let repo = common::temp_repo();
     let db_path = build_v1_index(repo.path());
 
     let status = run_stdout(&["status", "--repo", repo.path().to_str().unwrap()]);
     assert!(
-        status.contains("schema_version: 2"),
-        "store bootstrap should migrate v1 dbs to schema v2"
+        status.contains("schema_version: 3"),
+        "store bootstrap should migrate v1 dbs to schema v3"
     );
 
     let connection = Connection::open(db_path).expect("db should remain readable");
@@ -124,9 +124,9 @@ fn milestone6_schema_v1_upgrades_to_v2_without_data_loss() {
 
 /// Verifies that applying the schema migration is idempotent and that migrated artifacts persist.
 ///
-/// Runs the status command twice to ensure the repository index is migrated to schema version 2 on
+/// Runs the status command twice to ensure the repository index is migrated to schema version 3 on
 /// repeated runs, then opens the index database to assert that the `meta` table contains
-/// `schema_version = "2"` and that the `symbol_edges_v2` table exists.
+/// `schema_version = "3"` and that the `symbol_edges_v2` table exists.
 #[test]
 fn milestone6_schema_migration_is_idempotent() {
     let repo = common::temp_repo();
@@ -134,8 +134,8 @@ fn milestone6_schema_migration_is_idempotent() {
 
     let first = run_stdout(&["status", "--repo", repo.path().to_str().unwrap()]);
     let second = run_stdout(&["status", "--repo", repo.path().to_str().unwrap()]);
-    assert!(first.contains("schema_version: 2"));
-    assert!(second.contains("schema_version: 2"));
+    assert!(first.contains("schema_version: 3"));
+    assert!(second.contains("schema_version: 3"));
 
     let connection = Connection::open(db_path).expect("db should remain readable");
     let version: String = connection
@@ -145,7 +145,7 @@ fn milestone6_schema_migration_is_idempotent() {
             |row| row.get(0),
         )
         .expect("meta schema_version should exist");
-    assert_eq!(version, "2");
+    assert_eq!(version, "3");
 
     let edge_table_exists: i64 = connection
         .query_row(
