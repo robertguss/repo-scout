@@ -18,7 +18,7 @@ A user should be able to see this working through concrete commands: index a rep
 - [x] (2026-02-06 00:00Z) Drafted this Phase 2 agent-first ExecPlan with full milestone narrative, validation commands, and interface contracts.
 - [x] (2026-02-06 00:00Z) Added strict per-feature TDD gates (red, green, refactor) and evidence requirements for each milestone.
 - [x] (2026-02-06 01:10Z) Implemented Milestone 6 lifecycle correctness and schema migration guards (`tests/milestone6_lifecycle.rs`, `tests/milestone6_schema_migration.rs`, `src/indexer/mod.rs`, `src/store/schema.rs`) with full-suite green gate.
-- [ ] Implement Milestone 7: richer Rust AST extraction and symbol metadata (kind, container, span, signature summary).
+- [x] (2026-02-06 01:40Z) Implemented Milestone 7 richer Rust symbol extraction and metadata persistence (`tests/milestone7_rust_symbols.rs`, `src/indexer/rust_ast.rs`, `src/indexer/mod.rs`) with full-suite green gate.
 - [ ] Implement Milestone 8: symbol relationship graph storage and query primitives.
 - [ ] Implement Milestone 9: agent-native commands (`impact`, `context`) with deterministic JSON contracts.
 - [ ] Implement Milestone 10: validation intelligence (`tests-for`, `verify-plan`) and end-to-end acceptance hardening.
@@ -40,6 +40,9 @@ A user should be able to see this working through concrete commands: index a rep
 
 - Observation: Migrating store schema to v2 only impacted `index/status` schema reporting; `find`/`refs --json` remained schema-version 1 and behavior-compatible.
   Evidence: `tests/milestone1_cli.rs` required schema assertion updates to `2`, while `tests/milestone4_ranking_json.rs` and `tests/milestone5_e2e.rs` continued to assert JSON schema `1` successfully.
+
+- Observation: Import extraction introduces legitimate multiple AST definitions for some symbols (for example a local struct plus a `use` import of the same name), so tests should assert non-zero AST results rather than hard-coding single-result counts.
+  Evidence: `milestone7_struct_enum_trait_defs` initially expected `results: 1` for `Launcher` and failed once `use` extraction was added in slice 7C.
 
 ## Decision Log
 
@@ -71,6 +74,10 @@ A user should be able to see this working through concrete commands: index a rep
   Rationale: Phase 2 needs additive graph tables and migration guards, but existing query JSON contracts are explicitly preserved for compatibility.
   Date/Author: 2026-02-06 / Codex
 
+- Decision: Persist rich symbol metadata in `symbols_v2` while keeping `find` backed by `ast_definitions` for compatibility.
+  Rationale: Phase 2 needs container/span/signature data for new graph/query commands, but preserving existing `find` behavior avoids destabilizing earlier milestone contracts.
+  Date/Author: 2026-02-06 / Codex
+
 ## Outcomes & Retrospective
 
 Initial outcome at planning time: the repository has a solid v0 baseline and deterministic behavior, but no graph-level understanding, no task-shaped commands, and a correctness gap for deleted files. This plan addresses those gaps in an incremental path that preserves existing behavior and test contracts.
@@ -78,6 +85,8 @@ Initial outcome at planning time: the repository has a solid v0 baseline and det
 Target completion outcome: `repo-scout` becomes a dependable local intelligence tool for coding workflows with trustworthy incremental indexing, richer symbol coverage, graph-powered impact/context queries, and actionable validation suggestions. Remaining future work after this plan should be deeper semantic resolution (for example compiler-assisted type resolution), additional languages, and ranking quality iteration based on real repository telemetry.
 
 Milestone 6 outcome (2026-02-06): lifecycle correctness is now enforced for file deletion and rename scenarios, and schema migration guards validate upgrade from v1 to v2 without losing query behavior. Remaining work is entirely Phase 2 intelligence expansion (Milestones 7-10).
+
+Milestone 7 outcome (2026-02-06): Rust symbol extraction now covers struct/enum/trait/module/type-alias/const/import plus impl-method container metadata, and `symbols_v2` now persists container/span/signature summaries for downstream graph and agent-query milestones.
 
 ## Context and Orientation
 
@@ -449,3 +458,4 @@ Confidence and provenance vocabulary must remain explicit and finite. Extend exi
 2026-02-06: Created this new Phase 2 ExecPlan to define an agent-first roadmap after v0 completion. Chose a trust-first sequence (freshness before intelligence) and specified concrete milestones, commands, validation behavior, and interfaces so a novice can implement end-to-end from this single file.
 2026-02-06: Revised the plan to enforce strict per-feature red-green-refactor workflow, added explicit feature slices per milestone, and added mandatory TDD evidence requirements so implementation mirrors the rigor of the prior v0 plan.
 2026-02-06: Updated living sections after Milestone 6 implementation with lifecycle/migration outcomes, schema-version compatibility decisions, and TDD evidence notes for restartability.
+2026-02-06: Updated living sections after Milestone 7 implementation with richer symbol extraction outcomes, metadata persistence decisions, and slice-level test evidence notes.

@@ -80,3 +80,33 @@ Copy this template for each new task:
   - fix commit: pending.
   - docs/plan update: updated `agents/repo-scout-agent-first-phase2-execplan.md` Progress/Decision Log/Outcomes.
 - Status: `fixed`
+
+- Date: `2026-02-06`
+- Task: Milestone 7 richer Rust symbol extraction and metadata persistence.
+- Commands run:
+  - `just dogfood-pre Launcher`
+  - `just tdd-red milestone7_struct_enum_trait_defs`
+  - `just tdd-green milestone7_struct_enum_trait_defs`
+  - `just tdd-refactor`
+  - `just dogfood-pre run`
+  - `just tdd-red milestone7_impl_method_container`
+  - `just tdd-green milestone7_impl_method_container`
+  - `just tdd-refactor`
+  - `just dogfood-pre LocalLauncher`
+  - `just tdd-red milestone7_module_alias_const_use`
+  - `just tdd-green milestone7_module_alias_const_use`
+  - `just dogfood-pre start_engine`
+  - `just tdd-red milestone7_spans_and_signatures_persist`
+  - `just tdd-green milestone7_spans_and_signatures_persist`
+  - `just tdd-refactor`
+  - `just dogfood-post start_engine`
+- What helped:
+  - Existing Tree-sitter integration allowed additive symbol-kind extraction with small parser changes.
+  - `symbols_v2` table made it straightforward to persist richer metadata without changing `find` output schema.
+- What failed or felt weak:
+  - Import extraction caused valid duplicate AST hits for `Launcher`, so count-based assertions needed to be relaxed.
+- Action taken:
+  - failing test added: `tests/milestone7_rust_symbols.rs`.
+  - fix commit: pending.
+  - docs/plan update: updated `README.md`, `docs/cli-reference.md`, `docs/architecture.md`, and phase-2 ExecPlan living sections.
+- Status: `fixed`

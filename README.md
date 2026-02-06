@@ -5,7 +5,7 @@
 This project currently ships a hybrid approach:
 
 - Language-agnostic text indexing for all files.
-- Rust AST extraction (Tree-sitter) for function definitions and call references.
+- Rust AST extraction (Tree-sitter) for definitions (`fn`, `struct`, `enum`, `trait`, `mod`, `const`, `type`, `use`) plus call references.
 - Deterministic terminal and JSON output for scripting and agent use.
 
 ## Status
@@ -80,7 +80,7 @@ Returns likely definitions for `symbol`.
 
 Current behavior:
 
-- Prefer Rust AST definitions (`ast_definition`) when present.
+- Prefer Rust AST definitions (`ast_definition`) when present, including methods and non-function item kinds.
 - Otherwise use text fallback ranking:
   - exact token matches first (`exact_symbol_name`)
   - substring matches next (`text_substring_match`)

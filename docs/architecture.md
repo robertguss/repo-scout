@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the current v0 architecture for `repo-scout`.
+This document describes the current architecture for `repo-scout` after Phase 2 Milestones 6 and 7.
 
 ## High-Level Flow
 
@@ -26,7 +26,7 @@ This document describes the current v0 architecture for `repo-scout`.
 - `src/indexer/text.rs`
   - Language-agnostic token extraction with line/column locations.
 - `src/indexer/rust_ast.rs`
-  - Rust Tree-sitter parsing for function definitions and call references.
+  - Rust Tree-sitter parsing for symbol definitions (functions, types, modules, imports) and call references.
 - `src/indexer/mod.rs`
   - Incremental indexing coordinator and table upserts.
 - `src/query/mod.rs`
@@ -45,9 +45,13 @@ Current tables:
 - `text_occurrences`
   - Token-level fallback matches with `line` and `column`.
 - `ast_definitions`
-  - Rust AST definition entries (currently function definitions).
+  - Rust AST definition entries used by `find`.
 - `ast_references`
-  - Rust AST reference entries (currently call-site identifiers).
+  - Rust AST reference entries (call-site identifiers).
+- `symbols_v2`
+  - Rich symbol metadata for Phase 2: kind, container, start/end span, and optional signature summary.
+- `symbol_edges_v2`
+  - Reserved Phase 2 graph table for symbol-to-symbol edges (populated in Milestone 8).
 
 Indexes exist for common symbol lookups in text and AST tables.
 

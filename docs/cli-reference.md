@@ -45,7 +45,7 @@ Find likely definitions or matches for `SYMBOL`.
 
 Behavior:
 
-- Prefers Rust AST definitions if available.
+- Prefers Rust AST definitions if available (functions, methods, types, modules, consts, and imports).
 - Falls back to ranked text matching (exact token first, substring second).
 
 Example:

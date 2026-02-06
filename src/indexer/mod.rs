@@ -66,6 +66,16 @@ pub fn index_repository(repo: &Path, db_path: &Path) -> anyhow::Result<IndexSumm
             "DELETE FROM ast_references WHERE file_path = ?1",
             [&file.relative_path],
         )?;
+        tx.execute(
+            "DELETE FROM symbol_edges_v2
+             WHERE from_symbol_id IN (SELECT symbol_id FROM symbols_v2 WHERE file_path = ?1)
+                OR to_symbol_id IN (SELECT symbol_id FROM symbols_v2 WHERE file_path = ?1)",
+            [&file.relative_path],
+        )?;
+        tx.execute(
+            "DELETE FROM symbols_v2 WHERE file_path = ?1",
+            [&file.relative_path],
+        )?;
 
         for occurrence in token_occurrences {
             tx.execute(
@@ -81,15 +91,46 @@ pub fn index_repository(repo: &Path, db_path: &Path) -> anyhow::Result<IndexSumm
         }
 
         for definition in ast_items.0 {
+            let symbol = definition.symbol;
+            let kind = definition.kind;
+            let container = definition.container;
+            let start_line = i64::from(definition.line);
+            let start_column = i64::from(definition.column);
+            let end_line = i64::from(definition.end_line);
+            let end_column = i64::from(definition.end_column);
+            let signature = definition.signature;
+
             tx.execute(
                 "INSERT INTO ast_definitions(file_path, symbol, kind, line, column)
                  VALUES (?1, ?2, ?3, ?4, ?5)",
                 params![
-                    file.relative_path,
-                    definition.symbol,
-                    definition.kind,
-                    i64::from(definition.line),
-                    i64::from(definition.column)
+                    &file.relative_path,
+                    &symbol,
+                    &kind,
+                    start_line,
+                    start_column
+                ],
+            )?;
+            tx.execute(
+                "INSERT INTO symbols_v2(
+                    file_path, symbol, kind, container, start_line, start_column, end_line, end_column, signature
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                 ON CONFLICT(file_path, symbol, kind, start_line, start_column)
+                 DO UPDATE SET
+                    container = excluded.container,
+                    end_line = excluded.end_line,
+                    end_column = excluded.end_column,
+                    signature = excluded.signature",
+                params![
+                    &file.relative_path,
+                    &symbol,
+                    &kind,
+                    container.as_deref(),
+                    start_line,
+                    start_column,
+                    end_line,
+                    end_column,
+                    signature.as_deref()
                 ],
             )?;
         }
@@ -152,6 +193,13 @@ fn prune_stale_file_rows(
         tx.execute("DELETE FROM text_occurrences WHERE file_path = ?1", [&path])?;
         tx.execute("DELETE FROM ast_definitions WHERE file_path = ?1", [&path])?;
         tx.execute("DELETE FROM ast_references WHERE file_path = ?1", [&path])?;
+        tx.execute(
+            "DELETE FROM symbol_edges_v2
+             WHERE from_symbol_id IN (SELECT symbol_id FROM symbols_v2 WHERE file_path = ?1)
+                OR to_symbol_id IN (SELECT symbol_id FROM symbols_v2 WHERE file_path = ?1)",
+            [&path],
+        )?;
+        tx.execute("DELETE FROM symbols_v2 WHERE file_path = ?1", [&path])?;
         tx.execute("DELETE FROM indexed_files WHERE file_path = ?1", [&path])?;
     }
     tx.commit()?;
