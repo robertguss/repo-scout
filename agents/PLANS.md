@@ -21,6 +21,10 @@ NON-NEGOTIABLE REQUIREMENTS:
 - Every ExecPlan must enable a complete novice to implement the feature end-to-end without prior knowledge of this repo.
 - Every ExecPlan must produce a demonstrably working behavior, not merely code changes to "meet a definition".
 - Every ExecPlan must define every term of art in plain language or do not use it.
+- Every ExecPlan must enforce strict Test-Driven Development (TDD) for implementation work: red (write and run a failing test first), green (write the minimum production code to pass), and refactor (improve code while full tests stay green).
+- Every ExecPlan must require strict TDD at the feature-slice level, not only at milestone level. A feature slice is the smallest user-visible behavior unit.
+- Every ExecPlan must forbid writing production code for a feature slice before a failing automated test exists for that exact slice.
+- Every ExecPlan must require evidence artifacts for each feature slice: one red transcript, one green transcript, and one refactor full-suite transcript.
 
 Purpose and intent come first. Begin by explaining, in a few sentences, why the work matters from a user's perspective: what someone can do after this change that they could not do before, and how to see it working. Then guide the reader through the exact steps to achieve that outcome, including what to edit, what to run, and what they should observe.
 
@@ -48,6 +52,8 @@ Be idempotent and safe. Write the steps so they can be run multiple times withou
 
 Validation is not optional. Include instructions to run tests, to start the system if applicable, and to observe it doing something useful. Describe comprehensive testing for any new features or capabilities. Include expected outputs and error messages so a novice can tell success from failure. Where possible, show how to prove that the change is effective beyond compilation (for example, through a small end-to-end scenario, a CLI invocation, or an HTTP request/response transcript). State the exact test commands appropriate to the project’s toolchain and how to interpret their results.
 
+TDD strictness is not optional. Plans must explicitly name the failing test that starts each feature slice, then the command used to verify the pass, then the full-suite command used for the refactor gate. Plans must state in plain language that no production change is allowed before the red step is observed.
+
 Capture evidence. When your steps produce terminal output, short diffs, or logs, include them inside the single fenced block as indented examples. Keep them concise and focused on what proves success. If you need to include a patch, prefer file-scoped diffs or small excerpts that a reader can recreate by following your instructions rather than pasting large blobs.
 
 ## Milestones
@@ -55,6 +61,8 @@ Capture evidence. When your steps produce terminal output, short diffs, or logs,
 Milestones are narrative, not bureaucracy. If you break the work into milestones, introduce each with a brief paragraph that describes the scope, what will exist at the end of the milestone that did not exist before, the commands to run, and the acceptance you expect to observe. Keep it readable as a story: goal, work, result, proof. Progress and milestones are distinct: milestones tell the story, progress tracks granular work. Both must exist. Never abbreviate a milestone merely for the sake of brevity, do not leave out details that could be crucial to a future implementation.
 
 Each milestone must be independently verifiable and incrementally implement the overall goal of the execution plan.
+
+Each milestone must include explicit feature slices and a strict red-green-refactor loop for each slice. It is not sufficient to run one red-green-refactor loop for an entire milestone if the milestone contains multiple user-visible behaviors.
 
 ## Living plans and design decisions
 
@@ -115,17 +123,32 @@ Prefer additive code changes followed by subtractions that keep tests passing. P
 
     Describe the current state relevant to this task as if the reader knows nothing. Name the key files and modules by full path. Define any non-obvious term you will use. Do not refer to prior plans.
 
+    ## Strict TDD Contract
+
+    Define how strict red-green-refactor will be enforced for this plan. State that no production code is allowed before a failing test exists for each feature slice. Define what counts as a feature slice in this plan and where red/green/refactor evidence will be recorded.
+
     ## Plan of Work
 
-    Describe, in prose, the sequence of edits and additions. For each edit, name the file and location (function, module) and what to insert or change. Keep it concrete and minimal.
+    Describe, in prose, the sequence of edits and additions. For each edit, name the file and location (function, module) and what to insert or change. Keep it concrete and minimal. Break each milestone into feature slices and describe the red behavior test, green implementation scope, and refactor boundary for each slice.
 
     ## Concrete Steps
 
     State the exact commands to run and where to run them (working directory). When a command generates output, show a short expected transcript so the reader can compare. This section must be updated as work proceeds.
 
+    Include strict per-slice TDD commands in this order:
+
+        cargo test <slice_test_name> -- --nocapture
+        # red: confirm expected failure first
+        cargo test <slice_test_name> -- --nocapture
+        # green: confirm pass after minimum implementation
+        cargo test
+        # refactor gate: full suite must pass
+
     ## Validation and Acceptance
 
     Describe how to start or exercise the system and what to observe. Phrase acceptance as behavior, with specific inputs and outputs. If tests are involved, say "run <project’s test command> and expect <N> passed; the new test <name> fails before the change and passes after>".
+
+    Require explicit strict-TDD acceptance evidence: every feature slice must have a recorded red failure, green pass, and refactor full-suite pass.
 
     ## Idempotence and Recovery
 
