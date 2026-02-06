@@ -29,4 +29,6 @@ pub struct QueryArgs {
     pub symbol: String,
     #[arg(long)]
     pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
 }

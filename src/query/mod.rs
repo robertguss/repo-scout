@@ -1,8 +1,9 @@
 use std::path::Path;
 
 use rusqlite::{Connection, params};
+use serde::Serialize;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct QueryMatch {
     pub file_path: String,
     pub line: u32,
@@ -10,6 +11,7 @@ pub struct QueryMatch {
     pub symbol: String,
     pub why_matched: String,
     pub confidence: String,
+    pub score: f64,
 }
 
 pub fn find_matches(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<QueryMatch>> {
@@ -19,7 +21,7 @@ pub fn find_matches(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<QueryMat
         return Ok(ast_definitions);
     }
 
-    text_matches(&connection, symbol)
+    ranked_text_matches(&connection, symbol)
 }
 
 pub fn refs_matches(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<QueryMatch>> {
@@ -29,7 +31,7 @@ pub fn refs_matches(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<QueryMat
         return Ok(ast_references);
     }
 
-    text_matches(&connection, symbol)
+    ranked_text_matches(&connection, symbol)
 }
 
 fn ast_definition_matches(
@@ -50,6 +52,7 @@ fn ast_definition_matches(
             symbol: row.get(3)?,
             why_matched: "ast_definition".to_string(),
             confidence: "ast_exact".to_string(),
+            score: 1.0,
         })
     })?;
 
@@ -71,18 +74,25 @@ fn ast_reference_matches(connection: &Connection, symbol: &str) -> anyhow::Resul
             symbol: row.get(3)?,
             why_matched: "ast_reference".to_string(),
             confidence: "ast_likely".to_string(),
+            score: 0.95,
         })
     })?;
 
     collect_rows(rows)
 }
 
-fn text_matches(connection: &Connection, symbol: &str) -> anyhow::Result<Vec<QueryMatch>> {
+fn ranked_text_matches(connection: &Connection, symbol: &str) -> anyhow::Result<Vec<QueryMatch>> {
+    let mut matches = text_exact_matches(connection, symbol)?;
+    matches.extend(text_substring_matches(connection, symbol)?);
+    Ok(matches)
+}
+
+fn text_exact_matches(connection: &Connection, symbol: &str) -> anyhow::Result<Vec<QueryMatch>> {
     let mut statement = connection.prepare(
         "SELECT file_path, line, column, symbol
          FROM text_occurrences
          WHERE symbol = ?1
-         ORDER BY file_path ASC, line ASC, column ASC",
+         ORDER BY file_path ASC, line ASC, column ASC, symbol ASC",
     )?;
     let rows = statement.query_map(params![symbol], |row| {
         Ok(QueryMatch {
@@ -90,8 +100,35 @@ fn text_matches(connection: &Connection, symbol: &str) -> anyhow::Result<Vec<Que
             line: row.get::<_, i64>(1)? as u32,
             column: row.get::<_, i64>(2)? as u32,
             symbol: row.get(3)?,
-            why_matched: "text_identifier_match".to_string(),
+            why_matched: "exact_symbol_name".to_string(),
             confidence: "text_fallback".to_string(),
+            score: 0.8,
+        })
+    })?;
+
+    collect_rows(rows)
+}
+
+fn text_substring_matches(
+    connection: &Connection,
+    symbol: &str,
+) -> anyhow::Result<Vec<QueryMatch>> {
+    let pattern = format!("%{symbol}%");
+    let mut statement = connection.prepare(
+        "SELECT file_path, line, column, symbol
+         FROM text_occurrences
+         WHERE symbol LIKE ?1 AND symbol <> ?2
+         ORDER BY file_path ASC, line ASC, column ASC, symbol ASC",
+    )?;
+    let rows = statement.query_map(params![pattern, symbol], |row| {
+        Ok(QueryMatch {
+            file_path: row.get(0)?,
+            line: row.get::<_, i64>(1)? as u32,
+            column: row.get::<_, i64>(2)? as u32,
+            symbol: row.get(3)?,
+            why_matched: "text_substring_match".to_string(),
+            confidence: "text_fallback".to_string(),
+            score: 0.4,
         })
     })?;
 

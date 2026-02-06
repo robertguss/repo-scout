@@ -18,9 +18,9 @@ This implementation is intentionally strict Test-Driven Development (TDD). Every
 - [x] (2026-02-06 01:30Z) Milestone 1 (red-green-refactor): command surface and SQLite schema bootstrap completed with module refactor (`src/cli.rs`, `src/store/mod.rs`, `src/store/schema.rs`, `src/output.rs`, `src/main.rs`, `tests/milestone1_cli.rs`).
 - [x] (2026-02-06 01:36Z) Milestone 2 (red-green-refactor): language-agnostic indexing and incremental updates completed (`src/indexer/mod.rs`, `src/indexer/files.rs`, `src/indexer/text.rs`, `src/query/mod.rs`, schema updates, `tests/milestone2_indexing.rs`).
 - [x] (2026-02-06 01:43Z) Milestone 3 (red-green-refactor): Rust Tree-sitter adapter for function definitions and call references completed (`src/indexer/rust_ast.rs`, AST schema tables, query routing, `tests/milestone3_rust_ast.rs`).
-- [ ] Milestone 4 (red-green-refactor): query ranking, deterministic ordering, and JSON contract.
+- [x] (2026-02-06 01:48Z) Milestone 4 (red-green-refactor): query ranking, deterministic ordering, and JSON contract completed (`--json` flag, `score` field, exact-name-first ranking, deterministic JSON output, `tests/milestone4_ranking_json.rs`).
 - [ ] Milestone 5 (red-green-refactor): end-to-end validation, fixtures, and regression hardening.
-- [x] (2026-02-06 01:43Z) Updated living sections with Milestone 3 evidence, decisions, and outcomes.
+- [x] (2026-02-06 01:48Z) Updated living sections with Milestone 4 evidence, decisions, and outcomes.
 
 ## Surprises & Discoveries
 
@@ -35,6 +35,9 @@ This implementation is intentionally strict Test-Driven Development (TDD). Every
 
 - Observation: Pure text fallback produced two `launch` matches in Rust fixtures (definition + call), which failed Milestone 3 AST expectations.
   Evidence: Milestone 3 red tests showed `results: 2` with `[text_identifier_match text_fallback]` lines before AST routing was implemented.
+
+- Observation: Milestone 4 red tests failed at CLI parsing because `--json` was not supported on `find`/`refs`.
+  Evidence: clap emitted `unexpected argument '--json' found` for both commands until `QueryArgs` was extended.
 
 ## Decision Log
 
@@ -66,6 +69,14 @@ This implementation is intentionally strict Test-Driven Development (TDD). Every
   Rationale: This keeps behavior deterministic while preserving cross-language usefulness and improving precision in Rust files.
   Date/Author: 2026-02-06 / Codex
 
+- Decision: Use exact-name-first ranking for text fallback and include substring matches as lower-scored candidates.
+  Rationale: This satisfies milestone ranking requirements while preserving useful recall for partial queries.
+  Date/Author: 2026-02-06 / Codex
+
+- Decision: Add `score` to query results and emit stable pretty JSON with fixed top-level fields.
+  Rationale: Structured, deterministic output is required for agent automation and golden-test stability.
+  Date/Author: 2026-02-06 / Codex
+
 ## Outcomes & Retrospective
 
 Milestone 1 outcome: The CLI now supports `index`, `status`, `find`, and `refs`, and bootstraps a SQLite store at `.repo-scout/index.db` with schema metadata.
@@ -73,6 +84,8 @@ Milestone 1 outcome: The CLI now supports `index`, `status`, `find`, and `refs`,
 Milestone 2 outcome: Language-agnostic indexing now stores per-file content hashes and token occurrences, `index` reports both `indexed_files` and `skipped_files`, and `find`/`refs` return text fallback matches from non-Rust files with file:line:column output. The next milestone is Rust AST extraction.
 
 Milestone 3 outcome: Rust AST extraction now indexes function definitions (`ast_definition`, `ast_exact`) and call-site references (`ast_reference`, `ast_likely`) via Tree-sitter. Queries now prefer AST results when available and preserve text fallback when AST results are not present. The next milestone is ranking and JSON output contracts.
+
+Milestone 4 outcome: `find` and `refs` now support `--json` output with a stable schema (`schema_version`, `command`, `query`, `results`). Query results now include `score`, and text fallback ranking is exact-name-first (`exact_symbol_name`) followed by substring matches (`text_substring_match`) with deterministic ordering. The next milestone is end-to-end validation and regression hardening.
 
 ## Context and Orientation
 
@@ -241,11 +254,77 @@ Milestone 3 refactor transcript:
     test milestone3_refs_reports_rust_ast_reference_match ... ok
     test result: ok. 8 passed; 0 failed
 
+Milestone 4 red transcript:
+
+    $ cargo test milestone4_ -- --nocapture
+    running 3 tests
+    error: unexpected argument '--json' found
+    test result: FAILED. 0 passed; 3 failed
+
+Milestone 4 green transcript:
+
+    $ cargo test milestone4_ -- --nocapture
+    running 3 tests
+    test milestone4_find_json_schema_and_exact_name_first_ranking ... ok
+    test milestone4_find_json_output_is_deterministic_across_runs ... ok
+    test milestone4_refs_json_preserves_ast_labels ... ok
+    test result: ok. 3 passed; 0 failed
+
+Milestone 4 refactor transcript:
+
+    $ cargo fmt && cargo test
+    running 1 test
+    test harness_can_run_binary_and_create_fixture_files ... ok
+    running 3 tests
+    test milestone1_index_creates_db_and_prints_schema_version ... ok
+    test milestone1_status_reports_schema_after_index_bootstrap ... ok
+    test milestone1_find_and_refs_accept_symbol_queries ... ok
+    running 2 tests
+    test milestone2_second_index_skips_unchanged_files ... ok
+    test milestone2_find_and_refs_use_text_fallback_for_plain_text_files ... ok
+    running 2 tests
+    test milestone3_find_reports_rust_ast_definition_match ... ok
+    test milestone3_refs_reports_rust_ast_reference_match ... ok
+    running 3 tests
+    test milestone4_find_json_schema_and_exact_name_first_ranking ... ok
+    test milestone4_find_json_output_is_deterministic_across_runs ... ok
+    test milestone4_refs_json_preserves_ast_labels ... ok
+    test result: ok. 11 passed; 0 failed
+
+Milestone 4 sample JSON transcript:
+
+    $ cargo run -- find orbit --repo <repo> --json
+    {
+      "schema_version": 1,
+      "command": "find",
+      "query": "orbit",
+      "results": [
+        {
+          "file_path": "docs/rank.txt",
+          "line": 1,
+          "column": 1,
+          "symbol": "orbit",
+          "why_matched": "exact_symbol_name",
+          "confidence": "text_fallback",
+          "score": 0.8
+        },
+        {
+          "file_path": "docs/rank.txt",
+          "line": 1,
+          "column": 7,
+          "symbol": "orbital",
+          "why_matched": "text_substring_match",
+          "confidence": "text_fallback",
+          "score": 0.4
+        }
+      ]
+    }
+
 ## Interfaces and Dependencies
 
 Use `clap` for command parsing, `rusqlite` for storage, `ignore` for repository walking with ignore rules, `tree-sitter` plus `tree-sitter-rust` for Rust AST extraction, `serde` plus `serde_json` for JSON output, and `anyhow` plus `thiserror` for error handling.
 
-The CLI command surface in `/Users/robertguss/Projects/experiments/codex-5-3/src/cli.rs` must include `Index`, `Status`, `Find`, and `Refs`. The query result structure in `/Users/robertguss/Projects/experiments/codex-5-3/src/query/mod.rs` currently includes file path, line, column, symbol text, `why_matched`, and `confidence`; ranking score and richer kind metadata are deferred to Milestone 4. The JSON response in `/Users/robertguss/Projects/experiments/codex-5-3/src/output.rs` must include `schema_version`, command metadata, query metadata, and results.
+The CLI command surface in `/Users/robertguss/Projects/experiments/codex-5-3/src/cli.rs` must include `Index`, `Status`, `Find`, and `Refs`. The query result structure in `/Users/robertguss/Projects/experiments/codex-5-3/src/query/mod.rs` now includes file path, line, column, symbol text, `why_matched`, `confidence`, and `score`. The JSON response in `/Users/robertguss/Projects/experiments/codex-5-3/src/output.rs` must include `schema_version`, command metadata, query metadata, and results.
 
 Keep confidence vocabulary fixed in v0 as `ast_exact`, `ast_likely`, and `text_fallback`. Keep provenance vocabulary fixed in v0 as `ast_definition`, `ast_reference`, `exact_symbol_name`, `text_identifier_match`, and `text_substring_match`. If vocabulary changes later, increment schema version and document migration behavior in this plan.
 
@@ -262,3 +341,5 @@ Keep confidence vocabulary fixed in v0 as `ast_exact`, `ast_likely`, and `text_f
 2026-02-06: Completed Milestone 2 with strict red-green-refactor cycle; added language-agnostic file/token indexing, incremental skip behavior, and fallback `find`/`refs` query results for non-Rust files.
 
 2026-02-06: Completed Milestone 3 with strict red-green-refactor cycle; added Rust Tree-sitter extraction for function definitions and call references, AST-aware query routing, and milestone-specific AST integration tests.
+
+2026-02-06: Completed Milestone 4 with strict red-green-refactor cycle; added deterministic ranking rules, `--json` query output, stable JSON schema, and score-bearing query results.

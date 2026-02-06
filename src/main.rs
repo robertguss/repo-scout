@@ -49,13 +49,21 @@ fn run_status(args: crate::cli::RepoArgs) -> anyhow::Result<()> {
 fn run_find(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
     let matches = find_matches(&store.db_path, &args.symbol)?;
-    output::print_query("find", &args.symbol, &matches);
+    if args.json {
+        output::print_query_json("find", &args.symbol, &matches)?;
+    } else {
+        output::print_query("find", &args.symbol, &matches);
+    }
     Ok(())
 }
 
 fn run_refs(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
     let matches = refs_matches(&store.db_path, &args.symbol)?;
-    output::print_query("refs", &args.symbol, &matches);
+    if args.json {
+        output::print_query_json("refs", &args.symbol, &matches)?;
+    } else {
+        output::print_query("refs", &args.symbol, &matches);
+    }
     Ok(())
 }
