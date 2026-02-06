@@ -3,6 +3,16 @@ mod common;
 use rusqlite::Connection;
 use std::fs;
 
+/// Executes the repo-scout command with the provided arguments and returns its stdout as a `String`.
+///
+/// The returned string contains the command's standard output decoded as UTF-8.
+///
+/// # Examples
+///
+/// ```
+/// let out = run_stdout(&["status", "--repo", "/tmp/repo"]);
+/// assert!(out.contains("schema_version"));
+/// ```
 fn run_stdout(args: &[&str]) -> String {
     let mut cmd = common::repo_scout_cmd();
     cmd.args(args);
@@ -10,6 +20,24 @@ fn run_stdout(args: &[&str]) -> String {
     String::from_utf8(output).expect("stdout should be utf-8")
 }
 
+/// Create a v1-format repository index under the given repository path and return the path to the index database.
+///
+/// This creates a `.repo-scout` directory inside `repo_path`, initializes an `index.db` SQLite database using the
+/// legacy (v1) schema, and inserts seeded test rows (including a `schema_version` of `1`, a sample indexed file,
+/// a text occurrence, an AST definition, and an AST reference).
+///
+/// # Examples
+///
+/// ```
+/// use std::fs;
+/// use std::path::Path;
+///
+/// let repo = std::env::temp_dir().join("repo_scout_example");
+/// let _ = fs::remove_dir_all(&repo); // ignore errors from previous runs
+/// fs::create_dir_all(&repo).unwrap();
+/// let db_path = build_v1_index(&repo);
+/// assert!(db_path.exists());
+/// ```
 fn build_v1_index(repo_path: &std::path::Path) -> std::path::PathBuf {
     let index_dir = repo_path.join(".repo-scout");
     fs::create_dir_all(&index_dir).expect("index directory should exist");
@@ -94,6 +122,11 @@ fn milestone6_schema_v1_upgrades_to_v2_without_data_loss() {
     assert_eq!(symbols_table_exists, 1);
 }
 
+/// Verifies that applying the schema migration is idempotent and that migrated artifacts persist.
+///
+/// Runs the status command twice to ensure the repository index is migrated to schema version 2 on
+/// repeated runs, then opens the index database to assert that the `meta` table contains
+/// `schema_version = "2"` and that the `symbol_edges_v2` table exists.
 #[test]
 fn milestone6_schema_migration_is_idempotent() {
     let repo = common::temp_repo();

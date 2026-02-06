@@ -2,6 +2,16 @@ mod common;
 
 use std::fs;
 
+/// Executes the repository-scanning command with the provided arguments and returns its standard output.
+///
+/// Returns the command's stdout decoded as a UTF-8 `String`. Panics if the stdout is not valid UTF-8 or if the command fails.
+///
+/// # Examples
+///
+/// ```no_run
+/// let out = run_stdout(&["index", "--repo", "/tmp/repo"]);
+/// assert!(!out.is_empty());
+/// ```
 fn run_stdout(args: &[&str]) -> String {
     let mut cmd = common::repo_scout_cmd();
     cmd.args(args);
@@ -94,6 +104,20 @@ fn milestone6_rename_prunes_old_path() {
     assert!(!after.contains("src/rename_from.txt"));
 }
 
+/// Asserts that indexing lifecycle counts are stable and deterministic across runs and after file deletions.
+///
+/// This test ensures `indexed_files` and `skipped_files` reflect consistent, deterministic counts:
+/// - First index run reports two indexed files and zero skipped.
+/// - A subsequent index run with no changes reports zero indexed and two skipped.
+/// - After deleting one file and re-indexing, the counts update to zero indexed and one skipped, and remain stable on the next run.
+///
+/// # Examples
+///
+/// ```
+/// // The test creates a temporary repo with two files, runs indexing multiple times,
+/// // removes one file, and verifies the lifecycle counts described above.
+/// milestone6_lifecycle_counts_are_deterministic();
+/// ```
 #[test]
 fn milestone6_lifecycle_counts_are_deterministic() {
     let repo = common::temp_repo();

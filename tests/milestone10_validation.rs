@@ -2,6 +2,22 @@ mod common;
 
 use serde_json::Value;
 
+/// Execute the repository-scout command with the provided arguments and capture its standard output.
+///
+/// # Returns
+///
+/// The process stdout decoded as a UTF-8 `String`.
+///
+/// # Panics
+///
+/// Panics if the command exits non-successfully or if the captured stdout is not valid UTF-8.
+///
+/// # Examples
+///
+/// ```
+/// let out = run_stdout(&["index", "--path", "some/repo"]);
+/// assert!(out.contains("command: index"));
+/// ```
 fn run_stdout(args: &[&str]) -> String {
     let mut cmd = common::repo_scout_cmd();
     cmd.args(args);
