@@ -557,6 +557,14 @@ fn import_target_hints(file_path: &str, source: &str) -> HashMap<String, String>
                 }
                 hints.insert(local_symbol.to_string(), import_path.clone());
             }
+            let default_binding = head[..left_brace]
+                .trim_start_matches("import")
+                .trim()
+                .trim_end_matches(',')
+                .trim();
+            if !default_binding.is_empty() {
+                hints.insert(default_binding.to_string(), import_path.clone());
+            }
             continue;
         }
 

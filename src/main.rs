@@ -112,10 +112,12 @@ fn run_find(args: crate::cli::FindArgs) -> anyhow::Result<()> {
 /// # Examples
 ///
 /// ```
-/// let args = crate::cli::QueryArgs {
+/// let args = crate::cli::RefsArgs {
 ///     repo: "/path/to/repo".into(),
 ///     symbol: "my::Symbol".into(),
 ///     json: false,
+///     code_only: false,
+///     exclude_tests: false,
 /// };
 /// let _ = run_refs(args);
 /// ```
@@ -334,18 +336,24 @@ fn parse_changed_line_spec(
     raw_spec: &str,
 ) -> anyhow::Result<ChangedLineRange> {
     let mut segments = raw_spec.rsplitn(3, ':');
-    let tail = segments
+    let last = segments
         .next()
         .ok_or_else(|| anyhow::anyhow!("invalid --changed-line '{raw_spec}'"))?;
-    let middle = segments
+    let second = segments
         .next()
         .ok_or_else(|| anyhow::anyhow!("invalid --changed-line '{raw_spec}'"))?;
-    let head = segments.next();
+    let third = segments.next();
 
-    let (path_part, start_part, end_part) = if let Some(path_part) = head {
-        (path_part, middle, tail)
+    let (path_part, start_part, end_part) = if second.parse::<u32>().is_ok() {
+        (third.unwrap_or("").to_string(), second, last)
     } else {
-        (middle, tail, tail)
+        let mut path_part = String::new();
+        if let Some(prefix) = third {
+            path_part.push_str(prefix);
+            path_part.push(':');
+        }
+        path_part.push_str(second);
+        (path_part, last, last)
     };
 
     let start_line = start_part.parse::<u32>().ok();
@@ -372,7 +380,7 @@ fn parse_changed_line_spec(
     }
 
     Ok(ChangedLineRange {
-        file_path: normalize_changed_file(repo_root, path_part),
+        file_path: normalize_changed_file(repo_root, &path_part),
         start_line,
         end_line,
     })
@@ -448,4 +456,34 @@ fn normalize_changed_file(repo_root: &std::path::Path, changed_file: &str) -> St
         .trim_start_matches("./")
         .replace('\\', "/")
         .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{normalize_changed_file, parse_changed_line_spec};
+    use std::path::Path;
+
+    #[test]
+    fn parse_changed_line_spec_accepts_windows_drive_path_without_end() {
+        let parsed = parse_changed_line_spec(Path::new("."), r"C:\repo\src\lib.rs:12")
+            .expect("windows path with start line should parse");
+        assert_eq!(
+            parsed.file_path,
+            normalize_changed_file(Path::new("."), r"C:\repo\src\lib.rs")
+        );
+        assert_eq!(parsed.start_line, 12);
+        assert_eq!(parsed.end_line, 12);
+    }
+
+    #[test]
+    fn parse_changed_line_spec_accepts_windows_drive_path_with_end() {
+        let parsed = parse_changed_line_spec(Path::new("."), r"C:\repo\src\lib.rs:12:24")
+            .expect("windows path with start/end lines should parse");
+        assert_eq!(
+            parsed.file_path,
+            normalize_changed_file(Path::new("."), r"C:\repo\src\lib.rs")
+        );
+        assert_eq!(parsed.start_line, 12);
+        assert_eq!(parsed.end_line, 24);
+    }
 }

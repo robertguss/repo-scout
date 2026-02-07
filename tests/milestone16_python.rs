@@ -258,3 +258,32 @@ fn milestone16_python_edges_and_queries() {
     assert_eq!(explain_results[0]["language"], "python");
     assert_eq!(explain_results[0]["outbound"]["contains"], 1);
 }
+
+#[test]
+fn milestone16_python_import_edges_skip_import_targets_after_deferred_resolution() {
+    let repo = common::temp_repo();
+    common::write_file(
+        repo.path(),
+        "src/a.py",
+        "from missing_a import helper as call_helper\n",
+    );
+    common::write_file(repo.path(), "src/b.py", "from missing_b import helper\n");
+
+    run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
+
+    let db_path = repo.path().join(".repo-scout").join("index.db");
+    let connection = Connection::open(db_path).expect("db should open");
+    let invalid_edge_count: i64 = connection
+        .query_row(
+            "SELECT COUNT(*)
+             FROM symbol_edges_v2 e
+             JOIN symbols_v2 ts ON ts.symbol_id = e.to_symbol_id
+             WHERE e.edge_kind IN ('imports', 'implements')
+               AND ts.kind = 'import'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("edge count query should execute");
+
+    assert_eq!(invalid_edge_count, 0);
+}

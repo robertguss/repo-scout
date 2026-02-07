@@ -277,6 +277,11 @@ pub fn index_repository(repo: &Path, db_path: &Path) -> anyhow::Result<IndexSumm
             let Some(to_symbol_id) = resolve_symbol_id_in_tx(&tx, &to_symbol_key)? else {
                 continue;
             };
+            if matches!(edge_kind.as_str(), "imports" | "implements")
+                && symbol_kind_by_id_in_tx(&tx, to_symbol_id)?.as_deref() == Some("import")
+            {
+                continue;
+            }
 
             tx.execute(
                 "INSERT INTO symbol_edges_v2(from_symbol_id, to_symbol_id, edge_kind, confidence, provenance)

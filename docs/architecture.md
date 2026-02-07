@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the current `repo-scout` architecture after Phase 3.
+This document describes the current `repo-scout` architecture after Phase 4.
 
 ## High-Level Flow
 
