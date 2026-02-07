@@ -4,6 +4,7 @@ use std::path::Path;
 use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::indexer::languages::LanguageAdapter;
+use crate::indexer::languages::python::PythonLanguageAdapter;
 use crate::indexer::languages::rust::RustLanguageAdapter;
 use crate::indexer::languages::typescript::TypeScriptLanguageAdapter;
 
@@ -520,10 +521,12 @@ fn extract_with_adapter(
 ) -> anyhow::Result<languages::ExtractionUnit> {
     let rust_adapter = RustLanguageAdapter;
     let typescript_adapter = TypeScriptLanguageAdapter;
+    let python_adapter = PythonLanguageAdapter;
 
     for adapter in [
         &rust_adapter as &dyn LanguageAdapter,
         &typescript_adapter as &dyn LanguageAdapter,
+        &python_adapter as &dyn LanguageAdapter,
     ] {
         if adapter
             .file_extensions()

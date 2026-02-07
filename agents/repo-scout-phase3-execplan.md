@@ -87,7 +87,18 @@ before agent-facing commands and data contracts are stable.
       through `impact`, `diff-impact`, and `explain`.
 - [x] (2026-02-07 00:11Z) Milestone 15 feature implementation complete (TypeScript adapter MVP with
       deterministic query behavior and milestone-level manual `diff-impact`/`explain` checks).
-- [ ] Milestone 16 Python adapter MVP (definitions, references, imports, calls, containers).
+- [x] (2026-02-07 00:19Z) Milestone 16 slice 16A complete: red/green/refactor for
+      `milestone16_python_definitions` with Python adapter extraction for
+      class/function/method/constant definitions and `contains` edges.
+- [x] (2026-02-07 00:19Z) Milestone 16 slice 16B complete: red/green/refactor for
+      `milestone16_python_references_calls_imports` with Python `ast_references`, `calls`, and
+      `imports` graph extraction.
+- [x] (2026-02-07 00:19Z) Milestone 16 slice 16C complete: red/green/refactor for
+      `milestone16_python_edges_and_queries` with deterministic `find`/`refs`/`diff-impact` and
+      `explain` behavior on Python fixtures.
+- [x] (2026-02-07 00:19Z) Milestone 16 feature implementation complete (Python adapter MVP wired
+      behind language adapters with deterministic query behavior and milestone-level manual
+      `diff-impact`/`explain` checks).
 - [ ] Milestone 17 documentation and dogfood transcript updates (`README.md`,
       `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`,
       `docs/dogfood-log.md`).
@@ -149,6 +160,16 @@ before agent-facing commands and data contracts are stable.
   forms (`{ x }` vs `{ x as y }`) for direct field-name extraction in this codebase. Evidence:
   alias import rows were defined but import edges did not resolve for `callHelper` until import
   bindings were parsed from import statement text.
+
+- Observation: Python `refs` for imported symbols fell back to text-only matches until import
+  statements contributed `ast_references` for imported names. Evidence:
+  `milestone16_python_edges_and_queries` red run failed on
+  `assertion failed: refs_results.iter().any(|item| item["why_matched"] == "ast_reference")`.
+
+- Observation: For Python MVP, parsing import bindings from statement text is more stable across
+  `import` and `from ... import ... as ...` forms than depending on tree-sitter field names.
+  Evidence: import symbol/edge extraction became deterministic after line-text parsing with
+  `last_identifier` normalization.
 
 ## Decision Log
 
@@ -216,6 +237,15 @@ before agent-facing commands and data contracts are stable.
   reliable implementation for milestone scope without blocking on grammar-field variance across
   import syntactic forms. Date/Author: 2026-02-07 / Codex
 
+- Decision: Classify Python `function_definition` nodes inside classes as `method` symbols and emit
+  `contains` edges from class to method. Rationale: this preserves language-neutral relationship
+  behavior for `impact`, `diff-impact`, and `explain` while keeping Python extraction minimal.
+  Date/Author: 2026-02-07 / Codex
+
+- Decision: Emit Python import bindings as both `import` symbols/`imports` edges and
+  `ast_references` for the imported symbol name. Rationale: `refs` should stay AST-prioritized on
+  import-driven usage and remain deterministic across repeated runs. Date/Author: 2026-02-07 / Codex
+
 ## Outcomes & Retrospective
 
 Planning outcome at this stage: Phase 3 scope is explicitly sequenced around agent-loop value
@@ -248,6 +278,12 @@ implements edges, and contains edges through the adapter boundary. `impact`, `di
 `explain` produce deterministic TypeScript-labeled outputs for fixture repositories, and milestone15
 manual dogfood checks for `diff-impact`/`explain` completed. Remaining work is Python adapter rollout
 and documentation finalization.
+
+Milestone 16 outcome: Python indexing now extracts definitions (functions/classes/methods/constants),
+`ast_references`, `calls`, `imports`, and `contains` edges through the adapter boundary.
+`find`, `refs`, `impact`, `diff-impact`, and `explain` produce deterministic Python-labeled output
+on fixture repositories, and milestone16 manual dogfood checks for `diff-impact`/`explain`
+completed. Remaining work is documentation finalization.
 
 Target completion outcome: `repo-scout` provides deterministic changed-file impact analysis and
 symbol dossier commands, plus a language-neutral extraction pipeline that supports Rust, TypeScript,
@@ -661,7 +697,31 @@ Strict TDD artifact checklist to fill during implementation:
 
     - dogfood pre/post evidence captured for every milestone14 and milestone15 slice with required
       commands; milestone15 manual checks (`diff-impact` and `explain` terminal + JSON) completed.
-    - red/green/refactor transcripts for all milestone16_* tests.
+    - milestone16_python_definitions
+      red: `cargo test milestone16_python_definitions -- --nocapture`
+      failed on missing Python AST definition evidence (`assertion failed:
+      find_out.contains("[ast_definition ast_exact]")`).
+      green: `cargo test milestone16_python_definitions -- --nocapture`
+      passed after adding `PythonLanguageAdapter` definitions (class/function/method/constant) and
+      adapter registration in `extract_with_adapter`.
+      refactor: `cargo test` passed full suite.
+
+    - milestone16_python_references_calls_imports
+      red: `cargo test milestone16_python_references_calls_imports -- --nocapture`
+      failed on missing `[ast_reference ast_likely]` for Python call sites.
+      green: `cargo test milestone16_python_references_calls_imports -- --nocapture`
+      passed after Python call/import parsing emitted `ast_references`, `calls`, and `imports`.
+      refactor: `cargo test` passed full suite.
+
+    - milestone16_python_edges_and_queries
+      red: `cargo test milestone16_python_edges_and_queries -- --nocapture`
+      failed because `refs helper --json` lacked `ast_reference` rows for import-driven usage.
+      green: `cargo test milestone16_python_edges_and_queries -- --nocapture`
+      passed after import bindings also emitted `ast_references` for imported symbols.
+      refactor: `cargo test` passed full suite.
+
+    - dogfood pre/post evidence captured for every milestone16 slice with required commands;
+      milestone16 manual checks (`diff-impact` and `explain` terminal + JSON) completed.
 
 ## Interfaces and Dependencies
 
@@ -792,3 +852,8 @@ strict TDD/dogfooding evidence for all milestone13 slices.
 adapter-boundary migration outcomes, schema v3 metadata migration evidence, TypeScript adapter MVP
 behavior, cross-file deferred edge resolution decisions, and strict TDD/dogfooding transcripts for
 all milestone14/15 slices.
+
+2026-02-07: Updated the living plan after Milestone 16 implementation to capture Python adapter MVP
+outcomes (definitions/references/calls/imports/contains), deterministic command behavior across
+`find`/`refs`/`diff-impact`/`explain`, and strict red/green/refactor plus dogfooding evidence for
+all milestone16 slices.
