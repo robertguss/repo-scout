@@ -56,7 +56,17 @@ User-visible outcome: a tighter “what should I run next” loop with higher-si
 - [x] (2026-02-07 22:56Z) Ran Milestone 23 post-dogfood checks with passing
       `verify-plan --max-targeted` behavior and deterministic targeted capping.
 - [x] (2026-02-07 22:56Z) Milestone 23 complete: `verify-plan` high-signal recommendation contracts and implementation.
-- [ ] Milestone 24 complete: `context` relevance/recall contracts and implementation.
+- [x] (2026-02-07 23:00Z) Ran required pre-milestone dogfood baseline for Milestone 24:
+      `cargo run -- index --repo .`,
+      `cargo run -- find verify_plan_for_changed_files --repo . --json`,
+      `cargo run -- refs verify_plan_for_changed_files --repo . --json`.
+- [x] (2026-02-07 23:00Z) Completed Milestone 24 strict TDD slices:
+      `milestone24_context_matches_relevant_symbols_for_paraphrased_task`,
+      `milestone24_context_prioritizes_definitions_over_incidental_tokens`,
+      `milestone24_context_json_is_stable_with_relevance_scoring`.
+- [x] (2026-02-07 23:00Z) Ran Milestone 24 post-dogfood checks with richer context recall and
+      deterministic relevance-scored JSON output.
+- [x] (2026-02-07 23:00Z) Milestone 24 complete: `context` relevance/recall contracts and implementation.
 - [ ] Milestone 25 complete: true multi-hop `diff-impact` traversal contracts and implementation.
 - [ ] Phase 5 docs and dogfood evidence updates complete.
 
@@ -99,6 +109,11 @@ User-visible outcome: a tighter “what should I run next” loop with higher-si
 - Observation: post-Milestone-23 verify-plan output for `src/main.rs` shrank to high-signal rows.
   Evidence: required dogfood now returns 2 targeted rows (`milestone14_adapter`,
   `milestone6_schema_migration`) plus the full-suite gate instead of broad 20+ targeted rows.
+
+- Observation: richer context scoring increases recall but can surface test-function symbols quickly
+  when task wording overlaps many verification terms.
+  Evidence: post-Milestone-24 dogfood `context` returned 6 high-score rows, including
+  `tests/milestone10_validation.rs` and `tests/milestone23_verify_plan_precision.rs` symbols.
 
 ## Decision Log
 
@@ -143,6 +158,18 @@ User-visible outcome: a tighter “what should I run next” loop with higher-si
   symbol-target truncation.
   Date/Author: 2026-02-07 / Codex
 
+- Decision: replace exact-symbol-only context matching with deterministic token-overlap scoring
+  (including snake/camel tokenization, stopword filtering, and singular/plural overlap handling).
+  Rationale: realistic task phrasing is often paraphrased and should still retrieve relevant
+  symbols without introducing nondeterminism.
+  Date/Author: 2026-02-07 / Codex
+
+- Decision: bias context ranking toward multi-token definition specificity and standardize why text
+  around “token-overlap relevance”.
+  Rationale: prevents short incidental tokens from outranking meaningful definitions and enables
+  stable, auditable recommendation rationale.
+  Date/Author: 2026-02-07 / Codex
+
 ## Outcomes & Retrospective
 
 Planning outcome: Phase 5 scope is constrained to recommendation quality and traversal fidelity on
@@ -163,6 +190,10 @@ targets ahead of support paths, and supports explicit support-path restoration t
 Milestone 23 outcome: `verify-plan` now dampens generic changed symbols, supports deterministic
 targeted capping via `--max-targeted`, and preserves changed runnable test targets alongside the
 required full-suite gate.
+
+Milestone 24 outcome: `context` now matches paraphrased task text using deterministic token-overlap
+relevance scoring, ranks meaningful definitions above incidental short tokens, and keeps stable
+JSON output across repeated runs.
 
 ## Context and Orientation
 
@@ -580,6 +611,49 @@ Milestone 23 post-dogfood evidence:
     cargo run -- verify-plan --changed-file src/main.rs --repo . --max-targeted 6 --json
     # observed: deterministic output identical to capped baseline for this fixture
 
+Milestone 24 strict TDD evidence:
+
+    # Slice 24A red
+    cargo test milestone24_context_matches_relevant_symbols_for_paraphrased_task -- --nocapture
+    # observed: FAILED (paraphrased task did not return verify_plan_for_changed_files)
+
+    # Slice 24A green
+    cargo test milestone24_context_matches_relevant_symbols_for_paraphrased_task -- --nocapture
+    # observed: ok
+
+    # Slice 24A refactor gate
+    cargo test
+    # observed: full suite passed
+
+    # Slice 24B red
+    cargo test milestone24_context_prioritizes_definitions_over_incidental_tokens -- --nocapture
+    # observed: FAILED (incidental symbol 'plan' ranked first)
+
+    # Slice 24B green
+    cargo test milestone24_context_prioritizes_definitions_over_incidental_tokens -- --nocapture
+    # observed: ok
+
+    # Slice 24B refactor gate
+    cargo test
+    # observed: full suite passed
+
+    # Slice 24C red
+    cargo test milestone24_context_json_is_stable_with_relevance_scoring -- --nocapture
+    # observed: FAILED (why_included lacked standardized token-overlap rationale text)
+
+    # Slice 24C green
+    cargo test milestone24_context_json_is_stable_with_relevance_scoring -- --nocapture
+    # observed: ok
+
+    # Slice 24C refactor gate
+    cargo test
+    # observed: full suite passed
+
+Milestone 24 post-dogfood evidence:
+
+    cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --json
+    # observed: 6 deterministic high-signal rows with token-overlap rationale text
+
 ## Interfaces and Dependencies
 
 Phase 5 should not require new external crates by default. Continue using existing dependencies
@@ -618,3 +692,6 @@ Milestone 22 implementation details, strict TDD transcripts, and post-milestone 
 
 Revision Note (2026-02-07): Updated progress, decisions, surprises, outcomes, and artifacts with
 Milestone 23 implementation details, strict TDD transcripts, and capped verify-plan dogfood evidence.
+
+Revision Note (2026-02-07): Updated progress, decisions, surprises, outcomes, and artifacts with
+Milestone 24 context relevance work, strict TDD transcripts, and refreshed dogfood evidence.

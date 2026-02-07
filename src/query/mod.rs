@@ -847,76 +847,95 @@ pub fn context_matches(
 ) -> anyhow::Result<Vec<ContextMatch>> {
     let connection = Connection::open(db_path)?;
     let keywords = extract_keywords(task);
+    if keywords.is_empty() {
+        return Ok(Vec::new());
+    }
 
     let mut matches = Vec::new();
     let mut seen = HashSet::new();
 
-    for keyword in keywords {
-        let mut exact_statement = connection.prepare(
-            "SELECT symbol_id, file_path, symbol, kind, start_line, end_line
-             FROM symbols_v2
-             WHERE lower(symbol) = lower(?1)
-             ORDER BY file_path ASC, start_line ASC, start_column ASC",
+    let mut symbols_statement = connection.prepare(
+        "SELECT symbol_id, file_path, symbol, kind, start_line, end_line
+         FROM symbols_v2
+         ORDER BY file_path ASC, start_line ASC, start_column ASC, symbol ASC",
+    )?;
+    let symbol_rows = symbols_statement.query_map([], |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, String>(3)?,
+            row.get::<_, i64>(4)? as u32,
+            row.get::<_, i64>(5)? as u32,
+        ))
+    })?;
+
+    for row in symbol_rows {
+        let (symbol_id, file_path, symbol, kind, start_line, end_line) = row?;
+        let symbol_tokens = symbol_keywords(&symbol);
+        let matched_keywords = matched_task_keywords(&keywords, &symbol_tokens);
+        if matched_keywords.is_empty() {
+            continue;
+        }
+        let overlap_count = matched_keywords.len();
+        let exact_symbol_match = keywords.iter().any(|keyword| keyword == &symbol.to_ascii_lowercase());
+        let direct_score =
+            context_direct_score(overlap_count, exact_symbol_match, symbol_tokens.len());
+        let key = format!("{file_path}:{start_line}:{symbol}:direct");
+        if seen.insert(key) {
+            matches.push(ContextMatch {
+                file_path: file_path.clone(),
+                start_line,
+                end_line,
+                symbol: symbol.clone(),
+                kind: kind.clone(),
+                why_included: format!(
+                    "direct definition token-overlap relevance for [{}]",
+                    matched_keywords.join(", ")
+                ),
+                confidence: if overlap_count >= 2 || exact_symbol_match {
+                    "context_high".to_string()
+                } else {
+                    "context_medium".to_string()
+                },
+                score: direct_score,
+            });
+        }
+
+        let mut neighbor_statement = connection.prepare(
+            "SELECT n.file_path, n.symbol, n.kind, n.start_line, n.end_line
+             FROM symbol_edges_v2 e
+             JOIN symbols_v2 n ON n.symbol_id = e.to_symbol_id
+             WHERE e.from_symbol_id = ?1
+             ORDER BY n.file_path ASC, n.start_line ASC, n.start_column ASC, n.symbol ASC",
         )?;
-        let exact_rows = exact_statement.query_map(params![keyword], |row| {
+        let neighbor_rows = neighbor_statement.query_map(params![symbol_id], |neighbor_row| {
             Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, i64>(4)? as u32,
-                row.get::<_, i64>(5)? as u32,
+                neighbor_row.get::<_, String>(0)?,
+                neighbor_row.get::<_, String>(1)?,
+                neighbor_row.get::<_, String>(2)?,
+                neighbor_row.get::<_, i64>(3)? as u32,
+                neighbor_row.get::<_, i64>(4)? as u32,
             ))
         })?;
 
-        for row in exact_rows {
-            let (symbol_id, file_path, symbol, kind, start_line, end_line) = row?;
-            let key = format!("{file_path}:{start_line}:{symbol}:direct");
-            if seen.insert(key) {
+        for neighbor in neighbor_rows {
+            let (n_file, n_symbol, n_kind, n_start, n_end) = neighbor?;
+            let neighbor_key = format!("{n_file}:{n_start}:{n_symbol}:neighbor");
+            if seen.insert(neighbor_key) {
                 matches.push(ContextMatch {
-                    file_path: file_path.clone(),
-                    start_line,
-                    end_line,
-                    symbol: symbol.clone(),
-                    kind: kind.clone(),
-                    why_included: format!("direct definition match for task keyword '{keyword}'"),
-                    confidence: "context_high".to_string(),
-                    score: 0.95,
+                    file_path: n_file,
+                    start_line: n_start,
+                    end_line: n_end,
+                    symbol: n_symbol,
+                    kind: n_kind,
+                    why_included: format!(
+                        "graph neighbor of '{symbol}' from token-overlap relevance [{}]",
+                        matched_keywords.join(", ")
+                    ),
+                    confidence: "context_medium".to_string(),
+                    score: (direct_score - 0.2).max(0.55),
                 });
-            }
-
-            let mut neighbor_statement = connection.prepare(
-                "SELECT n.file_path, n.symbol, n.kind, n.start_line, n.end_line
-                 FROM symbol_edges_v2 e
-                 JOIN symbols_v2 n ON n.symbol_id = e.to_symbol_id
-                 WHERE e.from_symbol_id = ?1
-                 ORDER BY n.file_path ASC, n.start_line ASC, n.start_column ASC",
-            )?;
-            let neighbor_rows = neighbor_statement.query_map(params![symbol_id], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, i64>(3)? as u32,
-                    row.get::<_, i64>(4)? as u32,
-                ))
-            })?;
-
-            for neighbor in neighbor_rows {
-                let (n_file, n_symbol, n_kind, n_start, n_end) = neighbor?;
-                let neighbor_key = format!("{n_file}:{n_start}:{n_symbol}:neighbor");
-                if seen.insert(neighbor_key) {
-                    matches.push(ContextMatch {
-                        file_path: n_file,
-                        start_line: n_start,
-                        end_line: n_end,
-                        symbol: n_symbol,
-                        kind: n_kind,
-                        why_included: format!("graph neighbor of '{symbol}'"),
-                        confidence: "context_medium".to_string(),
-                        score: 0.7,
-                    });
-                }
             }
         }
     }
@@ -1357,6 +1376,10 @@ where
 fn extract_keywords(task: &str) -> Vec<String> {
     let mut keywords = Vec::new();
     let mut seen = HashSet::new();
+    let stopwords = [
+        "about", "after", "and", "for", "from", "into", "that", "the", "then", "this", "when",
+        "with",
+    ];
 
     for token in task
         .split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
@@ -1366,12 +1389,88 @@ fn extract_keywords(task: &str) -> Vec<String> {
         if lowered.len() < 3 {
             continue;
         }
+        if stopwords.contains(&lowered.as_str()) {
+            continue;
+        }
         if seen.insert(lowered.clone()) {
             keywords.push(lowered);
         }
     }
 
     keywords
+}
+
+fn symbol_keywords(symbol: &str) -> Vec<String> {
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+    let mut previous_was_lower = false;
+
+    for ch in symbol.chars() {
+        if !(ch.is_ascii_alphanumeric() || ch == '_') {
+            if !current.is_empty() {
+                tokens.push(current.to_ascii_lowercase());
+                current.clear();
+            }
+            previous_was_lower = false;
+            continue;
+        }
+
+        if ch == '_' {
+            if !current.is_empty() {
+                tokens.push(current.to_ascii_lowercase());
+                current.clear();
+            }
+            previous_was_lower = false;
+            continue;
+        }
+
+        if ch.is_ascii_uppercase() && previous_was_lower && !current.is_empty() {
+            tokens.push(current.to_ascii_lowercase());
+            current.clear();
+        }
+
+        previous_was_lower = ch.is_ascii_lowercase();
+        current.push(ch);
+    }
+
+    if !current.is_empty() {
+        tokens.push(current.to_ascii_lowercase());
+    }
+
+    let mut filtered = tokens
+        .into_iter()
+        .filter(|token| token.len() >= 3)
+        .collect::<Vec<_>>();
+    filtered.sort();
+    filtered.dedup();
+    filtered
+}
+
+fn matched_task_keywords(task_keywords: &[String], symbol_keywords: &[String]) -> Vec<String> {
+    let mut matched = Vec::new();
+    for task_keyword in task_keywords {
+        if symbol_keywords.iter().any(|symbol_keyword| {
+            symbol_keyword == task_keyword
+                || symbol_keyword.starts_with(task_keyword)
+                || task_keyword.starts_with(symbol_keyword)
+        }) {
+            matched.push(task_keyword.clone());
+        }
+    }
+    matched
+}
+
+fn context_direct_score(
+    overlap_count: usize,
+    exact_symbol_match: bool,
+    symbol_token_count: usize,
+) -> f64 {
+    let specificity_bonus = std::cmp::min(symbol_token_count, 4) as f64 * 0.04;
+    let mut score = 0.62 + (overlap_count as f64 * 0.09) + specificity_bonus;
+    if exact_symbol_match {
+        score += 0.04;
+    }
+    score.min(0.98)
 }
 
 /// Finds test files that reference a symbol and how often the symbol appears in each.
