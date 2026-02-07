@@ -36,8 +36,16 @@ editing loops, especially in repositories where repeated symbol names exist acro
       `src/b.rs::run`).
 - [x] (2026-02-07 01:24Z) Authored this Phase 4 ExecPlan as planning-only work (no production code
       changes outside plan docs).
-- [ ] Milestone 18 complete: precision contract tests for duplicate symbol disambiguation and
-      ambiguous-call safety.
+- [x] (2026-02-07 15:47Z) Created branch stack per workflow:
+      `codex/phase4-plan-and-precision-contracts` from `main`, then
+      `codex/phase4-implementation` for execution work.
+- [x] (2026-02-07 15:47Z) Ran required pre-milestone dogfood baseline:
+      `cargo run -- index --repo .`,
+      `cargo run -- find verify_plan_for_changed_files --repo . --json`,
+      `cargo run -- refs verify_plan_for_changed_files --repo . --json`.
+- [x] (2026-02-07 15:47Z) Milestone 18 complete: added
+      `tests/fixtures/phase4/ambiguity/{disambiguated,ambiguous}/` and
+      `tests/milestone18_precision_graph.rs` with strict red evidence for slices 18A/18B/18C.
 - [ ] Milestone 19 complete: symbol-key and edge-resolution implementation through adapter and
       indexer boundaries.
 - [ ] Milestone 20 complete: `diff-impact` high-signal seed controls (`--include-imports`,
@@ -61,6 +69,11 @@ editing loops, especially in repositories where repeated symbol names exist acro
   traversal, which amplifies low-value matches when files contain many declarations.
   Evidence: in repository self-dogfood, changing only `src/query/mod.rs` emitted dozens of
   `distance = 0` rows before any neighbor ranking was applied.
+
+- Observation: Rust qualified calls like `a::run()` and `b::run()` currently collapse onto one
+  duplicate target because resolver fallback remains symbol-text-only.
+  Evidence: `milestone18_disambiguates_duplicate_rust_call_targets` red run reported
+  `left: [\"src/a.rs\"]` vs `right: [\"src/a.rs\", \"src/b.rs\"]`.
 
 ## Decision Log
 
@@ -87,6 +100,12 @@ editing loops, especially in repositories where repeated symbol names exist acro
   outputs.
   Date/Author: 2026-02-07 / Codex
 
+- Decision: lock Milestone 18 contracts with two fixture variants (`disambiguated` and
+  `ambiguous`) under `tests/fixtures/phase4/ambiguity/` to isolate precision and fail-safe behavior.
+  Rationale: separate fixtures avoid conflating qualified and ambiguous call behavior in one test
+  corpus and keep red failures actionable.
+  Date/Author: 2026-02-07 / Codex
+
 ## Outcomes & Retrospective
 
 Planning outcome at this stage: Phase 4 scope is constrained to precision and signal quality on the
@@ -100,6 +119,10 @@ code-focused `find`/`refs` output when fallback noise is undesirable.
 Expected residual work after this plan: deeper type-aware semantic resolution (for example,
 module-aware import mapping and full language type inference), and longitudinal quality metrics
 across larger real-world repositories.
+
+Milestone 18 retrospective (2026-02-07): precision defect expectations are now locked as failing
+integration contracts before any production refactor. This preserved strict TDD ordering and
+provides deterministic pass/fail gates for resolver hardening in Milestone 19.
 
 ## Context and Orientation
 
@@ -380,6 +403,17 @@ Temporary duplicate-symbol fixture evidence:
 The missing `src/lib.rs|entry|...|src/b.rs|run|...|calls` row defines the precision defect locked
 by Milestone 18 red tests.
 
+Milestone 18 strict-TDD red evidence:
+
+    cargo test milestone18_disambiguates_duplicate_rust_call_targets -- --nocapture
+    # FAILED: left ["src/a.rs"] right ["src/a.rs", "src/b.rs"]
+
+    cargo test milestone18_diff_impact_includes_true_callers_for_changed_duplicate_target -- --nocapture
+    # FAILED: missing impacted_symbol entry caller for src/lib.rs::entry when changing src/b.rs
+
+    cargo test milestone18_ambiguous_unqualified_call_does_not_cross_link -- --nocapture
+    # FAILED: ambiguous_run_targets left 1 right 0
+
 ## Interfaces and Dependencies
 
 Phase 4 does not require new external crates by default. Continue using current dependencies
@@ -496,3 +530,6 @@ In `src/query/mod.rs`, add:
 the existing command surface. Chosen approach emphasizes strict per-slice TDD, deterministic edge
 resolution, explicit `diff-impact` seed controls, and scoped fallback filtering for `find`/`refs`
 without JSON schema-family churn.
+
+2026-02-07: Updated living sections during Milestone 18 execution with branch/workflow status,
+contract-fixture additions, and strict red transcript evidence for slices 18A/18B/18C.
