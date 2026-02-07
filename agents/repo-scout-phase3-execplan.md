@@ -99,9 +99,9 @@ before agent-facing commands and data contracts are stable.
 - [x] (2026-02-07 00:19Z) Milestone 16 feature implementation complete (Python adapter MVP wired
       behind language adapters with deterministic query behavior and milestone-level manual
       `diff-impact`/`explain` checks).
-- [ ] Milestone 17 documentation and dogfood transcript updates (`README.md`,
-      `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`,
-      `docs/dogfood-log.md`).
+- [x] (2026-02-07 00:22Z) Milestone 17 complete: documentation and dogfood transcript updates
+      landed in `README.md`, `docs/cli-reference.md`, `docs/json-output.md`,
+      `docs/architecture.md`, and `docs/dogfood-log.md` with Phase 3 command/adaptation behavior.
 
 ## Surprises & Discoveries
 
@@ -170,6 +170,10 @@ before agent-facing commands and data contracts are stable.
   `import` and `from ... import ... as ...` forms than depending on tree-sitter field names.
   Evidence: import symbol/edge extraction became deterministic after line-text parsing with
   `last_identifier` normalization.
+
+- Observation: Docs still described schema 3 commands as planned after implementation, which
+  conflicted with current CLI behavior. Evidence: `docs/json-output.md` had planned-only language
+  for `diff-impact`/`explain` until Milestone 17 refresh.
 
 ## Decision Log
 
@@ -246,6 +250,10 @@ before agent-facing commands and data contracts are stable.
   `ast_references` for the imported symbol name. Rationale: `refs` should stay AST-prioritized on
   import-driven usage and remain deterministic across repeated runs. Date/Author: 2026-02-07 / Codex
 
+- Decision: Keep schema 3 payload contracts unchanged while rewording docs from “planned” to
+  “implemented, frozen.” Rationale: this preserves the original contract freeze and avoids consumer
+  churn while aligning docs with shipped behavior. Date/Author: 2026-02-07 / Codex
+
 ## Outcomes & Retrospective
 
 Planning outcome at this stage: Phase 3 scope is explicitly sequenced around agent-loop value
@@ -284,6 +292,10 @@ Milestone 16 outcome: Python indexing now extracts definitions (functions/classe
 `find`, `refs`, `impact`, `diff-impact`, and `explain` produce deterministic Python-labeled output
 on fixture repositories, and milestone16 manual dogfood checks for `diff-impact`/`explain`
 completed. Remaining work is documentation finalization.
+
+Milestone 17 outcome: user-facing docs now describe the implemented Phase 3 surface (schema version
+3 commands, language-adapter architecture, and updated dogfood transcripts for new commands and
+TypeScript/Python adapters). This closes Phase 3 plan scope with restartable documentation state.
 
 Target completion outcome: `repo-scout` provides deterministic changed-file impact analysis and
 symbol dossier commands, plus a language-neutral extraction pipeline that supports Rust, TypeScript,
@@ -857,3 +869,7 @@ all milestone14/15 slices.
 outcomes (definitions/references/calls/imports/contains), deterministic command behavior across
 `find`/`refs`/`diff-impact`/`explain`, and strict red/green/refactor plus dogfooding evidence for
 all milestone16 slices.
+
+2026-02-07: Updated the living plan after Milestone 17 documentation finalization to record schema
+3 command doc alignment, architecture/dogfood transcript refreshes, and completed Phase 3 closure
+state.

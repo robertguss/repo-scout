@@ -52,9 +52,13 @@ fn milestone16_python_definitions() {
     assert!(symbols.iter().any(|(symbol, kind, language, _)| {
         symbol == "CONSTANT" && kind == "constant" && language == "python"
     }));
-    assert!(symbols
-        .iter()
-        .any(|(symbol, kind, language, _)| symbol == "Runner" && kind == "class" && language == "python"));
+    assert!(
+        symbols
+            .iter()
+            .any(|(symbol, kind, language, _)| symbol == "Runner"
+                && kind == "class"
+                && language == "python")
+    );
     assert!(symbols.iter().any(|(symbol, kind, language, _)| {
         symbol == "helper" && kind == "function" && language == "python"
     }));
@@ -78,7 +82,12 @@ fn milestone16_python_references_calls_imports() {
 
     run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
 
-    let refs_out = run_stdout(&["refs", "call_helper", "--repo", repo.path().to_str().unwrap()]);
+    let refs_out = run_stdout(&[
+        "refs",
+        "call_helper",
+        "--repo",
+        repo.path().to_str().unwrap(),
+    ]);
     assert!(refs_out.contains("[ast_reference ast_likely]"));
 
     let impact_helper = run_stdout(&["impact", "helper", "--repo", repo.path().to_str().unwrap()]);
@@ -134,9 +143,11 @@ fn milestone16_python_edges_and_queries() {
     let refs_results = refs_payload["results"]
         .as_array()
         .expect("refs results should be an array");
-    assert!(refs_results
-        .iter()
-        .any(|item| item["why_matched"] == "ast_reference"));
+    assert!(
+        refs_results
+            .iter()
+            .any(|item| item["why_matched"] == "ast_reference")
+    );
 
     let diff_out_1 = run_stdout(&[
         "diff-impact",

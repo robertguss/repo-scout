@@ -1,6 +1,6 @@
 # JSON Output Contracts
 
-`repo-scout` supports JSON output for query commands, and this document also includes frozen contracts for planned Phase 3 commands.
+`repo-scout` supports deterministic JSON output for all query commands.
 
 Available today:
 - `find --json`
@@ -9,8 +9,6 @@ Available today:
 - `context --json`
 - `tests-for --json`
 - `verify-plan --json`
-
-Planned (contract-frozen, not yet implemented):
 - `diff-impact --json`
 - `explain --json`
 
@@ -20,7 +18,7 @@ Planned (contract-frozen, not yet implemented):
 
 - `find`, `refs`: `schema_version = 1`
 - `impact`, `context`, `tests-for`, `verify-plan`: `schema_version = 2`
-- `diff-impact`, `explain`: `schema_version = 3` (planned contract freeze)
+- `diff-impact`, `explain`: `schema_version = 3` (implemented, contract frozen)
 
 ## `find --json` and `refs --json` (Schema 1)
 
@@ -212,11 +210,11 @@ Top-level fields:
 - `confidence` (`string`)
 - `score` (`number`)
 
-## Schema 3 Contract Freeze (Planned, Not Yet Implemented)
+## Schema 3 Contracts (Implemented, Frozen)
 
-The following contracts are frozen for implementation work in Phase 3. They are intentionally additive and do not change schema 1 or schema 2 payloads.
+These contracts are intentionally additive and do not change schema 1 or schema 2 payloads.
 
-## `diff-impact --json` (Schema 3, Planned)
+## `diff-impact --json` (Schema 3)
 
 ```json
 {
@@ -310,7 +308,7 @@ Deterministic ordering rules for `results`:
 3. For `impacted_symbol`, tie-break by `file_path`, `line`, `column`, `qualified_symbol`.
 4. For `test_target`, tie-break by `target_kind`, then `target`.
 
-## `explain --json` (Schema 3, Planned)
+## `explain --json` (Schema 3)
 
 ```json
 {

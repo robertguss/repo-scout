@@ -371,11 +371,12 @@ fn import_bindings(node: Node<'_>, source: &str) -> Vec<ImportBinding> {
             if specifier.is_empty() {
                 continue;
             }
-            let (imported_path, local_alias) = if let Some((left, right)) = specifier.split_once(" as ") {
-                (left.trim(), Some(right.trim()))
-            } else {
-                (specifier, None)
-            };
+            let (imported_path, local_alias) =
+                if let Some((left, right)) = specifier.split_once(" as ") {
+                    (left.trim(), Some(right.trim()))
+                } else {
+                    (specifier, None)
+                };
             let Some(imported_symbol) = last_identifier(imported_path) else {
                 continue;
             };
@@ -399,11 +400,12 @@ fn import_bindings(node: Node<'_>, source: &str) -> Vec<ImportBinding> {
             if specifier.is_empty() || specifier == "*" {
                 continue;
             }
-            let (imported_name, local_alias) = if let Some((left, right)) = specifier.split_once(" as ") {
-                (left.trim(), Some(right.trim()))
-            } else {
-                (specifier, None)
-            };
+            let (imported_name, local_alias) =
+                if let Some((left, right)) = specifier.split_once(" as ") {
+                    (left.trim(), Some(right.trim()))
+                } else {
+                    (specifier, None)
+                };
             let Some(imported_symbol) = last_identifier(imported_name) else {
                 continue;
             };
