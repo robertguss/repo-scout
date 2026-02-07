@@ -42,10 +42,8 @@ impl LanguageAdapter for RustLanguageAdapter {
 
             if let Some(container_symbol) = container {
                 edges.push(ExtractedEdge {
-                    from_symbol_key: SymbolKey {
-                        symbol: container_symbol,
-                    },
-                    to_symbol_key: SymbolKey { symbol },
+                    from_symbol_key: scoped_symbol_key(file_path, &language, &container_symbol),
+                    to_symbol_key: scoped_symbol_key(file_path, &language, &symbol),
                     edge_kind: "contains".to_string(),
                     confidence: 1.0,
                     provenance: "ast_definition".to_string(),
@@ -61,13 +59,26 @@ impl LanguageAdapter for RustLanguageAdapter {
             });
 
             if let Some(caller_symbol) = reference.caller {
+                let to_symbol_key = qualified_module_for_reference(source, reference.line, reference.column)
+                    .map(|module_symbol| {
+                        qualified_target_symbol_key(
+                            file_path,
+                            &language,
+                            &module_symbol,
+                            &reference.symbol,
+                        )
+                    })
+                    .unwrap_or_else(|| {
+                        SymbolKey {
+                            symbol: reference.symbol.clone(),
+                            qualified_symbol: None,
+                            file_path: Some(file_path.to_string()),
+                            language: Some(language.clone()),
+                        }
+                    });
                 edges.push(ExtractedEdge {
-                    from_symbol_key: SymbolKey {
-                        symbol: caller_symbol,
-                    },
-                    to_symbol_key: SymbolKey {
-                        symbol: reference.symbol,
-                    },
+                    from_symbol_key: scoped_symbol_key(file_path, &language, &caller_symbol),
+                    to_symbol_key,
                     edge_kind: "calls".to_string(),
                     confidence: 0.95,
                     provenance: "call_resolution".to_string(),
@@ -75,17 +86,7 @@ impl LanguageAdapter for RustLanguageAdapter {
             }
         }
 
-        edges.extend(relation_hints(source).into_iter().map(
-            |(from_symbol, to_symbol, edge_kind, confidence, provenance)| ExtractedEdge {
-                from_symbol_key: SymbolKey {
-                    symbol: from_symbol,
-                },
-                to_symbol_key: SymbolKey { symbol: to_symbol },
-                edge_kind,
-                confidence,
-                provenance,
-            },
-        ));
+        edges.extend(relation_hints(file_path, source, &language));
 
         Ok(ExtractionUnit {
             symbols,
@@ -95,7 +96,43 @@ impl LanguageAdapter for RustLanguageAdapter {
     }
 }
 
-fn relation_hints(content: &str) -> Vec<(String, String, String, f64, String)> {
+fn scoped_symbol_key(file_path: &str, language: &str, symbol: &str) -> SymbolKey {
+    SymbolKey {
+        symbol: symbol.to_string(),
+        qualified_symbol: Some(format!("{language}:{file_path}::{symbol}")),
+        file_path: Some(file_path.to_string()),
+        language: Some(language.to_string()),
+    }
+}
+
+fn qualified_target_symbol_key(
+    caller_file_path: &str,
+    language: &str,
+    module_symbol: &str,
+    symbol: &str,
+) -> SymbolKey {
+    let module_path = module_candidate_path(caller_file_path, module_symbol);
+    SymbolKey {
+        symbol: symbol.to_string(),
+        qualified_symbol: Some(format!("{language}:{module_path}::{symbol}")),
+        file_path: Some(module_path),
+        language: Some(language.to_string()),
+    }
+}
+
+fn module_candidate_path(caller_file_path: &str, module_symbol: &str) -> String {
+    let parent = std::path::Path::new(caller_file_path)
+        .parent()
+        .and_then(|path| path.to_str())
+        .unwrap_or("");
+    if parent.is_empty() {
+        format!("{module_symbol}.rs")
+    } else {
+        format!("{parent}/{module_symbol}.rs")
+    }
+}
+
+fn relation_hints(file_path: &str, content: &str, language: &str) -> Vec<ExtractedEdge> {
     let mut edges = Vec::new();
 
     for line in content.lines() {
@@ -111,13 +148,13 @@ fn relation_hints(content: &str) -> Vec<(String, String, String, f64, String)> {
                     continue;
                 };
                 if alias_symbol != target_symbol {
-                    edges.push((
-                        alias_symbol,
-                        target_symbol,
-                        "imports".to_string(),
-                        0.9,
-                        "import_resolution".to_string(),
-                    ));
+                    edges.push(ExtractedEdge {
+                        from_symbol_key: scoped_symbol_key(file_path, language, &alias_symbol),
+                        to_symbol_key: scoped_symbol_key(file_path, language, &target_symbol),
+                        edge_kind: "imports".to_string(),
+                        confidence: 0.9,
+                        provenance: "import_resolution".to_string(),
+                    });
                 }
             }
         }
@@ -137,18 +174,30 @@ fn relation_hints(content: &str) -> Vec<(String, String, String, f64, String)> {
                 let Some(type_symbol) = last_rust_identifier(type_head) else {
                     continue;
                 };
-                edges.push((
-                    type_symbol,
-                    trait_symbol,
-                    "implements".to_string(),
-                    0.95,
-                    "ast_reference".to_string(),
-                ));
+                edges.push(ExtractedEdge {
+                    from_symbol_key: scoped_symbol_key(file_path, language, &type_symbol),
+                    to_symbol_key: scoped_symbol_key(file_path, language, &trait_symbol),
+                    edge_kind: "implements".to_string(),
+                    confidence: 0.95,
+                    provenance: "ast_reference".to_string(),
+                });
             }
         }
     }
 
     edges
+}
+
+fn qualified_module_for_reference(source: &str, line: u32, column: u32) -> Option<String> {
+    let line_text = source.lines().nth(line.saturating_sub(1) as usize)?;
+    let column_index = column.saturating_sub(1) as usize;
+    if column_index > line_text.len() {
+        return None;
+    }
+
+    let prefix = line_text[..column_index].trim_end();
+    let without_separator = prefix.strip_suffix("::")?;
+    last_rust_identifier(without_separator)
 }
 
 fn strip_leading_impl_generics(segment: &str) -> Option<&str> {

@@ -1,4 +1,5 @@
 use anyhow::Context;
+use std::collections::HashMap;
 use tree_sitter::{Node, Parser};
 
 use crate::indexer::languages::{
@@ -6,6 +7,24 @@ use crate::indexer::languages::{
 };
 
 pub struct TypeScriptLanguageAdapter;
+
+fn scoped_symbol_key(file_path: &str, language: &str, symbol: &str) -> SymbolKey {
+    SymbolKey {
+        symbol: symbol.to_string(),
+        qualified_symbol: Some(format!("{language}:{file_path}::{symbol}")),
+        file_path: Some(file_path.to_string()),
+        language: Some(language.to_string()),
+    }
+}
+
+fn language_symbol_key(symbol: &str, language: &str) -> SymbolKey {
+    SymbolKey {
+        symbol: symbol.to_string(),
+        qualified_symbol: None,
+        file_path: None,
+        language: Some(language.to_string()),
+    }
+}
 
 impl LanguageAdapter for TypeScriptLanguageAdapter {
     fn language_id(&self) -> &'static str {
@@ -33,6 +52,7 @@ impl LanguageAdapter for TypeScriptLanguageAdapter {
             .context("failed to parse typescript source")?;
 
         let language = self.language_id().to_string();
+        let import_target_hints = import_target_hints(file_path, source);
         let mut symbols = Vec::new();
         let mut references = Vec::new();
         let mut edges = Vec::new();
@@ -64,13 +84,24 @@ impl LanguageAdapter for TypeScriptLanguageAdapter {
 
                     if let Some(class_symbol) = class_name {
                         for implemented in implemented_types(node, source) {
+                            let to_symbol_key = import_target_hints
+                                .get(&implemented)
+                                .map(|import_path| SymbolKey {
+                                    symbol: implemented.clone(),
+                                    qualified_symbol: Some(format!(
+                                        "{language}:{import_path}::{implemented}"
+                                    )),
+                                    file_path: Some(import_path.clone()),
+                                    language: Some(language.clone()),
+                                })
+                                .unwrap_or_else(|| language_symbol_key(&implemented, &language));
                             edges.push(ExtractedEdge {
-                                from_symbol_key: SymbolKey {
-                                    symbol: class_symbol.clone(),
-                                },
-                                to_symbol_key: SymbolKey {
-                                    symbol: implemented,
-                                },
+                                from_symbol_key: scoped_symbol_key(
+                                    file_path,
+                                    &language,
+                                    &class_symbol,
+                                ),
+                                to_symbol_key,
                                 edge_kind: "implements".to_string(),
                                 confidence: 0.95,
                                 provenance: "ast_reference".to_string(),
@@ -140,10 +171,12 @@ impl LanguageAdapter for TypeScriptLanguageAdapter {
                     ) && let Some(container_symbol) = container
                     {
                         edges.push(ExtractedEdge {
-                            from_symbol_key: SymbolKey {
-                                symbol: container_symbol,
-                            },
-                            to_symbol_key: SymbolKey { symbol },
+                            from_symbol_key: scoped_symbol_key(
+                                file_path,
+                                &language,
+                                &container_symbol,
+                            ),
+                            to_symbol_key: scoped_symbol_key(file_path, &language, &symbol),
                             edge_kind: "contains".to_string(),
                             confidence: 1.0,
                             provenance: "ast_definition".to_string(),
@@ -157,6 +190,8 @@ impl LanguageAdapter for TypeScriptLanguageAdapter {
                             function_node,
                             source,
                             caller.as_deref(),
+                            file_path,
+                            &language,
                             &mut references,
                             &mut edges,
                         );
@@ -164,6 +199,20 @@ impl LanguageAdapter for TypeScriptLanguageAdapter {
                 }
                 "import_statement" => {
                     for binding in import_bindings(node, source) {
+                        let to_symbol_key = import_target_hints
+                            .get(&binding.local_symbol)
+                            .map(|import_path| SymbolKey {
+                                symbol: binding.imported_symbol.clone(),
+                                qualified_symbol: Some(format!(
+                                    "{language}:{import_path}::{}",
+                                    binding.imported_symbol
+                                )),
+                                file_path: Some(import_path.clone()),
+                                language: Some(language.clone()),
+                            })
+                            .unwrap_or_else(|| {
+                                language_symbol_key(&binding.imported_symbol, &language)
+                            });
                         symbols.push(ExtractedSymbol {
                             symbol: binding.local_symbol.clone(),
                             qualified_symbol: Some(format!(
@@ -180,12 +229,12 @@ impl LanguageAdapter for TypeScriptLanguageAdapter {
                             signature: Some(format!("import {}", binding.local_symbol)),
                         });
                         edges.push(ExtractedEdge {
-                            from_symbol_key: SymbolKey {
-                                symbol: binding.local_symbol,
-                            },
-                            to_symbol_key: SymbolKey {
-                                symbol: binding.imported_symbol,
-                            },
+                            from_symbol_key: scoped_symbol_key(
+                                file_path,
+                                &language,
+                                &binding.local_symbol,
+                            ),
+                            to_symbol_key,
                             edge_kind: "imports".to_string(),
                             confidence: 0.9,
                             provenance: "import_resolution".to_string(),
@@ -321,6 +370,8 @@ fn collect_call_symbols(
     node: Node<'_>,
     source: &str,
     caller: Option<&str>,
+    file_path: &str,
+    language: &str,
     references: &mut Vec<ExtractedReference>,
     edges: &mut Vec<ExtractedEdge>,
 ) {
@@ -335,10 +386,13 @@ fn collect_call_symbols(
                 });
                 if let Some(caller_symbol) = caller {
                     edges.push(ExtractedEdge {
-                        from_symbol_key: SymbolKey {
-                            symbol: caller_symbol.to_string(),
+                        from_symbol_key: scoped_symbol_key(file_path, language, caller_symbol),
+                        to_symbol_key: SymbolKey {
+                            symbol,
+                            qualified_symbol: None,
+                            file_path: Some(file_path.to_string()),
+                            language: Some(language.to_string()),
                         },
-                        to_symbol_key: SymbolKey { symbol },
                         edge_kind: "calls".to_string(),
                         confidence: 0.95,
                         provenance: "call_resolution".to_string(),
@@ -348,13 +402,17 @@ fn collect_call_symbols(
         }
         "member_expression" => {
             if let Some(property) = node.child_by_field_name("property") {
-                collect_call_symbols(property, source, caller, references, edges);
+                collect_call_symbols(
+                    property, source, caller, file_path, language, references, edges,
+                );
             }
         }
         _ => {
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
-                collect_call_symbols(child, source, caller, references, edges);
+                collect_call_symbols(
+                    child, source, caller, file_path, language, references, edges,
+                );
             }
         }
     }
@@ -462,6 +520,95 @@ fn import_bindings(node: Node<'_>, source: &str) -> Vec<ImportBinding> {
         left.local_symbol == right.local_symbol && left.imported_symbol == right.imported_symbol
     });
     bindings
+}
+
+fn import_target_hints(file_path: &str, source: &str) -> HashMap<String, String> {
+    let mut hints = HashMap::new();
+
+    for line in source.lines() {
+        let trimmed = line.trim();
+        if !trimmed.starts_with("import ") {
+            continue;
+        }
+        let Some((head, from_tail)) = trimmed.split_once(" from ") else {
+            continue;
+        };
+        let Some(module_specifier) = quoted_text(from_tail) else {
+            continue;
+        };
+        let Some(import_path) = resolve_typescript_import_path(file_path, &module_specifier) else {
+            continue;
+        };
+
+        if let (Some(left_brace), Some(right_brace)) = (head.find('{'), head.find('}')) {
+            let clause = &head[left_brace + 1..right_brace];
+            for specifier in clause.split(',') {
+                let specifier = specifier.trim();
+                if specifier.is_empty() {
+                    continue;
+                }
+                let local_symbol = if let Some((_imported, local)) = specifier.split_once(" as ") {
+                    local.trim()
+                } else {
+                    specifier
+                };
+                if local_symbol.is_empty() {
+                    continue;
+                }
+                hints.insert(local_symbol.to_string(), import_path.clone());
+            }
+            continue;
+        }
+
+        let default_binding = head
+            .trim_start_matches("import")
+            .trim()
+            .split(',')
+            .next()
+            .map(str::trim)
+            .filter(|symbol| !symbol.is_empty());
+        if let Some(local_symbol) = default_binding {
+            hints.insert(local_symbol.to_string(), import_path);
+        }
+    }
+
+    hints
+}
+
+fn quoted_text(segment: &str) -> Option<String> {
+    let start = segment.find(['"', '\''])?;
+    let quote = segment.as_bytes()[start] as char;
+    let tail = &segment[start + 1..];
+    let end = tail.find(quote)?;
+    Some(tail[..end].to_string())
+}
+
+fn resolve_typescript_import_path(from_file_path: &str, module_specifier: &str) -> Option<String> {
+    if !module_specifier.starts_with('.') {
+        return None;
+    }
+
+    let base = std::path::Path::new(from_file_path).parent()?;
+    let mut candidate = base.join(module_specifier);
+    if candidate.extension().is_none() {
+        candidate.set_extension("ts");
+    }
+    Some(normalize_relative_path(&candidate))
+}
+
+fn normalize_relative_path(path: &std::path::Path) -> String {
+    let mut parts = Vec::new();
+    for component in path.components() {
+        use std::path::Component;
+        match component {
+            Component::Normal(part) => parts.push(part.to_string_lossy().to_string()),
+            Component::ParentDir => {
+                parts.pop();
+            }
+            Component::CurDir | Component::RootDir | Component::Prefix(_) => {}
+        }
+    }
+    parts.join("/")
 }
 
 fn node_text(node: Node<'_>, source: &str) -> Option<String> {

@@ -7,6 +7,24 @@ use crate::indexer::languages::{
 
 pub struct PythonLanguageAdapter;
 
+fn scoped_symbol_key(file_path: &str, language: &str, symbol: &str) -> SymbolKey {
+    SymbolKey {
+        symbol: symbol.to_string(),
+        qualified_symbol: Some(format!("{language}:{file_path}::{symbol}")),
+        file_path: Some(file_path.to_string()),
+        language: Some(language.to_string()),
+    }
+}
+
+fn language_symbol_key(symbol: &str, language: &str) -> SymbolKey {
+    SymbolKey {
+        symbol: symbol.to_string(),
+        qualified_symbol: None,
+        file_path: None,
+        language: Some(language.to_string()),
+    }
+}
+
 impl LanguageAdapter for PythonLanguageAdapter {
     fn language_id(&self) -> &'static str {
         "python"
@@ -63,10 +81,12 @@ impl LanguageAdapter for PythonLanguageAdapter {
                     ) && let Some(container_symbol) = container
                     {
                         edges.push(ExtractedEdge {
-                            from_symbol_key: SymbolKey {
-                                symbol: container_symbol,
-                            },
-                            to_symbol_key: SymbolKey { symbol },
+                            from_symbol_key: scoped_symbol_key(
+                                file_path,
+                                &language,
+                                &container_symbol,
+                            ),
+                            to_symbol_key: scoped_symbol_key(file_path, &language, &symbol),
                             edge_kind: "contains".to_string(),
                             confidence: 1.0,
                             provenance: "ast_definition".to_string(),
@@ -80,6 +100,8 @@ impl LanguageAdapter for PythonLanguageAdapter {
                             function_node,
                             source,
                             caller.as_deref(),
+                            file_path,
+                            &language,
                             &mut references,
                             &mut edges,
                         );
@@ -108,12 +130,12 @@ impl LanguageAdapter for PythonLanguageAdapter {
                             signature: Some(format!("import {}", binding.local_symbol)),
                         });
                         edges.push(ExtractedEdge {
-                            from_symbol_key: SymbolKey {
-                                symbol: binding.local_symbol,
-                            },
-                            to_symbol_key: SymbolKey {
-                                symbol: binding.imported_symbol,
-                            },
+                            from_symbol_key: scoped_symbol_key(
+                                file_path,
+                                &language,
+                                &binding.local_symbol,
+                            ),
+                            to_symbol_key: language_symbol_key(&binding.imported_symbol, &language),
                             edge_kind: "imports".to_string(),
                             confidence: 0.9,
                             provenance: "import_resolution".to_string(),
@@ -214,6 +236,8 @@ fn collect_call_symbols(
     node: Node<'_>,
     source: &str,
     caller: Option<&str>,
+    file_path: &str,
+    language: &str,
     references: &mut Vec<ExtractedReference>,
     edges: &mut Vec<ExtractedEdge>,
 ) {
@@ -228,10 +252,13 @@ fn collect_call_symbols(
                 });
                 if let Some(caller_symbol) = caller {
                     edges.push(ExtractedEdge {
-                        from_symbol_key: SymbolKey {
-                            symbol: caller_symbol.to_string(),
+                        from_symbol_key: scoped_symbol_key(file_path, language, caller_symbol),
+                        to_symbol_key: SymbolKey {
+                            symbol,
+                            qualified_symbol: None,
+                            file_path: Some(file_path.to_string()),
+                            language: Some(language.to_string()),
                         },
-                        to_symbol_key: SymbolKey { symbol },
                         edge_kind: "calls".to_string(),
                         confidence: 0.95,
                         provenance: "call_resolution".to_string(),
@@ -241,7 +268,15 @@ fn collect_call_symbols(
         }
         "attribute" => {
             if let Some(attribute_node) = node.child_by_field_name("attribute") {
-                collect_call_symbols(attribute_node, source, caller, references, edges);
+                collect_call_symbols(
+                    attribute_node,
+                    source,
+                    caller,
+                    file_path,
+                    language,
+                    references,
+                    edges,
+                );
             } else if let Some(text) = node_text(node, source)
                 && let Some(symbol) = last_identifier(&text)
             {
@@ -253,10 +288,13 @@ fn collect_call_symbols(
                 });
                 if let Some(caller_symbol) = caller {
                     edges.push(ExtractedEdge {
-                        from_symbol_key: SymbolKey {
-                            symbol: caller_symbol.to_string(),
+                        from_symbol_key: scoped_symbol_key(file_path, language, caller_symbol),
+                        to_symbol_key: SymbolKey {
+                            symbol,
+                            qualified_symbol: None,
+                            file_path: Some(file_path.to_string()),
+                            language: Some(language.to_string()),
                         },
-                        to_symbol_key: SymbolKey { symbol },
                         edge_kind: "calls".to_string(),
                         confidence: 0.95,
                         provenance: "call_resolution".to_string(),
@@ -267,7 +305,7 @@ fn collect_call_symbols(
         _ => {
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
-                collect_call_symbols(child, source, caller, references, edges);
+                collect_call_symbols(child, source, caller, file_path, language, references, edges);
             }
         }
     }

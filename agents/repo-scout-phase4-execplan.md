@@ -46,8 +46,10 @@ editing loops, especially in repositories where repeated symbol names exist acro
 - [x] (2026-02-07 15:47Z) Milestone 18 complete: added
       `tests/fixtures/phase4/ambiguity/{disambiguated,ambiguous}/` and
       `tests/milestone18_precision_graph.rs` with strict red evidence for slices 18A/18B/18C.
-- [ ] Milestone 19 complete: symbol-key and edge-resolution implementation through adapter and
-      indexer boundaries.
+- [x] (2026-02-07 15:55Z) Milestone 19 complete: shipped `SymbolKey` disambiguator fields,
+      resolver hardening in `src/indexer/mod.rs`, adapter-emitted scoped keys across
+      Rust/TypeScript/Python, and green/refactor validation for all Milestone 18 contracts plus
+      full suite.
 - [ ] Milestone 20 complete: `diff-impact` high-signal seed controls (`--include-imports`,
       `--changed-line`) with deterministic output behavior.
 - [ ] Milestone 21 complete: `find`/`refs` scope controls (`--code-only`, `--exclude-tests`) plus
@@ -74,6 +76,16 @@ editing loops, especially in repositories where repeated symbol names exist acro
   duplicate target because resolver fallback remains symbol-text-only.
   Evidence: `milestone18_disambiguates_duplicate_rust_call_targets` red run reported
   `left: [\"src/a.rs\"]` vs `right: [\"src/a.rs\", \"src/b.rs\"]`.
+
+- Observation: integration tests were selecting an external `codex-5-3` binary before
+  `repo-scout`, masking local implementation behavior.
+  Evidence: contract test remained red while manual local `cargo run -- index` query showed both
+  expected disambiguated edges; updating `tests/common/mod.rs` candidate order aligned outcomes.
+
+- Observation: strict unique-global resolver fallback broke prior TypeScript `implements` edge
+  behavior when both interface and import rows shared the same symbol.
+  Evidence: `milestone15_typescript_edges_and_queries` failed until adapter import-path hints
+  mapped `Runner implements Contract` to `src/contracts.ts::Contract`.
 
 ## Decision Log
 
@@ -106,6 +118,15 @@ editing loops, especially in repositories where repeated symbol names exist acro
   corpus and keep red failures actionable.
   Date/Author: 2026-02-07 / Codex
 
+- Decision: prioritize `repo-scout` binary discovery in `tests/common/mod.rs`.
+  Rationale: integration tests must exercise local repository code, not external tool binaries.
+  Date/Author: 2026-02-07 / Codex
+
+- Decision: emit deterministic import-path hints from the TypeScript adapter for imported symbols.
+  Rationale: resolver ambiguity safeguards should not regress valid cross-file `implements` and
+  `imports` edges when import source paths are syntactically known.
+  Date/Author: 2026-02-07 / Codex
+
 ## Outcomes & Retrospective
 
 Planning outcome at this stage: Phase 4 scope is constrained to precision and signal quality on the
@@ -123,6 +144,10 @@ across larger real-world repositories.
 Milestone 18 retrospective (2026-02-07): precision defect expectations are now locked as failing
 integration contracts before any production refactor. This preserved strict TDD ordering and
 provides deterministic pass/fail gates for resolver hardening in Milestone 19.
+
+Milestone 19 retrospective (2026-02-07): symbol-key-aware resolution now fails safe on ambiguity
+while preserving existing graph behavior through adapter hints. Duplicate-call disambiguation and
+ambiguous-call suppression are now enforced by passing integration tests and full-suite validation.
 
 ## Context and Orientation
 
@@ -414,6 +439,20 @@ Milestone 18 strict-TDD red evidence:
     cargo test milestone18_ambiguous_unqualified_call_does_not_cross_link -- --nocapture
     # FAILED: ambiguous_run_targets left 1 right 0
 
+Milestone 19 strict-TDD green/refactor evidence:
+
+    cargo test milestone18_disambiguates_duplicate_rust_call_targets -- --nocapture
+    # PASS
+
+    cargo test milestone18_diff_impact_includes_true_callers_for_changed_duplicate_target -- --nocapture
+    # PASS
+
+    cargo test milestone18_ambiguous_unqualified_call_does_not_cross_link -- --nocapture
+    # PASS
+
+    cargo test
+    # PASS (full integration suite green after resolver + adapter refactor)
+
 ## Interfaces and Dependencies
 
 Phase 4 does not require new external crates by default. Continue using current dependencies
@@ -533,3 +572,6 @@ without JSON schema-family churn.
 
 2026-02-07: Updated living sections during Milestone 18 execution with branch/workflow status,
 contract-fixture additions, and strict red transcript evidence for slices 18A/18B/18C.
+
+2026-02-07: Updated living sections during Milestone 19 implementation with resolver/adapter
+decisions, discovered regressions, and green/refactor transcript evidence.

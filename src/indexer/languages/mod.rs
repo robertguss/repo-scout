@@ -5,6 +5,9 @@ pub mod typescript;
 #[derive(Debug, Clone)]
 pub struct SymbolKey {
     pub symbol: String,
+    pub qualified_symbol: Option<String>,
+    pub file_path: Option<String>,
+    pub language: Option<String>,
 }
 
 #[derive(Debug, Clone)]
