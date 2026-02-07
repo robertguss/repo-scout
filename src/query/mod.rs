@@ -952,20 +952,55 @@ pub fn context_matches(
 ///     println!("{} -> {} (score={})", t.target, t.why_included, t.score);
 /// }
 /// ```
-pub fn tests_for_symbol(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<TestTarget>> {
+pub fn tests_for_symbol(
+    db_path: &Path,
+    symbol: &str,
+    include_support: bool,
+) -> anyhow::Result<Vec<TestTarget>> {
     let connection = Connection::open(db_path)?;
+    let mut ranked_targets = test_targets_for_symbol(&connection, symbol)?
+        .into_iter()
+        .map(|(target, hit_count)| {
+            let is_runnable = is_runnable_test_target(&target);
+            (target, hit_count, is_runnable)
+        })
+        .filter(|(_, _, is_runnable)| include_support || *is_runnable)
+        .collect::<Vec<_>>();
+    ranked_targets.sort_by(|left, right| {
+        right
+            .2
+            .cmp(&left.2)
+            .then(right.1.cmp(&left.1))
+            .then(left.0.cmp(&right.0))
+    });
+
     let mut targets = Vec::new();
-    for (target, hit_count) in test_targets_for_symbol(&connection, symbol)? {
+    for (target, hit_count, is_runnable) in ranked_targets {
+        let (confidence, score) = if is_runnable {
+            if hit_count > 1 {
+                ("graph_likely", 0.9)
+            } else {
+                ("context_medium", 0.75)
+            }
+        } else if hit_count > 1 {
+            ("context_medium", 0.62)
+        } else {
+            ("context_medium", 0.58)
+        };
         targets.push(TestTarget {
             target: target.clone(),
-            target_kind: "integration_test_file".to_string(),
-            why_included: format!("direct symbol match for '{symbol}' in test file"),
-            confidence: if hit_count > 1 {
-                "graph_likely".to_string()
+            target_kind: if is_runnable {
+                "integration_test_file".to_string()
             } else {
-                "context_medium".to_string()
+                "support_test_file".to_string()
             },
-            score: if hit_count > 1 { 0.9 } else { 0.75 },
+            why_included: if is_runnable {
+                format!("direct symbol match for '{symbol}' in test file")
+            } else {
+                format!("direct symbol match for '{symbol}' in support path")
+            },
+            confidence: confidence.to_string(),
+            score,
         });
     }
 
@@ -1373,6 +1408,10 @@ fn test_command_for_target(target: &str) -> Option<String> {
 
     let stem = test_file.file_stem()?.to_str()?;
     Some(format!("cargo test --test {stem}"))
+}
+
+fn is_runnable_test_target(target: &str) -> bool {
+    test_command_for_target(target).is_some()
 }
 
 /// Assigns a numeric rank to a verification scope for ordering.

@@ -34,7 +34,17 @@ User-visible outcome: a tighter “what should I run next” loop with higher-si
 - [x] (2026-02-07 17:11Z) Captured baseline traversal evidence proving
       `diff-impact --max-distance > 1` currently emits no distance-2/3 rows.
 - [x] (2026-02-07 17:12Z) Authored this Phase 5 ExecPlan as planning-only work.
-- [ ] Milestone 22 complete: `tests-for` target-quality contracts and implementation.
+- [x] (2026-02-07 22:51Z) Ran required pre-milestone dogfood baseline for Milestone 22:
+      `cargo run -- index --repo .`,
+      `cargo run -- find verify_plan_for_changed_files --repo . --json`,
+      `cargo run -- refs verify_plan_for_changed_files --repo . --json`.
+- [x] (2026-02-07 22:51Z) Completed Milestone 22 strict TDD slices:
+      `milestone22_tests_for_excludes_support_paths_by_default`,
+      `milestone22_tests_for_prefers_runnable_targets`,
+      `milestone22_tests_for_include_support_restores_paths`.
+- [x] (2026-02-07 22:51Z) Ran Milestone 22 post-dogfood checks; observed expected
+      `verify-plan --max-targeted` CLI failure pending Milestone 23 implementation.
+- [x] (2026-02-07 22:51Z) Milestone 22 complete: `tests-for` target-quality contracts and implementation.
 - [ ] Milestone 23 complete: `verify-plan` high-signal recommendation contracts and implementation.
 - [ ] Milestone 24 complete: `context` relevance/recall contracts and implementation.
 - [ ] Milestone 25 complete: true multi-hop `diff-impact` traversal contracts and implementation.
@@ -63,6 +73,15 @@ User-visible outcome: a tighter “what should I run next” loop with higher-si
   Evidence: `cargo run --quiet -- refs helper --repo . --json | jq` showed `total: 72`, `tests: 58`,
   all `text_fallback`.
 
+- Observation: post-Milestone-22 dogfood still fails on `verify-plan --max-targeted`.
+  Evidence: CLI error `unexpected argument '--max-targeted' found` while running the required
+  post-milestone command list; implementation is tracked in Milestone 23.
+
+- Observation: `tests-for` default output now omits support paths, while `--include-support`
+  restores them with explicit support classification.
+  Evidence: default `tests-for Path --json` no longer emits `tests/common/mod.rs`; with
+  `--include-support`, the row appears as `target_kind: "support_test_file"`.
+
 ## Decision Log
 
 - Decision: prioritize recommendation precision and actionability before adding any new command
@@ -84,6 +103,18 @@ User-visible outcome: a tighter “what should I run next” loop with higher-si
   Rationale: agent loops need executable steps first; support files are useful but secondary.
   Date/Author: 2026-02-07 / Codex
 
+- Decision: add `tests-for --include-support` as the explicit opt-in, and classify restored support
+  results with `target_kind = "support_test_file"` plus support-specific rationale text.
+  Rationale: keeps default recommendations runnable-first while preserving additive, deterministic
+  schema-2 compatibility.
+  Date/Author: 2026-02-07 / Codex
+
+- Decision: treat Milestone 22 `verify-plan --max-targeted` command failure as expected post-check
+  evidence until Milestone 23 lands.
+  Rationale: the command is mandated by the plan, but its implementation scope belongs to the next
+  milestone.
+  Date/Author: 2026-02-07 / Codex
+
 ## Outcomes & Retrospective
 
 Planning outcome: Phase 5 scope is constrained to recommendation quality and traversal fidelity on
@@ -96,6 +127,10 @@ deterministically.
 
 Expected residual work after this plan: deeper semantic/type-aware resolution, broader benchmark
 corpora, and potential language-server-backed confidence upgrades.
+
+Milestone 22 outcome: `tests-for` now defaults to runnable integration targets, ranks runnable
+targets ahead of support paths, and supports explicit support-path restoration through
+`--include-support` without changing schema envelopes.
 
 ## Context and Orientation
 
@@ -418,6 +453,55 @@ Baseline evidence captured before implementation:
       "dist3": 0
     }
 
+Milestone 22 strict TDD evidence:
+
+    # Slice 22A red
+    cargo test milestone22_tests_for_excludes_support_paths_by_default -- --nocapture
+    # observed: FAILED (default output still contained tests/common/mod.rs)
+
+    # Slice 22A green
+    cargo test milestone22_tests_for_excludes_support_paths_by_default -- --nocapture
+    # observed: ok
+
+    # Slice 22A refactor gate
+    cargo test
+    # observed: full suite passed
+
+    # Slice 22B red
+    cargo test milestone22_tests_for_prefers_runnable_targets -- --nocapture
+    # observed: FAILED (CLI rejected --include-support)
+
+    # Slice 22B green
+    cargo test milestone22_tests_for_prefers_runnable_targets -- --nocapture
+    # observed: ok
+
+    # Slice 22B refactor gate
+    cargo test
+    # observed: full suite passed
+
+    # Slice 22C red
+    cargo test milestone22_tests_for_include_support_restores_paths -- --nocapture
+    # observed: FAILED (support row reason did not mention support path)
+
+    # Slice 22C green
+    cargo test milestone22_tests_for_include_support_restores_paths -- --nocapture
+    # observed: ok
+
+    # Slice 22C refactor gate
+    cargo test
+    # observed: full suite passed
+
+Milestone 22 post-dogfood evidence:
+
+    cargo run -- tests-for Path --repo . --json
+    # observed: no tests/common/mod.rs row
+
+    cargo run -- tests-for Path --repo . --include-support --json
+    # observed: tests/common/mod.rs returned with target_kind "support_test_file"
+
+    cargo run -- verify-plan --changed-file src/main.rs --repo . --max-targeted 6 --json
+    # observed: unexpected argument '--max-targeted' found (expected before Milestone 23)
+
 ## Interfaces and Dependencies
 
 Phase 5 should not require new external crates by default. Continue using existing dependencies
@@ -450,3 +534,6 @@ Backward compatibility requirements:
 Revision Note (2026-02-07): Created initial Phase 5 execution plan to address recommendation noise
 (`tests-for`, `verify-plan`, `context`) and `diff-impact` multi-hop fidelity gaps discovered during
 post-Phase-4 dogfooding. No production code changes were made as part of this planning step.
+
+Revision Note (2026-02-07): Updated progress, decisions, surprises, outcomes, and artifacts with
+Milestone 22 implementation details, strict TDD transcripts, and post-milestone dogfood evidence.

@@ -226,9 +226,9 @@ fn run_context(args: crate::cli::ContextArgs) -> anyhow::Result<()> {
 ///
 /// let _ = crate::run_tests_for(args);
 /// ```
-fn run_tests_for(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
+fn run_tests_for(args: crate::cli::TestsForArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
-    let targets = tests_for_symbol(&store.db_path, &args.symbol)?;
+    let targets = tests_for_symbol(&store.db_path, &args.symbol, args.include_support)?;
     if args.json {
         output::print_tests_for_json(&args.symbol, &targets)?;
     } else {

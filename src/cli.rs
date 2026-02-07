@@ -18,7 +18,7 @@ pub enum Command {
     Refs(RefsArgs),
     Impact(QueryArgs),
     Context(ContextArgs),
-    TestsFor(QueryArgs),
+    TestsFor(TestsForArgs),
     VerifyPlan(VerifyPlanArgs),
     DiffImpact(DiffImpactArgs),
     Explain(ExplainArgs),
@@ -75,6 +75,17 @@ pub struct ContextArgs {
     pub json: bool,
     #[arg(long, default_value_t = 1200)]
     pub budget: usize,
+}
+
+#[derive(Debug, Args)]
+pub struct TestsForArgs {
+    pub symbol: String,
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long, default_value_t = false)]
+    pub include_support: bool,
 }
 
 #[derive(Debug, Args)]
