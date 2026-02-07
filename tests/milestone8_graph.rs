@@ -134,7 +134,7 @@ fn milestone8_call_and_contains_edges() {
 fn milestone8_imports_and_implements_edges() {
     let repo = common::temp_repo();
     let source = format!(
-        "{}\nuse launch::Launcher as LocalLauncher;\n",
+        "{}\nuse launch::Launcher as LocalLauncher;\ntrait GenericRunnable {{}}\nstruct GenericLauncher<T>(T);\nimpl<T> GenericRunnable for GenericLauncher<T> {{}}\n",
         include_str!("fixtures/phase2/rust_symbols/src/lib.rs")
     );
     common::write_file(repo.path(), "src/lib.rs", &source);
@@ -158,6 +158,14 @@ fn milestone8_imports_and_implements_edges() {
             "implements".to_string()
         )),
         "expected implements edge Launcher -> Runnable"
+    );
+    assert!(
+        edges.contains(&(
+            "GenericLauncher".to_string(),
+            "GenericRunnable".to_string(),
+            "implements".to_string()
+        )),
+        "expected implements edge GenericLauncher -> GenericRunnable"
     );
 }
 

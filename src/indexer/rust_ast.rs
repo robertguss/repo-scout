@@ -234,7 +234,7 @@ fn push_named_definition(
     };
 
     let (line, column) = start_position(name_node);
-    let (end_line, end_column) = end_position(name_node);
+    let (end_line, end_column) = end_position(node);
     output.push(AstDefinition {
         symbol,
         kind: kind.to_string(),

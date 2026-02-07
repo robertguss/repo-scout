@@ -22,6 +22,8 @@ Current command surface:
 - `context`
 - `tests-for`
 - `verify-plan`
+- `diff-impact`
+- `explain`
 
 ## Commands
 
@@ -167,6 +169,44 @@ Example:
 ```bash
 cargo run -- verify-plan --changed-file src/query/mod.rs --repo .
 cargo run -- verify-plan --changed-file src/query/mod.rs --changed-file ./src/query/mod.rs --repo . --json
+```
+
+### `diff-impact --changed-file <PATH> [--changed-file <PATH> ...] --repo <PATH> [--max-distance <N>] [--include-tests] [--json]`
+
+Generate deterministic changed-file impact results.
+
+Behavior:
+
+- Normalizes and deduplicates changed-file paths.
+- Emits changed symbols (`distance = 0`, `relationship = changed_symbol`).
+- Emits one-hop incoming neighbors (`called_by`, `contained_by`, `imported_by`, `implemented_by`)
+  when `max_distance >= 1`.
+- Optionally emits test targets (`result_kind = test_target`).
+
+Examples:
+
+```bash
+cargo run -- diff-impact --changed-file src/query/mod.rs --repo .
+cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --json
+```
+
+### `explain <SYMBOL> --repo <PATH> [--include-snippets] [--json]`
+
+Return a deterministic symbol dossier.
+
+Behavior:
+
+- Resolves exact symbol definitions.
+- Includes signature and span metadata.
+- Includes inbound/outbound relationship counters.
+- Optionally includes source snippets (`--include-snippets`).
+
+Examples:
+
+```bash
+cargo run -- explain impact_matches --repo .
+cargo run -- explain impact_matches --repo . --json
+cargo run -- explain impact_matches --repo . --include-snippets --json
 ```
 
 ## Exit Codes

@@ -9,8 +9,8 @@ use clap::Parser;
 use crate::cli::{Cli, Command};
 use crate::indexer::index_repository;
 use crate::query::{
-    context_matches, find_matches, impact_matches, refs_matches, tests_for_symbol,
-    verify_plan_for_changed_files,
+    context_matches, diff_impact_for_changed_files, explain_symbol, find_matches, impact_matches,
+    refs_matches, tests_for_symbol, verify_plan_for_changed_files,
 };
 use crate::store::ensure_store;
 
@@ -58,6 +58,8 @@ fn run() -> anyhow::Result<()> {
         Command::Context(args) => run_context(args),
         Command::TestsFor(args) => run_tests_for(args),
         Command::VerifyPlan(args) => run_verify_plan(args),
+        Command::DiffImpact(args) => run_diff_impact(args),
+        Command::Explain(args) => run_explain(args),
     }
 }
 
@@ -260,6 +262,51 @@ fn run_verify_plan(args: crate::cli::VerifyPlanArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn run_diff_impact(args: crate::cli::DiffImpactArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let mut changed_files = args
+        .changed_files
+        .iter()
+        .map(|path| normalize_changed_file(&args.repo, path))
+        .collect::<Vec<_>>();
+    changed_files.sort();
+    changed_files.dedup();
+
+    let matches = diff_impact_for_changed_files(
+        &store.db_path,
+        &changed_files,
+        args.max_distance,
+        args.include_tests,
+    )?;
+    if args.json {
+        output::print_diff_impact_json(
+            &changed_files,
+            args.max_distance,
+            args.include_tests,
+            &matches,
+        )?;
+    } else {
+        output::print_diff_impact(
+            &changed_files,
+            args.max_distance,
+            args.include_tests,
+            &matches,
+        );
+    }
+    Ok(())
+}
+
+fn run_explain(args: crate::cli::ExplainArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let matches = explain_symbol(&store.db_path, &args.symbol, args.include_snippets)?;
+    if args.json {
+        output::print_explain_json(&args.symbol, args.include_snippets, &matches)?;
+    } else {
+        output::print_explain(&args.symbol, &matches);
+    }
+    Ok(())
+}
+
 /// Normalize a changed-file path into a repository-relative, forward-slash string.
 ///
 /// The returned string has any leading "./" removed and all backslashes replaced with
@@ -292,9 +339,23 @@ fn normalize_changed_file(repo_root: &std::path::Path, changed_file: &str) -> St
             .unwrap_or_else(|_| repo_root.to_path_buf())
     });
     let normalized = if candidate.is_absolute() {
-        candidate
-            .strip_prefix(&absolute_repo_root)
+        let canonical_candidate = std::fs::canonicalize(&candidate).ok();
+        canonical_candidate
+            .as_deref()
+            .and_then(|path| path.strip_prefix(&absolute_repo_root).ok())
             .map(|path| path.to_path_buf())
+            .or_else(|| {
+                candidate
+                    .strip_prefix(&absolute_repo_root)
+                    .ok()
+                    .map(|path| path.to_path_buf())
+            })
+            .or_else(|| {
+                candidate
+                    .strip_prefix(repo_root)
+                    .ok()
+                    .map(|path| path.to_path_buf())
+            })
             .unwrap_or(candidate)
     } else {
         candidate

@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the current `repo-scout` architecture after Phase 2.
+This document describes the current `repo-scout` architecture after Phase 3.
 
 ## High-Level Flow
 
@@ -19,17 +19,21 @@ This document describes the current `repo-scout` architecture after Phase 2.
 - `src/store/mod.rs`
   - Index path resolution, DB bootstrap, corruption hinting.
 - `src/store/schema.rs`
-  - Schema DDL and schema version metadata (`SCHEMA_VERSION = 2`).
+  - Schema DDL and schema version metadata (`SCHEMA_VERSION = 3`).
 - `src/indexer/files.rs`
   - Repository discovery and ignore-aware file walking.
 - `src/indexer/text.rs`
   - Token occurrence extraction with line/column.
 - `src/indexer/rust_ast.rs`
   - Rust AST extraction for definitions/references.
+- `src/indexer/languages/`
+  - Language adapters (`rust`, `typescript`, `python`) and normalized extraction contracts.
 - `src/indexer/mod.rs`
-  - Incremental indexing coordinator, stale-row pruning, symbol/edge persistence.
+  - Incremental indexing coordinator, stale-row pruning, adapter dispatch, deferred edge resolution,
+    and symbol/edge persistence.
 - `src/query/mod.rs`
-  - `find`, `refs`, `impact`, `context`, `tests-for`, `verify-plan` implementations.
+  - `find`, `refs`, `impact`, `context`, `tests-for`, `verify-plan`, `diff-impact`, and `explain`
+    implementations.
 - `src/output.rs`
   - Human-readable and JSON serialization paths.
 
@@ -44,13 +48,13 @@ Primary tables:
 - `text_occurrences`
   - Token fallback source for text matching and test heuristics.
 - `ast_definitions`
-  - Rust definition entries (`find` primary path).
+  - AST-backed definition entries (`find` primary path).
 - `ast_references`
-  - Rust reference entries (`refs` primary path).
+  - AST-backed reference entries (`refs` primary path).
 - `symbols_v2`
-  - Rich symbol metadata (kind/container/span/signature).
+  - Rich symbol metadata (kind/language/qualified_symbol/container/span/signature).
 - `symbol_edges_v2`
-  - Symbol graph edges (`calls`, `contains`, `imports`, `implements`).
+  - Symbol graph edges (`calls`, `contains`, `imports`, `implements`) with provenance metadata.
 
 ## Incremental Indexing Lifecycle
 
@@ -62,7 +66,8 @@ For each indexing run:
    - compute hash,
    - skip unchanged files,
    - otherwise delete existing rows for that file and reinsert fresh text/AST/symbol/edge rows in one transaction.
-4. Upsert file hash into `indexed_files`.
+4. Resolve deferred cross-file edges after all files are indexed.
+5. Upsert file hash into `indexed_files`.
 
 Lifecycle guarantees covered by integration tests include stale-file pruning, rename handling, and schema migration safety.
 
@@ -104,6 +109,20 @@ Lifecycle guarantees covered by integration tests include stale-file pruning, re
   - tests referencing symbols defined in changed files.
 - Keep best evidence for duplicate commands.
 - Always append `cargo test` full-suite gate.
+
+### `diff-impact`
+
+- Normalize + dedupe changed-file inputs.
+- Emit changed symbols from `symbols_v2`.
+- Expand one-hop incoming neighbors from `symbol_edges_v2`.
+- Optionally attach ranked test targets.
+- Sort mixed result kinds deterministically.
+
+### `explain`
+
+- Resolve exact symbol definitions from `symbols_v2`.
+- Attach deterministic inbound/outbound edge counters from `symbol_edges_v2`.
+- Optionally attach source snippets resolved from the indexed repository root.
 
 ## Determinism
 

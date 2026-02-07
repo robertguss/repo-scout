@@ -1,10 +1,14 @@
 use std::path::Path;
 
-use crate::query::{ContextMatch, ImpactMatch, QueryMatch, TestTarget, VerificationStep};
+use crate::query::{
+    ContextMatch, DiffImpactMatch, ExplainMatch, ImpactMatch, QueryMatch, TestTarget,
+    VerificationStep,
+};
 use serde::Serialize;
 
 pub const JSON_SCHEMA_VERSION: u32 = 1;
 pub const JSON_SCHEMA_VERSION_V2: u32 = 2;
+pub const JSON_SCHEMA_VERSION_V3: u32 = 3;
 
 #[derive(Debug, Serialize)]
 struct JsonQueryOutput<'a> {
@@ -45,6 +49,25 @@ struct JsonVerifyPlanOutput<'a> {
     command: &'a str,
     changed_files: &'a [String],
     results: &'a [VerificationStep],
+}
+
+#[derive(Debug, Serialize)]
+struct JsonDiffImpactOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    changed_files: &'a [String],
+    max_distance: u32,
+    include_tests: bool,
+    results: &'a [DiffImpactMatch],
+}
+
+#[derive(Debug, Serialize)]
+struct JsonExplainOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    query: &'a str,
+    include_snippets: bool,
+    results: &'a [ExplainMatch],
 }
 
 /// Prints index metadata (path, schema version, and file counts) to stdout.
@@ -348,6 +371,94 @@ pub fn print_verify_plan_json(
         command: "verify-plan",
         changed_files,
         results: steps,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}
+
+pub fn print_diff_impact(
+    changed_files: &[String],
+    max_distance: u32,
+    include_tests: bool,
+    results: &[DiffImpactMatch],
+) {
+    println!("command: diff-impact");
+    println!("changed_files: {}", changed_files.len());
+    for changed_file in changed_files {
+        println!("changed_file: {changed_file}");
+    }
+    println!("max_distance: {max_distance}");
+    println!("include_tests: {include_tests}");
+    println!("results: {}", results.len());
+}
+
+pub fn print_diff_impact_json(
+    changed_files: &[String],
+    max_distance: u32,
+    include_tests: bool,
+    results: &[DiffImpactMatch],
+) -> anyhow::Result<()> {
+    let payload = JsonDiffImpactOutput {
+        schema_version: JSON_SCHEMA_VERSION_V3,
+        command: "diff-impact",
+        changed_files,
+        max_distance,
+        include_tests,
+        results,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}
+
+pub fn print_explain(symbol: &str, matches: &[ExplainMatch]) {
+    println!("command: explain");
+    println!("query: {symbol}");
+    println!("results: {}", matches.len());
+    for result in matches {
+        println!(
+            "{}:{}:{} {} ({}) [{} {} {:.2}]",
+            result.file_path,
+            result.start_line,
+            result.start_column,
+            result.symbol,
+            result.kind,
+            result.provenance,
+            result.confidence,
+            result.score
+        );
+        if let Some(signature) = &result.signature {
+            println!("signature: {signature}");
+        }
+        println!(
+            "inbound: called_by={} imported_by={} implemented_by={} contained_by={}",
+            result.inbound.called_by,
+            result.inbound.imported_by,
+            result.inbound.implemented_by,
+            result.inbound.contained_by
+        );
+        println!(
+            "outbound: calls={} imports={} implements={} contains={}",
+            result.outbound.calls,
+            result.outbound.imports,
+            result.outbound.implements,
+            result.outbound.contains
+        );
+    }
+}
+
+pub fn print_explain_json(
+    symbol: &str,
+    include_snippets: bool,
+    matches: &[ExplainMatch],
+) -> anyhow::Result<()> {
+    let payload = JsonExplainOutput {
+        schema_version: JSON_SCHEMA_VERSION_V3,
+        command: "explain",
+        query: symbol,
+        include_snippets,
+        results: matches,
     };
     let serialized = serde_json::to_string_pretty(&payload)?;
     println!("{serialized}");

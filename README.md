@@ -2,13 +2,13 @@
 
 `repo-scout` is a local, deterministic CLI for indexing a repository and answering code-navigation questions fast.
 
-Phase 2 is fully implemented and includes agent-focused commands beyond basic symbol lookup.
+Phase 3 is fully implemented and adds deterministic changed-file and symbol-dossier workflows.
 
 ## What It Does
 
 - Incrementally indexes repositories into `<repo>/.repo-scout/index.db`.
 - Extracts language-agnostic token occurrences from all files.
-- Extracts Rust AST definitions/references plus symbol graph metadata from `.rs` files.
+- Extracts Rust, TypeScript, and Python symbol/graph metadata through language adapters.
 - Supports deterministic terminal and JSON output for automation.
 
 Available commands:
@@ -21,6 +21,8 @@ Available commands:
 - `context`
 - `tests-for`
 - `verify-plan`
+- `diff-impact`
+- `explain`
 
 ## Quick Start
 
@@ -46,6 +48,8 @@ cargo run -- impact launch --repo /path/to/repo
 cargo run -- context --task "modify launch flow and update callers" --repo /path/to/repo --budget 1200
 cargo run -- tests-for launch --repo /path/to/repo
 cargo run -- verify-plan --changed-file src/lib.rs --repo /path/to/repo
+cargo run -- diff-impact --changed-file src/lib.rs --repo /path/to/repo
+cargo run -- explain impact_matches --repo /path/to/repo
 ```
 
 JSON output is supported by query commands:
@@ -53,6 +57,8 @@ JSON output is supported by query commands:
 ```bash
 cargo run -- find launch --repo /path/to/repo --json
 cargo run -- impact launch --repo /path/to/repo --json
+cargo run -- diff-impact --changed-file src/lib.rs --repo /path/to/repo --json
+cargo run -- explain impact_matches --repo /path/to/repo --json
 ```
 
 ## Command Behavior Summary
@@ -74,6 +80,10 @@ cargo run -- impact launch --repo /path/to/repo --json
   - Finds test-like files that directly reference a symbol.
 - `verify-plan --changed-file <PATH> --repo <PATH> [--json]`
   - Produces deterministic verification steps (targeted test commands + `cargo test`).
+- `diff-impact --changed-file <PATH> --repo <PATH> [--max-distance <N>] [--include-tests] [--json]`
+  - Emits changed-symbol rows plus deterministic one-hop impacted symbols/test targets.
+- `explain <SYMBOL> --repo <PATH> [--include-snippets] [--json]`
+  - Produces a deterministic symbol dossier with spans, signature, and relationship counts.
 
 ## JSON Schemas
 
@@ -81,6 +91,7 @@ Current schema versions:
 
 - `find`, `refs`: `schema_version = 1`
 - `impact`, `context`, `tests-for`, `verify-plan`: `schema_version = 2`
+- `diff-impact`, `explain`: `schema_version = 3`
 
 See full contracts in `docs/json-output.md`.
 
