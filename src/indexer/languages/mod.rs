@@ -1,4 +1,5 @@
 pub mod rust;
+pub mod typescript;
 
 #[derive(Debug, Clone)]
 pub struct SymbolKey {

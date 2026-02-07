@@ -76,7 +76,17 @@ before agent-facing commands and data contracts are stable.
       `language`, `qualified_symbol`, `provenance`, and new indices.
 - [x] (2026-02-06 17:18Z) Milestone 14 feature implementation complete (adapter extraction boundary
       stabilized, Rust behavior preserved, and schema migration upgraded to v3 metadata contracts).
-- [ ] Milestone 15 TypeScript adapter MVP (definitions, references, imports, calls, containers).
+- [x] (2026-02-07 00:11Z) Milestone 15 slice 15A complete: red/green/refactor for
+      `milestone15_typescript_definitions` with TypeScript adapter definition extraction
+      (function/class/interface/enum/type_alias/method + language metadata).
+- [x] (2026-02-07 00:11Z) Milestone 15 slice 15B complete: red/green/refactor for
+      `milestone15_typescript_references_and_calls` with arrow/function-expression caller
+      resolution and call edge persistence.
+- [x] (2026-02-07 00:11Z) Milestone 15 slice 15C complete: red/green/refactor for
+      `milestone15_typescript_edges_and_queries` with import/implements/contains edges flowing
+      through `impact`, `diff-impact`, and `explain`.
+- [x] (2026-02-07 00:11Z) Milestone 15 feature implementation complete (TypeScript adapter MVP with
+      deterministic query behavior and milestone-level manual `diff-impact`/`explain` checks).
 - [ ] Milestone 16 Python adapter MVP (definitions, references, imports, calls, containers).
 - [ ] Milestone 17 documentation and dogfood transcript updates (`README.md`,
       `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`,
@@ -128,6 +138,17 @@ before agent-facing commands and data contracts are stable.
   causes bootstrap failure. Evidence: `milestone14_schema_language_metadata_migration` green attempt
   failed with `no such column: language` during `CREATE INDEX ... symbols_v2(language, symbol)` and
   required moving metadata index creation after additive column migration.
+
+- Observation: Cross-file TypeScript edges were dropped when the target symbol appeared in a later
+  file because edge resolution happened inside per-file transactions only. Evidence:
+  `milestone15_typescript_edges_and_queries` red run and SQLite inspection showed
+  `run|callHelper|calls` but missing `callHelper|helper|imports` until a deferred edge pass was
+  added after indexing all files.
+
+- Observation: Tree-sitter TypeScript import field mapping is not stable enough across specifier
+  forms (`{ x }` vs `{ x as y }`) for direct field-name extraction in this codebase. Evidence:
+  alias import rows were defined but import edges did not resolve for `callHelper` until import
+  bindings were parsed from import statement text.
 
 ## Decision Log
 
@@ -185,6 +206,16 @@ before agent-facing commands and data contracts are stable.
   identifiers and stable qualified/provenance values while keeping v1/v2 query behavior intact.
   Date/Author: 2026-02-06 / Codex
 
+- Decision: Add a deferred edge-resolution pass after all files are indexed and push unresolved
+  cross-file edges into that pass. Rationale: language adapters now emit cross-file relations
+  (notably TypeScript imports/implements) that cannot always resolve during a single file
+  transaction. Date/Author: 2026-02-07 / Codex
+
+- Decision: Parse TypeScript import bindings from import statement text for named imports in the MVP
+  path, then emit deterministic `import` symbols plus `imports` edges. Rationale: this is a small,
+  reliable implementation for milestone scope without blocking on grammar-field variance across
+  import syntactic forms. Date/Author: 2026-02-07 / Codex
+
 ## Outcomes & Retrospective
 
 Planning outcome at this stage: Phase 3 scope is explicitly sequenced around agent-loop value
@@ -211,6 +242,12 @@ including adapter-provided references so legacy `find`/`refs` behavior remains i
 is upgraded additively to version 3 with persisted `language`, `qualified_symbol`, and
 `provenance` metadata plus migration-safe index creation/backfill. Remaining work is TypeScript and
 Python adapter rollout plus documentation updates.
+
+Milestone 15 outcome: TypeScript indexing now extracts definitions, references, calls, import edges,
+implements edges, and contains edges through the adapter boundary. `impact`, `diff-impact`, and
+`explain` produce deterministic TypeScript-labeled outputs for fixture repositories, and milestone15
+manual dogfood checks for `diff-impact`/`explain` completed. Remaining work is Python adapter rollout
+and documentation finalization.
 
 Target completion outcome: `repo-scout` provides deterministic changed-file impact analysis and
 symbol dossier commands, plus a language-neutral extraction pipeline that supports Rust, TypeScript,
@@ -580,8 +617,50 @@ Strict TDD artifact checklist to fill during implementation:
 
     - dogfood pre/post evidence captured for every milestone13 slice with required commands and
       milestone-level manual checks (`diff-impact`/`explain` terminal + JSON runs).
-    - red/green/refactor transcripts for all milestone14_* tests.
-    - red/green/refactor transcripts for all milestone15_* tests.
+    - milestone14_language_adapter_trait_migration
+      red: `cargo test milestone14_language_adapter_trait_migration -- --nocapture`
+      failed on `indexing should route language extraction through adapters`.
+      green: `cargo test milestone14_language_adapter_trait_migration -- --nocapture`
+      passed after indexer extraction moved behind adapter-only entrypoints.
+      refactor: `cargo test` passed full suite.
+
+    - milestone14_rust_behavior_unchanged_through_adapter
+      red: `cargo test milestone14_rust_behavior_unchanged_through_adapter -- --nocapture`
+      failed on missing `[ast_reference ast_likely]` after adapter migration.
+      green: `cargo test milestone14_rust_behavior_unchanged_through_adapter -- --nocapture`
+      passed after `ExtractionUnit.references` persisted `ast_references`.
+      refactor: `cargo test` passed full suite.
+
+    - milestone14_schema_language_metadata_migration
+      red: `cargo test milestone14_schema_language_metadata_migration -- --nocapture`
+      failed on `schema_version: 3` expectation and missing metadata columns.
+      green: `cargo test milestone14_schema_language_metadata_migration -- --nocapture`
+      passed after additive schema v3 migration and metadata backfill/index creation.
+      refactor: `cargo test` passed full suite.
+
+    - milestone15_typescript_definitions
+      red: `cargo test milestone15_typescript_definitions -- --nocapture`
+      failed on missing TypeScript AST definition match for `helper`.
+      green: `cargo test milestone15_typescript_definitions -- --nocapture`
+      passed after adding `TypeScriptLanguageAdapter` definition extraction.
+      refactor: `cargo test` passed full suite.
+
+    - milestone15_typescript_references_and_calls
+      red: `cargo test milestone15_typescript_references_and_calls -- --nocapture`
+      failed with missing `called_by` impact evidence for callable variable wrappers.
+      green: `cargo test milestone15_typescript_references_and_calls -- --nocapture`
+      passed after arrow/function-expression caller resolution and variable symbol extraction.
+      refactor: `cargo test` passed full suite.
+
+    - milestone15_typescript_edges_and_queries
+      red: `cargo test milestone15_typescript_edges_and_queries -- --nocapture`
+      failed with missing `imported_by`/`implemented_by` graph evidence.
+      green: `cargo test milestone15_typescript_edges_and_queries -- --nocapture`
+      passed after import-binding edge emission plus deferred cross-file edge resolution.
+      refactor: `cargo test` passed full suite.
+
+    - dogfood pre/post evidence captured for every milestone14 and milestone15 slice with required
+      commands; milestone15 manual checks (`diff-impact` and `explain` terminal + JSON) completed.
     - red/green/refactor transcripts for all milestone16_* tests.
 
 ## Interfaces and Dependencies
@@ -708,3 +787,8 @@ ordering rules, and full red/green/refactor transcript evidence for all mileston
 2026-02-06: Updated the living plan after Milestone 13 implementation to record explain dossier
 improvements (signature output, inbound/outbound summaries, deterministic JSON snippets) and the
 strict TDD/dogfooding evidence for all milestone13 slices.
+
+2026-02-07: Updated the living plan after Milestone 14 and Milestone 15 implementation to capture
+adapter-boundary migration outcomes, schema v3 metadata migration evidence, TypeScript adapter MVP
+behavior, cross-file deferred edge resolution decisions, and strict TDD/dogfooding transcripts for
+all milestone14/15 slices.

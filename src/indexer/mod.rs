@@ -5,6 +5,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::indexer::languages::LanguageAdapter;
 use crate::indexer::languages::rust::RustLanguageAdapter;
+use crate::indexer::languages::typescript::TypeScriptLanguageAdapter;
 
 pub mod files;
 pub mod languages;
@@ -52,6 +53,7 @@ pub fn index_repository(repo: &Path, db_path: &Path) -> anyhow::Result<IndexSumm
 
     let mut indexed_files = 0usize;
     let mut skipped_files = 0usize;
+    let mut deferred_edges: Vec<(String, String, String, f64, String)> = Vec::new();
 
     for file in source_files {
         let existing_hash: Option<String> = connection
@@ -201,11 +203,19 @@ pub fn index_repository(repo: &Path, db_path: &Path) -> anyhow::Result<IndexSumm
 
         for (from_symbol, to_symbol, edge_kind, confidence, provenance) in pending_edges {
             let Some(from_symbol_id) = resolve_symbol_id_in_tx(&tx, &from_symbol)? else {
+                deferred_edges.push((from_symbol, to_symbol, edge_kind, confidence, provenance));
                 continue;
             };
             let Some(to_symbol_id) = resolve_symbol_id_in_tx(&tx, &to_symbol)? else {
+                deferred_edges.push((from_symbol, to_symbol, edge_kind, confidence, provenance));
                 continue;
             };
+            if matches!(edge_kind.as_str(), "imports" | "implements")
+                && symbol_kind_by_id_in_tx(&tx, to_symbol_id)?.as_deref() == Some("import")
+            {
+                deferred_edges.push((from_symbol, to_symbol, edge_kind, confidence, provenance));
+                continue;
+            }
 
             tx.execute(
                 "INSERT INTO symbol_edges_v2(from_symbol_id, to_symbol_id, edge_kind, confidence, provenance)
@@ -225,6 +235,27 @@ pub fn index_repository(repo: &Path, db_path: &Path) -> anyhow::Result<IndexSumm
         tx.commit()?;
 
         indexed_files += 1;
+    }
+
+    if !deferred_edges.is_empty() {
+        let tx = connection.transaction()?;
+        for (from_symbol, to_symbol, edge_kind, confidence, provenance) in deferred_edges {
+            let Some(from_symbol_id) = resolve_symbol_id_in_tx(&tx, &from_symbol)? else {
+                continue;
+            };
+            let Some(to_symbol_id) = resolve_symbol_id_in_tx(&tx, &to_symbol)? else {
+                continue;
+            };
+
+            tx.execute(
+                "INSERT INTO symbol_edges_v2(from_symbol_id, to_symbol_id, edge_kind, confidence, provenance)
+                 VALUES (?1, ?2, ?3, ?4, ?5)
+                 ON CONFLICT(from_symbol_id, to_symbol_id, edge_kind)
+                 DO UPDATE SET confidence = excluded.confidence, provenance = excluded.provenance",
+                params![from_symbol_id, to_symbol_id, edge_kind, confidence, provenance],
+            )?;
+        }
+        tx.commit()?;
     }
 
     Ok(IndexSummary {
@@ -339,13 +370,30 @@ fn resolve_symbol_id_in_tx(
             "SELECT symbol_id
              FROM symbols_v2
              WHERE symbol = ?1
-             ORDER BY file_path ASC, start_line ASC, start_column ASC
+             ORDER BY CASE WHEN kind = 'import' THEN 1 ELSE 0 END ASC,
+                      file_path ASC, start_line ASC, start_column ASC
              LIMIT 1",
             [symbol],
             |row| row.get::<_, i64>(0),
         )
         .optional()?;
     Ok(symbol_id)
+}
+
+fn symbol_kind_by_id_in_tx(
+    tx: &rusqlite::Transaction<'_>,
+    symbol_id: i64,
+) -> anyhow::Result<Option<String>> {
+    let kind = tx
+        .query_row(
+            "SELECT kind
+             FROM symbols_v2
+             WHERE symbol_id = ?1",
+            [symbol_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()?;
+    Ok(kind)
 }
 
 /// Builds a mapping from (symbol, kind) to a list of existing `symbol_id`s for a given file.
@@ -471,12 +519,19 @@ fn extract_with_adapter(
     source: &str,
 ) -> anyhow::Result<languages::ExtractionUnit> {
     let rust_adapter = RustLanguageAdapter;
-    if rust_adapter
-        .file_extensions()
-        .iter()
-        .any(|extension| file_path.ends_with(&format!(".{extension}")))
-    {
-        return rust_adapter.extract(file_path, source);
+    let typescript_adapter = TypeScriptLanguageAdapter;
+
+    for adapter in [
+        &rust_adapter as &dyn LanguageAdapter,
+        &typescript_adapter as &dyn LanguageAdapter,
+    ] {
+        if adapter
+            .file_extensions()
+            .iter()
+            .any(|extension| file_path.ends_with(&format!(".{extension}")))
+        {
+            return adapter.extract(file_path, source);
+        }
     }
 
     Ok(languages::ExtractionUnit::default())
