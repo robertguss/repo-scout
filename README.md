@@ -2,8 +2,8 @@
 
 `repo-scout` is a local, deterministic CLI for indexing a repository and answering code-navigation questions fast.
 
-Phase 4 is fully implemented and adds precision/disambiguation/noise-control workflows on the
-existing command surface.
+Phase 5 is fully implemented and adds recommendation-quality and multi-hop impact-fidelity
+workflows on the existing command surface.
 
 ## What It Does
 
@@ -52,10 +52,13 @@ cargo run -- verify-plan --changed-file src/lib.rs --repo /path/to/repo
 cargo run -- diff-impact --changed-file src/lib.rs --repo /path/to/repo
 cargo run -- explain impact_matches --repo /path/to/repo
 
-# Phase 4 controls
+# Phase 5 controls
 cargo run -- refs launch --repo /path/to/repo --code-only --exclude-tests
+cargo run -- tests-for launch --repo /path/to/repo --include-support
+cargo run -- verify-plan --changed-file src/lib.rs --repo /path/to/repo --max-targeted 6
 cargo run -- diff-impact --changed-file src/lib.rs --changed-line src/lib.rs:20:80 --repo /path/to/repo
 cargo run -- diff-impact --changed-file src/lib.rs --include-imports --repo /path/to/repo
+cargo run -- diff-impact --changed-file src/lib.rs --repo /path/to/repo --max-distance 3
 ```
 
 JSON output is supported by query commands:
@@ -82,13 +85,17 @@ cargo run -- explain impact_matches --repo /path/to/repo --json
 - `impact <SYMBOL> --repo <PATH> [--json]`
   - Returns one-hop incoming graph neighbors (`called_by`, `contained_by`, `imported_by`, `implemented_by`).
 - `context --task <TEXT> --repo <PATH> [--budget <N>] [--json]`
-  - Ranks direct symbol hits + graph neighbors for the task, truncated by budget.
-- `tests-for <SYMBOL> --repo <PATH> [--json]`
-  - Finds test-like files that directly reference a symbol.
-- `verify-plan --changed-file <PATH> --repo <PATH> [--json]`
-  - Produces deterministic verification steps (targeted test commands + `cargo test`).
+  - Uses deterministic token-overlap relevance to rank direct symbol definitions plus graph
+    neighbors, truncated by budget.
+- `tests-for <SYMBOL> --repo <PATH> [--include-support] [--json]`
+  - Returns runnable test targets by default and restores support paths when
+    `--include-support` is set.
+- `verify-plan --changed-file <PATH> --repo <PATH> [--max-targeted <N>] [--json]`
+  - Produces deterministic verification steps (bounded targeted test commands + `cargo test`).
+  - Default targeted cap is `8`; changed runnable test files are preserved even when
+    `--max-targeted=0`.
 - `diff-impact --changed-file <PATH> --repo <PATH> [--max-distance <N>] [--include-tests] [--include-imports] [--changed-line <path:start[:end]>] [--json]`
-  - Emits changed-symbol rows plus deterministic one-hop impacted symbols/test targets.
+  - Emits changed-symbol rows plus deterministic bounded multi-hop impacted symbols/test targets.
   - By default, changed-symbol seeds exclude import definitions unless `--include-imports` is set.
   - `--changed-line` limits changed-symbol seeds to symbols overlapping the provided ranges.
 - `explain <SYMBOL> --repo <PATH> [--include-snippets] [--json]`

@@ -126,9 +126,9 @@ Per-result fields:
       "end_line": 50,
       "symbol": "run",
       "kind": "function",
-      "why_included": "direct definition match for task keyword 'run'",
+      "why_included": "direct definition token-overlap relevance for [run]",
       "confidence": "context_high",
-      "score": 0.95
+      "score": 0.98
     }
   ]
 }
@@ -144,6 +144,10 @@ Per-result fields:
 - `why_included` (`string`)
 - `confidence` (`context_high | context_medium`)
 - `score` (`number`)
+
+Phase 5 keeps schema 2 stable and upgrades matching/ranking only: context rows now use
+token-overlap rationale text (for example `token-overlap relevance`) and deterministic
+definition-first scoring.
 
 ## `tests-for --json` (Schema 2)
 
@@ -167,10 +171,14 @@ Per-result fields:
 Per-result fields:
 
 - `target` (`string`)
-- `target_kind` (`string`)
+- `target_kind` (`integration_test_file | support_test_file`)
 - `why_included` (`string`)
 - `confidence` (`graph_likely | context_medium`)
 - `score` (`number`)
+
+Default output excludes support paths and emits runnable integration targets first.
+When `tests-for --include-support` is used, support rows are restored additively as
+`target_kind = "support_test_file"`.
 
 ## `verify-plan --json` (Schema 2)
 
@@ -212,6 +220,10 @@ Top-level fields:
 - `why_included` (`string`)
 - `confidence` (`string`)
 - `score` (`number`)
+
+Phase 5 keeps schema 2 stable and adds precision controls through CLI options:
+`--max-targeted` bounds symbol-derived targeted rows (default cap `8`, `0` means none),
+while changed runnable test targets and the `cargo test` full-suite gate remain preserved.
 
 ## Schema 3 Contracts (Implemented, Frozen)
 
@@ -268,12 +280,15 @@ Top-level fields:
 | `include_tests` | `boolean` | yes | Echoes resolved test-target behavior. |
 | `results` | `array<DiffImpactResult>` | yes | Deterministically ordered (see rules below). |
 
-Phase 4 option effects (schema unchanged):
+Phase 4/5 option effects (schema unchanged):
 
 - `--include-imports` changes changed-symbol seed selection by allowing `kind=import` at
   `distance=0`.
 - `--changed-line` limits changed-symbol seeds to symbol spans overlapping the specified line
   ranges.
+- `--max-distance` now drives true bounded multi-hop inbound traversal for `distance >= 1`.
+- Traversal suppresses changed-symbol re-entry at `distance > 0` and uses deterministic dedupe for
+  cycle safety.
 - Neither option requires new mandatory top-level fields in schema 3.
 
 `DiffImpactResult` union discriminator:
@@ -305,8 +320,8 @@ Phase 4 option effects (schema unchanged):
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
 | `target` | `string` | yes | Test command or test file path. |
-| `target_kind` | `string` | yes | `"integration_test_file"`, `"unit_test"`, or `"command"`. |
-| `language` | `string` | yes | Language enum; `"unknown"` allowed for command-level targets. |
+| `target_kind` | `string` | yes | Currently `"integration_test_file"`. |
+| `language` | `string` | yes | Language enum for the target file. |
 | `why_included` | `string` | yes | Human-readable deterministic rationale. |
 | `confidence` | `string` | yes | Confidence enum. |
 | `provenance` | `string` | yes | Provenance enum. |

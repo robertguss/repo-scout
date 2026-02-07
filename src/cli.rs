@@ -18,7 +18,7 @@ pub enum Command {
     Refs(RefsArgs),
     Impact(QueryArgs),
     Context(ContextArgs),
-    TestsFor(QueryArgs),
+    TestsFor(TestsForArgs),
     VerifyPlan(VerifyPlanArgs),
     DiffImpact(DiffImpactArgs),
     Explain(ExplainArgs),
@@ -78,9 +78,22 @@ pub struct ContextArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct TestsForArgs {
+    pub symbol: String,
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long, default_value_t = false)]
+    pub include_support: bool,
+}
+
+#[derive(Debug, Args)]
 pub struct VerifyPlanArgs {
     #[arg(long = "changed-file", required = true)]
     pub changed_files: Vec<String>,
+    #[arg(long = "max-targeted")]
+    pub max_targeted: Option<usize>,
     #[arg(long)]
     pub repo: PathBuf,
     #[arg(long)]

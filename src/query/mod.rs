@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::Path;
 
@@ -150,6 +150,8 @@ pub struct DiffImpactOptions {
     pub changed_lines: Vec<ChangedLineRange>,
 }
 
+pub const DEFAULT_VERIFY_PLAN_MAX_TARGETED: usize = 8;
+
 pub fn diff_impact_for_changed_files(
     db_path: &Path,
     changed_files: &[String],
@@ -229,73 +231,111 @@ pub fn diff_impact_for_changed_files(
         }
     }
 
+    let changed_symbol_id_set = changed_symbol_ids
+        .iter()
+        .map(|(symbol_id, _)| *symbol_id)
+        .collect::<HashSet<_>>();
+
     if options.max_distance >= 1 {
+        let traversal_limit = options.max_distance;
         for (changed_symbol_id, changed_symbol) in changed_symbol_ids {
-            let mut incoming_statement = connection.prepare(
-                "SELECT fs.symbol, fs.kind, fs.file_path, fs.start_line, fs.start_column, fs.language, fs.qualified_symbol, e.edge_kind, e.confidence, e.provenance
-                 FROM symbol_edges_v2 e
-                 JOIN symbols_v2 fs ON fs.symbol_id = e.from_symbol_id
-                 WHERE e.to_symbol_id = ?1
-                 ORDER BY fs.file_path ASC, fs.start_line ASC, fs.start_column ASC, fs.symbol ASC",
-            )?;
-            let incoming_rows =
-                incoming_statement.query_map(params![changed_symbol_id], |row| {
+            let mut frontier = VecDeque::new();
+            let mut min_distance_by_symbol = HashMap::new();
+            frontier.push_back((changed_symbol_id, 0_u32));
+            min_distance_by_symbol.insert(changed_symbol_id, 0_u32);
+
+            while let Some((to_symbol_id, distance)) = frontier.pop_front() {
+                if distance >= traversal_limit {
+                    continue;
+                }
+                let next_distance = distance + 1;
+
+                let mut incoming_statement = connection.prepare(
+                    "SELECT fs.symbol_id, fs.symbol, fs.kind, fs.file_path, fs.start_line, fs.start_column, fs.language, fs.qualified_symbol, e.edge_kind, e.confidence, e.provenance
+                     FROM symbol_edges_v2 e
+                     JOIN symbols_v2 fs ON fs.symbol_id = e.from_symbol_id
+                     WHERE e.to_symbol_id = ?1
+                     ORDER BY fs.file_path ASC, fs.start_line ASC, fs.start_column ASC, fs.symbol ASC",
+                )?;
+                let incoming_rows = incoming_statement.query_map(params![to_symbol_id], |row| {
                     Ok((
-                        row.get::<_, String>(0)?,
+                        row.get::<_, i64>(0)?,
                         row.get::<_, String>(1)?,
                         row.get::<_, String>(2)?,
-                        row.get::<_, i64>(3)? as u32,
+                        row.get::<_, String>(3)?,
                         row.get::<_, i64>(4)? as u32,
-                        row.get::<_, String>(5)?,
-                        row.get::<_, Option<String>>(6)?,
-                        row.get::<_, String>(7)?,
-                        row.get::<_, f64>(8)?,
-                        row.get::<_, String>(9)?,
+                        row.get::<_, i64>(5)? as u32,
+                        row.get::<_, String>(6)?,
+                        row.get::<_, Option<String>>(7)?,
+                        row.get::<_, String>(8)?,
+                        row.get::<_, f64>(9)?,
+                        row.get::<_, String>(10)?,
                     ))
                 })?;
 
-            for incoming in incoming_rows {
-                let (
-                    symbol,
-                    kind,
-                    file_path,
-                    line,
-                    column,
-                    language,
-                    qualified_symbol,
-                    edge_kind,
-                    score,
-                    provenance,
-                ) = incoming?;
-                let language = normalized_language(&language, &file_path).to_string();
-                let qualified_symbol =
-                    qualified_symbol.unwrap_or_else(|| format!("{language}:{file_path}::{symbol}"));
-                let relationship = edge_kind_relationship(&edge_kind);
-                let provenance = normalized_provenance(&provenance, &edge_kind);
-                let key = format!(
-                    "{file_path}:{line}:{column}:{qualified_symbol}:{relationship}:distance1"
-                );
-                if !seen.insert(key) {
-                    continue;
-                }
+                for incoming in incoming_rows {
+                    let (
+                        from_symbol_id,
+                        symbol,
+                        kind,
+                        file_path,
+                        line,
+                        column,
+                        language,
+                        qualified_symbol,
+                        edge_kind,
+                        score,
+                        provenance,
+                    ) = incoming?;
+                    if changed_symbol_id_set.contains(&from_symbol_id) {
+                        continue;
+                    }
+                    if min_distance_by_symbol
+                        .get(&from_symbol_id)
+                        .is_some_and(|known| *known < next_distance)
+                    {
+                        continue;
+                    }
 
-                results.push(DiffImpactMatch::ImpactedSymbol {
-                    symbol,
-                    qualified_symbol,
-                    kind,
-                    language,
-                    file_path,
-                    line,
-                    column,
-                    distance: 1,
-                    relationship: relationship.to_string(),
-                    why_included: format!(
-                        "direct {relationship} neighbor of changed symbol '{changed_symbol}'"
-                    ),
-                    confidence: "graph_likely".to_string(),
-                    provenance,
-                    score,
-                });
+                    let known_distance = min_distance_by_symbol.get(&from_symbol_id).copied();
+                    let should_expand_frontier = known_distance != Some(next_distance);
+                    if known_distance.is_none_or(|known| next_distance < known) {
+                        min_distance_by_symbol.insert(from_symbol_id, next_distance);
+                    }
+
+                    let language = normalized_language(&language, &file_path).to_string();
+                    let qualified_symbol = qualified_symbol
+                        .unwrap_or_else(|| format!("{language}:{file_path}::{symbol}"));
+                    let relationship = edge_kind_relationship(&edge_kind);
+                    let provenance = normalized_provenance(&provenance, &edge_kind);
+                    let key = format!(
+                        "{file_path}:{line}:{column}:{qualified_symbol}:{relationship}:distance{next_distance}"
+                    );
+                    if !seen.insert(key) {
+                        continue;
+                    }
+
+                    results.push(DiffImpactMatch::ImpactedSymbol {
+                        symbol: symbol.clone(),
+                        qualified_symbol,
+                        kind,
+                        language,
+                        file_path,
+                        line,
+                        column,
+                        distance: next_distance,
+                        relationship: relationship.to_string(),
+                        why_included: format!(
+                            "direct {relationship} neighbor of changed symbol '{changed_symbol}'"
+                        ),
+                        confidence: "graph_likely".to_string(),
+                        provenance,
+                        score,
+                    });
+                    if should_expand_frontier {
+                        frontier.push_back((from_symbol_id, next_distance));
+                    }
+                }
             }
         }
     }
@@ -845,76 +885,97 @@ pub fn context_matches(
 ) -> anyhow::Result<Vec<ContextMatch>> {
     let connection = Connection::open(db_path)?;
     let keywords = extract_keywords(task);
+    if keywords.is_empty() {
+        return Ok(Vec::new());
+    }
 
     let mut matches = Vec::new();
     let mut seen = HashSet::new();
 
-    for keyword in keywords {
-        let mut exact_statement = connection.prepare(
-            "SELECT symbol_id, file_path, symbol, kind, start_line, end_line
-             FROM symbols_v2
-             WHERE lower(symbol) = lower(?1)
-             ORDER BY file_path ASC, start_line ASC, start_column ASC",
+    let mut symbols_statement = connection.prepare(
+        "SELECT symbol_id, file_path, symbol, kind, start_line, end_line
+         FROM symbols_v2
+         ORDER BY file_path ASC, start_line ASC, start_column ASC, symbol ASC",
+    )?;
+    let symbol_rows = symbols_statement.query_map([], |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, String>(3)?,
+            row.get::<_, i64>(4)? as u32,
+            row.get::<_, i64>(5)? as u32,
+        ))
+    })?;
+
+    for row in symbol_rows {
+        let (symbol_id, file_path, symbol, kind, start_line, end_line) = row?;
+        let symbol_tokens = symbol_keywords(&symbol);
+        let matched_keywords = matched_task_keywords(&keywords, &symbol_tokens);
+        if matched_keywords.is_empty() {
+            continue;
+        }
+        let overlap_count = matched_keywords.len();
+        let exact_symbol_match = keywords
+            .iter()
+            .any(|keyword| keyword == &symbol.to_ascii_lowercase());
+        let direct_score =
+            context_direct_score(overlap_count, exact_symbol_match, symbol_tokens.len());
+        let key = format!("{file_path}:{start_line}:{symbol}:direct");
+        if seen.insert(key) {
+            matches.push(ContextMatch {
+                file_path: file_path.clone(),
+                start_line,
+                end_line,
+                symbol: symbol.clone(),
+                kind: kind.clone(),
+                why_included: format!(
+                    "direct definition token-overlap relevance for [{}]",
+                    matched_keywords.join(", ")
+                ),
+                confidence: if overlap_count >= 2 || exact_symbol_match {
+                    "context_high".to_string()
+                } else {
+                    "context_medium".to_string()
+                },
+                score: direct_score,
+            });
+        }
+
+        let mut neighbor_statement = connection.prepare(
+            "SELECT n.file_path, n.symbol, n.kind, n.start_line, n.end_line
+             FROM symbol_edges_v2 e
+             JOIN symbols_v2 n ON n.symbol_id = e.to_symbol_id
+             WHERE e.from_symbol_id = ?1
+             ORDER BY n.file_path ASC, n.start_line ASC, n.start_column ASC, n.symbol ASC",
         )?;
-        let exact_rows = exact_statement.query_map(params![keyword], |row| {
+        let neighbor_rows = neighbor_statement.query_map(params![symbol_id], |neighbor_row| {
             Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, i64>(4)? as u32,
-                row.get::<_, i64>(5)? as u32,
+                neighbor_row.get::<_, String>(0)?,
+                neighbor_row.get::<_, String>(1)?,
+                neighbor_row.get::<_, String>(2)?,
+                neighbor_row.get::<_, i64>(3)? as u32,
+                neighbor_row.get::<_, i64>(4)? as u32,
             ))
         })?;
 
-        for row in exact_rows {
-            let (symbol_id, file_path, symbol, kind, start_line, end_line) = row?;
-            let key = format!("{file_path}:{start_line}:{symbol}:direct");
-            if seen.insert(key) {
+        for neighbor in neighbor_rows {
+            let (n_file, n_symbol, n_kind, n_start, n_end) = neighbor?;
+            let neighbor_key = format!("{n_file}:{n_start}:{n_symbol}:neighbor");
+            if seen.insert(neighbor_key) {
                 matches.push(ContextMatch {
-                    file_path: file_path.clone(),
-                    start_line,
-                    end_line,
-                    symbol: symbol.clone(),
-                    kind: kind.clone(),
-                    why_included: format!("direct definition match for task keyword '{keyword}'"),
-                    confidence: "context_high".to_string(),
-                    score: 0.95,
+                    file_path: n_file,
+                    start_line: n_start,
+                    end_line: n_end,
+                    symbol: n_symbol,
+                    kind: n_kind,
+                    why_included: format!(
+                        "graph neighbor of '{symbol}' from token-overlap relevance [{}]",
+                        matched_keywords.join(", ")
+                    ),
+                    confidence: "context_medium".to_string(),
+                    score: (direct_score - 0.2).max(0.55),
                 });
-            }
-
-            let mut neighbor_statement = connection.prepare(
-                "SELECT n.file_path, n.symbol, n.kind, n.start_line, n.end_line
-                 FROM symbol_edges_v2 e
-                 JOIN symbols_v2 n ON n.symbol_id = e.to_symbol_id
-                 WHERE e.from_symbol_id = ?1
-                 ORDER BY n.file_path ASC, n.start_line ASC, n.start_column ASC",
-            )?;
-            let neighbor_rows = neighbor_statement.query_map(params![symbol_id], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, i64>(3)? as u32,
-                    row.get::<_, i64>(4)? as u32,
-                ))
-            })?;
-
-            for neighbor in neighbor_rows {
-                let (n_file, n_symbol, n_kind, n_start, n_end) = neighbor?;
-                let neighbor_key = format!("{n_file}:{n_start}:{n_symbol}:neighbor");
-                if seen.insert(neighbor_key) {
-                    matches.push(ContextMatch {
-                        file_path: n_file,
-                        start_line: n_start,
-                        end_line: n_end,
-                        symbol: n_symbol,
-                        kind: n_kind,
-                        why_included: format!("graph neighbor of '{symbol}'"),
-                        confidence: "context_medium".to_string(),
-                        score: 0.7,
-                    });
-                }
             }
         }
     }
@@ -952,20 +1013,55 @@ pub fn context_matches(
 ///     println!("{} -> {} (score={})", t.target, t.why_included, t.score);
 /// }
 /// ```
-pub fn tests_for_symbol(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<TestTarget>> {
+pub fn tests_for_symbol(
+    db_path: &Path,
+    symbol: &str,
+    include_support: bool,
+) -> anyhow::Result<Vec<TestTarget>> {
     let connection = Connection::open(db_path)?;
+    let mut ranked_targets = test_targets_for_symbol(&connection, symbol)?
+        .into_iter()
+        .map(|(target, hit_count)| {
+            let is_runnable = is_runnable_test_target(&target);
+            (target, hit_count, is_runnable)
+        })
+        .filter(|(_, _, is_runnable)| include_support || *is_runnable)
+        .collect::<Vec<_>>();
+    ranked_targets.sort_by(|left, right| {
+        right
+            .2
+            .cmp(&left.2)
+            .then(right.1.cmp(&left.1))
+            .then(left.0.cmp(&right.0))
+    });
+
     let mut targets = Vec::new();
-    for (target, hit_count) in test_targets_for_symbol(&connection, symbol)? {
+    for (target, hit_count, is_runnable) in ranked_targets {
+        let (confidence, score) = if is_runnable {
+            if hit_count > 1 {
+                ("graph_likely", 0.9)
+            } else {
+                ("context_medium", 0.75)
+            }
+        } else if hit_count > 1 {
+            ("context_medium", 0.62)
+        } else {
+            ("context_medium", 0.58)
+        };
         targets.push(TestTarget {
             target: target.clone(),
-            target_kind: "integration_test_file".to_string(),
-            why_included: format!("direct symbol match for '{symbol}' in test file"),
-            confidence: if hit_count > 1 {
-                "graph_likely".to_string()
+            target_kind: if is_runnable {
+                "integration_test_file".to_string()
             } else {
-                "context_medium".to_string()
+                "support_test_file".to_string()
             },
-            score: if hit_count > 1 { 0.9 } else { 0.75 },
+            why_included: if is_runnable {
+                format!("direct symbol match for '{symbol}' in test file")
+            } else {
+                format!("direct symbol match for '{symbol}' in support path")
+            },
+            confidence: confidence.to_string(),
+            score,
         });
     }
 
@@ -991,13 +1087,14 @@ pub fn tests_for_symbol(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<Test
 /// use std::path::Path;
 /// let db = Path::new("code_index.sqlite");
 /// let changed = vec!["src/lib.rs".to_string(), "tests/my_test.rs".to_string()];
-/// let steps = verify_plan_for_changed_files(db, &changed).unwrap();
+/// let steps = verify_plan_for_changed_files(db, &changed, None).unwrap();
 /// // `steps` is a Vec<VerificationStep> describing targeted test commands and a final
 /// // "cargo test" full-suite step.
 /// ```
 pub fn verify_plan_for_changed_files(
     db_path: &Path,
     changed_files: &[String],
+    max_targeted: Option<usize>,
 ) -> anyhow::Result<Vec<VerificationStep>> {
     let connection = Connection::open(db_path)?;
 
@@ -1028,6 +1125,9 @@ pub fn verify_plan_for_changed_files(
 
         for symbol_row in symbol_rows {
             let symbol = symbol_row?;
+            if is_generic_changed_symbol(&symbol) {
+                continue;
+            }
             for (target, hit_count) in test_targets_for_symbol(&connection, &symbol)? {
                 if let Some(command) = test_command_for_target(&target) {
                     let (confidence, score) = if hit_count > 1 {
@@ -1052,18 +1152,54 @@ pub fn verify_plan_for_changed_files(
         }
     }
 
-    upsert_verification_step(
-        &mut steps_by_command,
-        VerificationStep {
-            step: "cargo test".to_string(),
-            scope: "full_suite".to_string(),
-            why_included: "required safety gate after refactor".to_string(),
-            confidence: "context_high".to_string(),
-            score: 1.0,
-        },
-    );
+    let mut steps = steps_by_command
+        .into_values()
+        .filter(|step| step.scope == "targeted")
+        .collect::<Vec<_>>();
+    steps.sort_by(|left, right| {
+        right
+            .score
+            .partial_cmp(&left.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(confidence_rank(&right.confidence).cmp(&confidence_rank(&left.confidence)))
+            .then(left.step.cmp(&right.step))
+            .then(left.why_included.cmp(&right.why_included))
+    });
+    let mut prioritized = steps
+        .iter()
+        .filter(|step| is_changed_test_target_reason(&step.why_included))
+        .cloned()
+        .collect::<Vec<_>>();
+    prioritized.sort_by(|left, right| {
+        left.step
+            .cmp(&right.step)
+            .then(left.why_included.cmp(&right.why_included))
+    });
 
-    let mut steps = steps_by_command.into_values().collect::<Vec<_>>();
+    let targeted_cap = max_targeted.unwrap_or(DEFAULT_VERIFY_PLAN_MAX_TARGETED);
+    let mut capped = Vec::new();
+    let mut capped_count = 0usize;
+    for step in steps {
+        if is_changed_test_target_reason(&step.why_included) {
+            continue;
+        }
+        if capped_count >= targeted_cap {
+            continue;
+        }
+        capped_count += 1;
+        capped.push(step);
+    }
+
+    let mut steps = prioritized;
+    steps.extend(capped);
+
+    steps.push(VerificationStep {
+        step: "cargo test".to_string(),
+        scope: "full_suite".to_string(),
+        why_included: "required safety gate after refactor".to_string(),
+        confidence: "context_high".to_string(),
+        score: 1.0,
+    });
 
     steps.sort_by(|left, right| {
         verification_scope_rank(&left.scope)
@@ -1280,6 +1416,10 @@ where
 fn extract_keywords(task: &str) -> Vec<String> {
     let mut keywords = Vec::new();
     let mut seen = HashSet::new();
+    let stopwords = [
+        "about", "after", "and", "for", "from", "into", "that", "the", "then", "this", "when",
+        "with",
+    ];
 
     for token in task
         .split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
@@ -1289,12 +1429,88 @@ fn extract_keywords(task: &str) -> Vec<String> {
         if lowered.len() < 3 {
             continue;
         }
+        if stopwords.contains(&lowered.as_str()) {
+            continue;
+        }
         if seen.insert(lowered.clone()) {
             keywords.push(lowered);
         }
     }
 
     keywords
+}
+
+fn symbol_keywords(symbol: &str) -> Vec<String> {
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+    let mut previous_was_lower = false;
+
+    for ch in symbol.chars() {
+        if !(ch.is_ascii_alphanumeric() || ch == '_') {
+            if !current.is_empty() {
+                tokens.push(current.to_ascii_lowercase());
+                current.clear();
+            }
+            previous_was_lower = false;
+            continue;
+        }
+
+        if ch == '_' {
+            if !current.is_empty() {
+                tokens.push(current.to_ascii_lowercase());
+                current.clear();
+            }
+            previous_was_lower = false;
+            continue;
+        }
+
+        if ch.is_ascii_uppercase() && previous_was_lower && !current.is_empty() {
+            tokens.push(current.to_ascii_lowercase());
+            current.clear();
+        }
+
+        previous_was_lower = ch.is_ascii_lowercase();
+        current.push(ch);
+    }
+
+    if !current.is_empty() {
+        tokens.push(current.to_ascii_lowercase());
+    }
+
+    let mut filtered = tokens
+        .into_iter()
+        .filter(|token| token.len() >= 3)
+        .collect::<Vec<_>>();
+    filtered.sort();
+    filtered.dedup();
+    filtered
+}
+
+fn matched_task_keywords(task_keywords: &[String], symbol_keywords: &[String]) -> Vec<String> {
+    let mut matched = Vec::new();
+    for task_keyword in task_keywords {
+        if symbol_keywords.iter().any(|symbol_keyword| {
+            symbol_keyword == task_keyword
+                || symbol_keyword.starts_with(task_keyword)
+                || task_keyword.starts_with(symbol_keyword)
+        }) {
+            matched.push(task_keyword.clone());
+        }
+    }
+    matched
+}
+
+fn context_direct_score(
+    overlap_count: usize,
+    exact_symbol_match: bool,
+    symbol_token_count: usize,
+) -> f64 {
+    let specificity_bonus = std::cmp::min(symbol_token_count, 4) as f64 * 0.04;
+    let mut score = 0.62 + (overlap_count as f64 * 0.09) + specificity_bonus;
+    if exact_symbol_match {
+        score += 0.04;
+    }
+    score.min(0.98)
 }
 
 /// Finds test files that reference a symbol and how often the symbol appears in each.
@@ -1373,6 +1589,10 @@ fn test_command_for_target(target: &str) -> Option<String> {
 
     let stem = test_file.file_stem()?.to_str()?;
     Some(format!("cargo test --test {stem}"))
+}
+
+fn is_runnable_test_target(target: &str) -> bool {
+    test_command_for_target(target).is_some()
 }
 
 /// Assigns a numeric rank to a verification scope for ordering.
@@ -1483,4 +1703,18 @@ fn confidence_rank(confidence: &str) -> u8 {
         "context_medium" => 1,
         _ => 0,
     }
+}
+
+fn is_generic_changed_symbol(symbol: &str) -> bool {
+    const GENERIC_SYMBOLS: &[&str] = &[
+        "args", "common", "error", "file", "files", "json", "main", "mod", "output", "path",
+        "query", "repo", "result", "run", "symbol", "test", "tests", "value",
+    ];
+
+    let lowered = symbol.to_ascii_lowercase();
+    GENERIC_SYMBOLS.contains(&lowered.as_str())
+}
+
+fn is_changed_test_target_reason(why_included: &str) -> bool {
+    why_included.starts_with("changed file '") && why_included.ends_with("is itself a test target")
 }

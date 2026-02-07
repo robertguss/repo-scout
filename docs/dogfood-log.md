@@ -21,6 +21,93 @@ This log captures real `repo-scout` usage while building `repo-scout`.
 ## Entries
 
 - Date: `2026-02-07`
+- Task: Phase 5 Milestones 22-24 recommendation quality (`tests-for`, `verify-plan`, `context`).
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find verify_plan_for_changed_files --repo . --json`
+  - `cargo run -- refs verify_plan_for_changed_files --repo . --json`
+  - `cargo test milestone22_tests_for_excludes_support_paths_by_default -- --nocapture`
+  - `cargo test milestone22_tests_for_prefers_runnable_targets -- --nocapture`
+  - `cargo test milestone22_tests_for_include_support_restores_paths -- --nocapture`
+  - `cargo test milestone23_verify_plan_downranks_generic_changed_symbols -- --nocapture`
+  - `cargo test milestone23_verify_plan_applies_targeted_cap_deterministically -- --nocapture`
+  - `cargo test milestone23_verify_plan_preserves_changed_test_target_and_full_suite_gate -- --nocapture`
+  - `cargo test milestone24_context_matches_relevant_symbols_for_paraphrased_task -- --nocapture`
+  - `cargo test milestone24_context_prioritizes_definitions_over_incidental_tokens -- --nocapture`
+  - `cargo test milestone24_context_json_is_stable_with_relevance_scoring -- --nocapture`
+  - `cargo run -- tests-for Path --repo . --json`
+  - `cargo run -- tests-for Path --repo . --include-support --json`
+  - `cargo run -- verify-plan --changed-file src/main.rs --repo . --json`
+  - `cargo run -- verify-plan --changed-file src/main.rs --repo . --max-targeted 6 --json`
+  - `cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --json`
+- What helped:
+  - Runnable-first target classification plus explicit `--include-support` eliminated noisy default
+    support-path recommendations.
+  - Generic-symbol damping and deterministic capping reduced verify-plan step explosion.
+  - Token-overlap relevance improved context recall for paraphrased task text without schema churn.
+- What failed or felt weak:
+  - Initial strict TDD sequencing briefly failed when future-slice tests were introduced too early.
+- Action taken:
+  - failing test added:
+    - `tests/milestone22_recommendation_quality.rs`
+    - `tests/milestone23_verify_plan_precision.rs`
+    - `tests/milestone24_context_relevance.rs`
+  - fix commit:
+    - `Implement Milestone 22 tests-for recommendation quality via TDD`
+    - `Implement Milestone 23 verify-plan precision controls via TDD`
+    - `Implement Milestone 24 context relevance scoring via TDD`
+  - docs update: `README.md`, `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`,
+    `agents/repo-scout-phase5-execplan.md`.
+- Status: `fixed`
+
+- Date: `2026-02-07`
+- Task: Phase 5 Milestone 25 true multi-hop `diff-impact` traversal fidelity.
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find verify_plan_for_changed_files --repo . --json`
+  - `cargo run -- refs verify_plan_for_changed_files --repo . --json`
+  - `cargo test milestone25_diff_impact_max_distance_two_emits_distance_two_neighbors -- --nocapture`
+  - `cargo test milestone25_diff_impact_respects_max_distance_bound -- --nocapture`
+  - `cargo test milestone25_diff_impact_handles_cycles_without_duplicate_growth -- --nocapture`
+  - `cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --max-distance 3 --json`
+  - `cargo test`
+- What helped:
+  - Inbound BFS frontier traversal over `symbol_edges_v2` made `--max-distance` semantics true for
+    distance 2+ without changing schema envelopes.
+- What failed or felt weak:
+  - Cycle traversal initially re-emitted changed symbols at non-zero distance.
+- Action taken:
+  - failing test added: `tests/milestone25_diff_impact_multihop.rs`
+  - fix commit: `Implement Milestone 25 multi-hop diff-impact traversal via TDD`
+  - docs update: `README.md`, `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`,
+    `agents/repo-scout-phase5-execplan.md`.
+- Status: `fixed`
+
+- Date: `2026-02-07`
+- Task: Phase 5 Milestone 26 docs and transcript refresh.
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- tests-for Path --repo . --json`
+  - `cargo run -- tests-for Path --repo . --include-support --json`
+  - `cargo run -- verify-plan --changed-file src/main.rs --repo . --json`
+  - `cargo run -- verify-plan --changed-file src/main.rs --repo . --max-targeted 6 --json`
+  - `cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --json`
+  - `cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --max-distance 3 --json`
+  - `cargo test`
+- What helped:
+  - Re-running the exact dogfood set after docs edits confirmed command/output descriptions still
+    match real behavior.
+- What failed or felt weak:
+  - Large `diff-impact --json` payloads are hard to scan manually without focused filtering.
+- Action taken:
+  - failing test added: none (documentation/evidence pass).
+  - fix commit: docs and plan refresh commit for Milestone 26.
+  - docs update: `README.md`, `docs/cli-reference.md`, `docs/json-output.md`,
+    `docs/architecture.md`, `docs/dogfood-log.md`, `docs/performance-baseline.md`,
+    `agents/repo-scout-phase5-execplan.md`.
+- Status: `fixed`
+
+- Date: `2026-02-07`
 - Task: Milestone 21 scoped fallback controls for `find`/`refs`.
 - Commands run:
   - `cargo run -- index --repo .`

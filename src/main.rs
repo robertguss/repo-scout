@@ -226,9 +226,9 @@ fn run_context(args: crate::cli::ContextArgs) -> anyhow::Result<()> {
 ///
 /// let _ = crate::run_tests_for(args);
 /// ```
-fn run_tests_for(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
+fn run_tests_for(args: crate::cli::TestsForArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
-    let targets = tests_for_symbol(&store.db_path, &args.symbol)?;
+    let targets = tests_for_symbol(&store.db_path, &args.symbol, args.include_support)?;
     if args.json {
         output::print_tests_for_json(&args.symbol, &targets)?;
     } else {
@@ -270,7 +270,7 @@ fn run_verify_plan(args: crate::cli::VerifyPlanArgs) -> anyhow::Result<()> {
     changed_files.sort();
     changed_files.dedup();
 
-    let steps = verify_plan_for_changed_files(&store.db_path, &changed_files)?;
+    let steps = verify_plan_for_changed_files(&store.db_path, &changed_files, args.max_targeted)?;
     if args.json {
         output::print_verify_plan_json(&changed_files, &steps)?;
     } else {

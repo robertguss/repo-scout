@@ -34,11 +34,71 @@ User-visible outcome: a tighter “what should I run next” loop with higher-si
 - [x] (2026-02-07 17:11Z) Captured baseline traversal evidence proving
       `diff-impact --max-distance > 1` currently emits no distance-2/3 rows.
 - [x] (2026-02-07 17:12Z) Authored this Phase 5 ExecPlan as planning-only work.
-- [ ] Milestone 22 complete: `tests-for` target-quality contracts and implementation.
-- [ ] Milestone 23 complete: `verify-plan` high-signal recommendation contracts and implementation.
-- [ ] Milestone 24 complete: `context` relevance/recall contracts and implementation.
-- [ ] Milestone 25 complete: true multi-hop `diff-impact` traversal contracts and implementation.
-- [ ] Phase 5 docs and dogfood evidence updates complete.
+- [x] (2026-02-07 22:51Z) Ran required pre-milestone dogfood baseline for Milestone 22:
+      `cargo run -- index --repo .`,
+      `cargo run -- find verify_plan_for_changed_files --repo . --json`,
+      `cargo run -- refs verify_plan_for_changed_files --repo . --json`.
+- [x] (2026-02-07 22:51Z) Completed Milestone 22 strict TDD slices:
+      `milestone22_tests_for_excludes_support_paths_by_default`,
+      `milestone22_tests_for_prefers_runnable_targets`,
+      `milestone22_tests_for_include_support_restores_paths`.
+- [x] (2026-02-07 22:51Z) Ran Milestone 22 post-dogfood checks; observed expected
+      `verify-plan --max-targeted` CLI failure pending Milestone 23 implementation.
+- [x] (2026-02-07 22:51Z) Milestone 22 complete: `tests-for` target-quality contracts and implementation.
+- [x] (2026-02-07 22:56Z) Ran required pre-milestone dogfood baseline for Milestone 23:
+      `cargo run -- index --repo .`,
+      `cargo run -- find verify_plan_for_changed_files --repo . --json`,
+      `cargo run -- refs verify_plan_for_changed_files --repo . --json`.
+- [x] (2026-02-07 22:56Z) Completed Milestone 23 strict TDD slices:
+      `milestone23_verify_plan_downranks_generic_changed_symbols`,
+      `milestone23_verify_plan_applies_targeted_cap_deterministically`,
+      `milestone23_verify_plan_preserves_changed_test_target_and_full_suite_gate`.
+- [x] (2026-02-07 22:56Z) Ran Milestone 23 post-dogfood checks with passing
+      `verify-plan --max-targeted` behavior and deterministic targeted capping.
+- [x] (2026-02-07 22:56Z) Milestone 23 complete: `verify-plan` high-signal recommendation contracts and implementation.
+- [x] (2026-02-07 23:00Z) Ran required pre-milestone dogfood baseline for Milestone 24:
+      `cargo run -- index --repo .`,
+      `cargo run -- find verify_plan_for_changed_files --repo . --json`,
+      `cargo run -- refs verify_plan_for_changed_files --repo . --json`.
+- [x] (2026-02-07 23:00Z) Completed Milestone 24 strict TDD slices:
+      `milestone24_context_matches_relevant_symbols_for_paraphrased_task`,
+      `milestone24_context_prioritizes_definitions_over_incidental_tokens`,
+      `milestone24_context_json_is_stable_with_relevance_scoring`.
+- [x] (2026-02-07 23:00Z) Ran Milestone 24 post-dogfood checks with richer context recall and
+      deterministic relevance-scored JSON output.
+- [x] (2026-02-07 23:00Z) Milestone 24 complete: `context` relevance/recall contracts and implementation.
+- [x] (2026-02-07 23:07Z) Ran required pre-milestone dogfood baseline for Milestone 25:
+      `cargo run -- index --repo .`,
+      `cargo run -- find verify_plan_for_changed_files --repo . --json`,
+      `cargo run -- refs verify_plan_for_changed_files --repo . --json`.
+- [x] (2026-02-07 23:07Z) Completed Milestone 25 strict TDD slices:
+      `milestone25_diff_impact_max_distance_two_emits_distance_two_neighbors`,
+      `milestone25_diff_impact_respects_max_distance_bound`,
+      `milestone25_diff_impact_handles_cycles_without_duplicate_growth`.
+- [x] (2026-02-07 23:07Z) Ran Milestone 25 post-dogfood checks with deterministic multi-hop
+      traversal output and bounded distance behavior.
+- [x] (2026-02-07 23:07Z) Milestone 25 complete: true multi-hop `diff-impact` traversal contracts and implementation.
+- [x] (2026-02-07 23:07Z) Ran required pre-milestone dogfood baseline for Milestone 26:
+      `cargo run -- index --repo .`,
+      `cargo run -- find verify_plan_for_changed_files --repo . --json`,
+      `cargo run -- refs verify_plan_for_changed_files --repo . --json`.
+- [x] (2026-02-07 23:07Z) Updated Phase 5 docs and evidence artifacts:
+      `README.md`,
+      `docs/cli-reference.md`,
+      `docs/json-output.md`,
+      `docs/architecture.md`,
+      `docs/dogfood-log.md`,
+      `docs/performance-baseline.md`.
+- [x] (2026-02-07 23:07Z) Re-ran required post-milestone dogfood checks after docs refresh:
+      `cargo run -- index --repo .`,
+      `cargo run -- tests-for Path --repo . --json`,
+      `cargo run -- tests-for Path --repo . --include-support --json`,
+      `cargo run -- verify-plan --changed-file src/main.rs --repo . --json`,
+      `cargo run -- verify-plan --changed-file src/main.rs --repo . --max-targeted 6 --json`,
+      `cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --json`,
+      `cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --max-distance 3 --json`,
+      `cargo test`.
+- [x] (2026-02-07 23:07Z) Phase 5 docs and dogfood evidence updates complete.
 
 ## Surprises & Discoveries
 
@@ -63,6 +123,37 @@ User-visible outcome: a tighter “what should I run next” loop with higher-si
   Evidence: `cargo run --quiet -- refs helper --repo . --json | jq` showed `total: 72`, `tests: 58`,
   all `text_fallback`.
 
+- Observation: post-Milestone-22 dogfood still fails on `verify-plan --max-targeted`.
+  Evidence: CLI error `unexpected argument '--max-targeted' found` while running the required
+  post-milestone command list; implementation is tracked in Milestone 23.
+
+- Observation: `tests-for` default output now omits support paths, while `--include-support`
+  restores them with explicit support classification.
+  Evidence: default `tests-for Path --json` no longer emits `tests/common/mod.rs`; with
+  `--include-support`, the row appears as `target_kind: "support_test_file"`.
+
+- Observation: strict per-slice TDD required staging future-slice tests after each refactor gate.
+  Evidence: adding Milestone 23 tests for slices 23B/23C before finishing 23A caused the 23A
+  full-suite refactor gate to fail; resolved by re-adding tests slice-by-slice.
+
+- Observation: post-Milestone-23 verify-plan output for `src/main.rs` shrank to high-signal rows.
+  Evidence: required dogfood now returns 2 targeted rows (`milestone14_adapter`,
+  `milestone6_schema_migration`) plus the full-suite gate instead of broad 20+ targeted rows.
+
+- Observation: richer context scoring increases recall but can surface test-function symbols quickly
+  when task wording overlaps many verification terms.
+  Evidence: post-Milestone-24 dogfood `context` returned 6 high-score rows, including
+  `tests/milestone10_validation.rs` and `tests/milestone23_verify_plan_precision.rs` symbols.
+
+- Observation: multi-hop traversal can reintroduce changed symbols at `distance > 0` when changed
+  files seed many symbols by default.
+  Evidence: slice-25C red test showed `changed_c` emitted as an impacted symbol in a cycle until
+  traversal suppressed symbol re-entry for all changed-seed IDs.
+
+- Observation: documentation drifted behind behavior for `context` and `diff-impact` details.
+  Evidence: pre-update docs still described one-hop `diff-impact` output and pre-Phase-5 context
+  rationale wording.
+
 ## Decision Log
 
 - Decision: prioritize recommendation precision and actionability before adding any new command
@@ -84,6 +175,51 @@ User-visible outcome: a tighter “what should I run next” loop with higher-si
   Rationale: agent loops need executable steps first; support files are useful but secondary.
   Date/Author: 2026-02-07 / Codex
 
+- Decision: add `tests-for --include-support` as the explicit opt-in, and classify restored support
+  results with `target_kind = "support_test_file"` plus support-specific rationale text.
+  Rationale: keeps default recommendations runnable-first while preserving additive, deterministic
+  schema-2 compatibility.
+  Date/Author: 2026-02-07 / Codex
+
+- Decision: treat Milestone 22 `verify-plan --max-targeted` command failure as expected post-check
+  evidence until Milestone 23 lands.
+  Rationale: the command is mandated by the plan, but its implementation scope belongs to the next
+  milestone.
+  Date/Author: 2026-02-07 / Codex
+
+- Decision: set default verify-plan targeted cap to `DEFAULT_VERIFY_PLAN_MAX_TARGETED = 8` and
+  apply `--max-targeted` only to symbol-derived targeted recommendations.
+  Rationale: keeps omitted behavior bounded/non-zero while preserving deterministic command quality.
+  Date/Author: 2026-02-07 / Codex
+
+- Decision: preserve changed runnable test targets even when `--max-targeted=0`.
+  Rationale: changed test files are high-priority safety steps and should not be dropped by
+  symbol-target truncation.
+  Date/Author: 2026-02-07 / Codex
+
+- Decision: replace exact-symbol-only context matching with deterministic token-overlap scoring
+  (including snake/camel tokenization, stopword filtering, and singular/plural overlap handling).
+  Rationale: realistic task phrasing is often paraphrased and should still retrieve relevant
+  symbols without introducing nondeterminism.
+  Date/Author: 2026-02-07 / Codex
+
+- Decision: bias context ranking toward multi-token definition specificity and standardize why text
+  around “token-overlap relevance”.
+  Rationale: prevents short incidental tokens from outranking meaningful definitions and enables
+  stable, auditable recommendation rationale.
+  Date/Author: 2026-02-07 / Codex
+
+- Decision: enforce cycle-safe multi-hop traversal by tracking minimum discovered distance per seed
+  and suppressing changed-seed symbol re-entry at non-zero distance.
+  Rationale: prevents duplicate growth, avoids changed-symbol echo rows, and keeps traversal
+  deterministic while honoring `--max-distance`.
+  Date/Author: 2026-02-07 / Codex
+
+- Decision: keep schema envelopes unchanged for Milestone 26 docs refresh and document Phase 5 as
+  behavior/option semantics over existing schema 1/2/3 payloads.
+  Rationale: avoids contract churn while making option-driven behavior explicit to users.
+  Date/Author: 2026-02-07 / Codex
+
 ## Outcomes & Retrospective
 
 Planning outcome: Phase 5 scope is constrained to recommendation quality and traversal fidelity on
@@ -96,6 +232,26 @@ deterministically.
 
 Expected residual work after this plan: deeper semantic/type-aware resolution, broader benchmark
 corpora, and potential language-server-backed confidence upgrades.
+
+Milestone 22 outcome: `tests-for` now defaults to runnable integration targets, ranks runnable
+targets ahead of support paths, and supports explicit support-path restoration through
+`--include-support` without changing schema envelopes.
+
+Milestone 23 outcome: `verify-plan` now dampens generic changed symbols, supports deterministic
+targeted capping via `--max-targeted`, and preserves changed runnable test targets alongside the
+required full-suite gate.
+
+Milestone 24 outcome: `context` now matches paraphrased task text using deterministic token-overlap
+relevance scoring, ranks meaningful definitions above incidental short tokens, and keeps stable
+JSON output across repeated runs.
+
+Milestone 25 outcome: `diff-impact` now performs bounded true multi-hop inbound traversal with
+deterministic dedupe, emits valid distance-2 neighbors on chain fixtures, and avoids cycle-driven
+duplicate growth while preserving schema-3 output shape.
+
+Milestone 26 outcome: user and contributor docs now reflect Phase 5 recommendation-quality and
+multi-hop traversal behavior, with updated command examples, schema notes, dogfood transcripts,
+and performance-baseline command coverage.
 
 ## Context and Orientation
 
@@ -418,6 +574,213 @@ Baseline evidence captured before implementation:
       "dist3": 0
     }
 
+Milestone 22 strict TDD evidence:
+
+    # Slice 22A red
+    cargo test milestone22_tests_for_excludes_support_paths_by_default -- --nocapture
+    # observed: FAILED (default output still contained tests/common/mod.rs)
+
+    # Slice 22A green
+    cargo test milestone22_tests_for_excludes_support_paths_by_default -- --nocapture
+    # observed: ok
+
+    # Slice 22A refactor gate
+    cargo test
+    # observed: full suite passed
+
+    # Slice 22B red
+    cargo test milestone22_tests_for_prefers_runnable_targets -- --nocapture
+    # observed: FAILED (CLI rejected --include-support)
+
+    # Slice 22B green
+    cargo test milestone22_tests_for_prefers_runnable_targets -- --nocapture
+    # observed: ok
+
+    # Slice 22B refactor gate
+    cargo test
+    # observed: full suite passed
+
+    # Slice 22C red
+    cargo test milestone22_tests_for_include_support_restores_paths -- --nocapture
+    # observed: FAILED (support row reason did not mention support path)
+
+    # Slice 22C green
+    cargo test milestone22_tests_for_include_support_restores_paths -- --nocapture
+    # observed: ok
+
+    # Slice 22C refactor gate
+    cargo test
+    # observed: full suite passed
+
+Milestone 22 post-dogfood evidence:
+
+    cargo run -- tests-for Path --repo . --json
+    # observed: no tests/common/mod.rs row
+
+    cargo run -- tests-for Path --repo . --include-support --json
+    # observed: tests/common/mod.rs returned with target_kind "support_test_file"
+
+    cargo run -- verify-plan --changed-file src/main.rs --repo . --max-targeted 6 --json
+    # observed: unexpected argument '--max-targeted' found (expected before Milestone 23)
+
+Milestone 23 strict TDD evidence:
+
+    # Slice 23A red
+    cargo test milestone23_verify_plan_downranks_generic_changed_symbols -- --nocapture
+    # observed: FAILED (verify-plan still recommended generic_output/generic_path)
+
+    # Slice 23A green
+    cargo test milestone23_verify_plan_downranks_generic_changed_symbols -- --nocapture
+    # observed: ok
+
+    # Slice 23A refactor gate
+    cargo test
+    # observed: full suite passed
+
+    # Slice 23B red
+    cargo test milestone23_verify_plan_applies_targeted_cap_deterministically -- --nocapture
+    # observed: FAILED (CLI rejected --max-targeted)
+
+    # Slice 23B green
+    cargo test milestone23_verify_plan_applies_targeted_cap_deterministically -- --nocapture
+    # observed: ok
+
+    # Slice 23B refactor gate
+    cargo test
+    # observed: full suite passed
+
+    # Slice 23C red
+    cargo test milestone23_verify_plan_preserves_changed_test_target_and_full_suite_gate -- --nocapture
+    # observed: FAILED (changed runnable test target dropped at --max-targeted=0)
+
+    # Slice 23C green
+    cargo test milestone23_verify_plan_preserves_changed_test_target_and_full_suite_gate -- --nocapture
+    # observed: ok
+
+    # Slice 23C refactor gate
+    cargo test
+    # observed: full suite passed
+
+Milestone 23 post-dogfood evidence:
+
+    cargo run -- verify-plan --changed-file src/main.rs --repo . --json
+    # observed: 2 targeted rows + full-suite gate
+
+    cargo run -- verify-plan --changed-file src/main.rs --repo . --max-targeted 6 --json
+    # observed: deterministic output identical to capped baseline for this fixture
+
+Milestone 24 strict TDD evidence:
+
+    # Slice 24A red
+    cargo test milestone24_context_matches_relevant_symbols_for_paraphrased_task -- --nocapture
+    # observed: FAILED (paraphrased task did not return verify_plan_for_changed_files)
+
+    # Slice 24A green
+    cargo test milestone24_context_matches_relevant_symbols_for_paraphrased_task -- --nocapture
+    # observed: ok
+
+    # Slice 24A refactor gate
+    cargo test
+    # observed: full suite passed
+
+    # Slice 24B red
+    cargo test milestone24_context_prioritizes_definitions_over_incidental_tokens -- --nocapture
+    # observed: FAILED (incidental symbol 'plan' ranked first)
+
+    # Slice 24B green
+    cargo test milestone24_context_prioritizes_definitions_over_incidental_tokens -- --nocapture
+    # observed: ok
+
+    # Slice 24B refactor gate
+    cargo test
+    # observed: full suite passed
+
+    # Slice 24C red
+    cargo test milestone24_context_json_is_stable_with_relevance_scoring -- --nocapture
+    # observed: FAILED (why_included lacked standardized token-overlap rationale text)
+
+    # Slice 24C green
+    cargo test milestone24_context_json_is_stable_with_relevance_scoring -- --nocapture
+    # observed: ok
+
+    # Slice 24C refactor gate
+    cargo test
+    # observed: full suite passed
+
+Milestone 24 post-dogfood evidence:
+
+    cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --json
+    # observed: 6 deterministic high-signal rows with token-overlap rationale text
+
+Milestone 25 strict TDD evidence:
+
+    # Slice 25A red
+    cargo test milestone25_diff_impact_max_distance_two_emits_distance_two_neighbors -- --nocapture
+    # observed: FAILED (no distance=2 impacted row before multi-hop traversal)
+
+    # Slice 25A green
+    cargo test milestone25_diff_impact_max_distance_two_emits_distance_two_neighbors -- --nocapture
+    # observed: ok
+
+    # Slice 25A refactor gate
+    cargo test
+    # observed: full suite passed
+
+    # Slice 25B red
+    cargo test milestone25_diff_impact_respects_max_distance_bound -- --nocapture
+    # observed: FAILED (distance exceeded requested bound before traversal cap enforcement)
+
+    # Slice 25B green
+    cargo test milestone25_diff_impact_respects_max_distance_bound -- --nocapture
+    # observed: ok
+
+    # Slice 25B refactor gate
+    cargo test
+    # observed: full suite passed
+
+    # Slice 25C red
+    cargo test milestone25_diff_impact_handles_cycles_without_duplicate_growth -- --nocapture
+    # observed: FAILED (cycle traversal re-emitted changed symbol at non-zero distance)
+
+    # Slice 25C green
+    cargo test milestone25_diff_impact_handles_cycles_without_duplicate_growth -- --nocapture
+    # observed: ok
+
+    # Slice 25C refactor gate
+    cargo test
+    # observed: full suite passed
+
+Milestone 25 post-dogfood evidence:
+
+    cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --max-distance 3 --json
+    # observed: command succeeded with deterministic schema-3 payload and bounded distances
+
+    cargo run -- tests-for Path --repo . --json
+    # observed: runnable-only targets by default (no support path rows)
+
+    cargo run -- tests-for Path --repo . --include-support --json
+    # observed: support row restored as target_kind "support_test_file"
+
+    cargo run -- verify-plan --changed-file src/main.rs --repo . --max-targeted 6 --json
+    # observed: deterministic capped targeted steps plus full-suite gate
+
+Milestone 26 post-dogfood evidence:
+
+    cargo run -- tests-for Path --repo . --json
+    # observed: runnable-only deterministic target list
+
+    cargo run -- tests-for Path --repo . --include-support --json
+    # observed: support path restored with target_kind "support_test_file"
+
+    cargo run -- verify-plan --changed-file src/main.rs --repo . --max-targeted 6 --json
+    # observed: bounded targeted rows remained deterministic; full-suite gate retained
+
+    cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --json
+    # observed: token-overlap rationale rows remained stable at schema_version 2
+
+    cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --max-distance 3 --json
+    # observed: schema_version 3 output remained deterministic with bounded traversal
+
 ## Interfaces and Dependencies
 
 Phase 5 should not require new external crates by default. Continue using existing dependencies
@@ -450,3 +813,18 @@ Backward compatibility requirements:
 Revision Note (2026-02-07): Created initial Phase 5 execution plan to address recommendation noise
 (`tests-for`, `verify-plan`, `context`) and `diff-impact` multi-hop fidelity gaps discovered during
 post-Phase-4 dogfooding. No production code changes were made as part of this planning step.
+
+Revision Note (2026-02-07): Updated progress, decisions, surprises, outcomes, and artifacts with
+Milestone 22 implementation details, strict TDD transcripts, and post-milestone dogfood evidence.
+
+Revision Note (2026-02-07): Updated progress, decisions, surprises, outcomes, and artifacts with
+Milestone 23 implementation details, strict TDD transcripts, and capped verify-plan dogfood evidence.
+
+Revision Note (2026-02-07): Updated progress, decisions, surprises, outcomes, and artifacts with
+Milestone 24 context relevance work, strict TDD transcripts, and refreshed dogfood evidence.
+
+Revision Note (2026-02-07): Updated progress, decisions, surprises, outcomes, and artifacts with
+Milestone 25 multi-hop traversal work, strict TDD transcripts, and post-milestone dogfood evidence.
+
+Revision Note (2026-02-07): Updated Phase 5 documentation set (`README`, CLI/JSON/architecture,
+dogfood log, performance baseline) and marked Milestone 26 completion in the living plan.

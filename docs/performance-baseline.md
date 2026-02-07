@@ -13,6 +13,8 @@ Track wall-clock timings for:
 - Phase 2 queries (`impact`, `context`, `tests-for`, `verify-plan`)
 - Phase 4 precision controls (`diff-impact --include-imports/--changed-line`,
   `refs --code-only --exclude-tests`)
+- Phase 5 recommendation/fidelity controls (`tests-for --include-support`,
+  `verify-plan --max-targeted`, context token-overlap matching, multi-hop `diff-impact --max-distance`)
 
 ## Commands
 
@@ -32,8 +34,11 @@ Equivalent manual commands:
 /usr/bin/time -p cargo run --release -- impact run --repo . --json
 /usr/bin/time -p cargo run --release -- context --task "update run and verify refs behavior" --repo . --budget 1200 --json
 /usr/bin/time -p cargo run --release -- tests-for run --repo . --json
+/usr/bin/time -p cargo run --release -- tests-for run --repo . --include-support --json
 /usr/bin/time -p cargo run --release -- verify-plan --changed-file src/query/mod.rs --repo . --json
+/usr/bin/time -p cargo run --release -- verify-plan --changed-file src/query/mod.rs --repo . --max-targeted 6 --json
 /usr/bin/time -p cargo run --release -- diff-impact --changed-file src/query/mod.rs --repo . --json
+/usr/bin/time -p cargo run --release -- diff-impact --changed-file src/query/mod.rs --repo . --max-distance 3 --json
 /usr/bin/time -p cargo run --release -- diff-impact --changed-file src/query/mod.rs --changed-line src/query/mod.rs:132:220 --repo .
 /usr/bin/time -p cargo run --release -- refs verify_plan_for_changed_files --repo . --code-only --exclude-tests --json
 ```

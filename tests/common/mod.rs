@@ -40,6 +40,14 @@ pub fn repo_scout_cmd() -> Command {
     );
 }
 
+#[allow(dead_code)]
+pub fn run_stdout(args: &[&str]) -> String {
+    let mut cmd = repo_scout_cmd();
+    cmd.args(args);
+    let output = cmd.assert().success().get_output().stdout.clone();
+    String::from_utf8(output).expect("stdout should be utf-8")
+}
+
 pub fn temp_repo() -> TempDir {
     tempfile::tempdir().expect("temporary repo should be created")
 }
