@@ -1,13 +1,7 @@
 mod common;
 
+use common::run_stdout;
 use serde_json::Value;
-
-fn run_stdout(args: &[&str]) -> String {
-    let mut cmd = common::repo_scout_cmd();
-    cmd.args(args);
-    let output = cmd.assert().success().get_output().stdout.clone();
-    String::from_utf8(output).expect("stdout should be utf-8")
-}
 
 #[test]
 fn milestone25_diff_impact_max_distance_two_emits_distance_two_neighbors() {
@@ -50,7 +44,7 @@ fn milestone25_diff_impact_respects_max_distance_bound() {
     common::write_file(
         repo.path(),
         "src/lib.rs",
-        "pub fn c_changed() {}\\n\\npub fn b_calls_c() {\\n    c_changed();\\n}\\n\\npub fn a_calls_b() {\\n    b_calls_c();\\n}\\n\\npub fn d_calls_a() {\\n    a_calls_b();\\n}\\n",
+        "pub fn c_changed() {}\n\npub fn b_calls_c() {\n    c_changed();\n}\n\npub fn a_calls_b() {\n    b_calls_c();\n}\n\npub fn d_calls_a() {\n    a_calls_b();\n}\n",
     );
 
     run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
@@ -83,7 +77,7 @@ fn milestone25_diff_impact_handles_cycles_without_duplicate_growth() {
     common::write_file(
         repo.path(),
         "src/lib.rs",
-        "pub fn changed_c() {\\n    b();\\n}\\n\\npub fn b() {\\n    a();\\n}\\n\\npub fn a() {\\n    changed_c();\\n}\\n",
+        "pub fn changed_c() {\n    b();\n}\n\npub fn b() {\n    a();\n}\n\npub fn a() {\n    changed_c();\n}\n",
     );
 
     run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);

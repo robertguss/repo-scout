@@ -1712,7 +1712,7 @@ fn is_generic_changed_symbol(symbol: &str) -> bool {
     ];
 
     let lowered = symbol.to_ascii_lowercase();
-    lowered.len() <= 3 || GENERIC_SYMBOLS.contains(&lowered.as_str())
+    GENERIC_SYMBOLS.contains(&lowered.as_str())
 }
 
 fn is_changed_test_target_reason(why_included: &str) -> bool {

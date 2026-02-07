@@ -1,13 +1,7 @@
 mod common;
 
+use common::run_stdout;
 use serde_json::Value;
-
-fn run_stdout(args: &[&str]) -> String {
-    let mut cmd = common::repo_scout_cmd();
-    cmd.args(args);
-    let output = cmd.assert().success().get_output().stdout.clone();
-    String::from_utf8(output).expect("stdout should be utf-8")
-}
 
 #[test]
 fn milestone22_tests_for_excludes_support_paths_by_default() {

@@ -1,13 +1,7 @@
 mod common;
 
+use common::run_stdout;
 use serde_json::Value;
-
-fn run_stdout(args: &[&str]) -> String {
-    let mut cmd = common::repo_scout_cmd();
-    cmd.args(args);
-    let output = cmd.assert().success().get_output().stdout.clone();
-    String::from_utf8(output).expect("stdout should be utf-8")
-}
 
 #[test]
 fn milestone23_verify_plan_downranks_generic_changed_symbols() {
@@ -163,6 +157,42 @@ fn milestone23_verify_plan_applies_targeted_cap_deterministically() {
             .filter(|row| row["scope"] == "full_suite")
             .count(),
         1
+    );
+}
+
+#[test]
+fn milestone23_verify_plan_keeps_short_meaningful_symbols() {
+    let repo = common::temp_repo();
+    common::write_file(
+        repo.path(),
+        "src/main.rs",
+        "pub fn api() -> usize {\n    1\n}\n",
+    );
+    common::write_file(
+        repo.path(),
+        "tests/api_contract.rs",
+        "#[test]\nfn api_contract() {\n    let _ = api();\n}\n",
+    );
+
+    run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
+
+    let out = run_stdout(&[
+        "verify-plan",
+        "--changed-file",
+        "src/main.rs",
+        "--repo",
+        repo.path().to_str().unwrap(),
+        "--json",
+    ]);
+    let payload: Value = serde_json::from_str(&out).expect("verify-plan json should parse");
+    let results = payload["results"]
+        .as_array()
+        .expect("results should be array");
+
+    assert!(
+        results
+            .iter()
+            .any(|row| row["step"] == "cargo test --test api_contract")
     );
 }
 

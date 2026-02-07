@@ -1,13 +1,7 @@
 mod common;
 
+use common::run_stdout;
 use serde_json::Value;
-
-fn run_stdout(args: &[&str]) -> String {
-    let mut cmd = common::repo_scout_cmd();
-    cmd.args(args);
-    let output = cmd.assert().success().get_output().stdout.clone();
-    String::from_utf8(output).expect("stdout should be utf-8")
-}
 
 #[test]
 fn milestone24_context_matches_relevant_symbols_for_paraphrased_task() {
@@ -53,7 +47,7 @@ fn milestone24_context_prioritizes_definitions_over_incidental_tokens() {
     common::write_file(
         repo.path(),
         "src/lib.rs",
-        "pub fn verify_plan_for_changed_files() {}\\n\\npub fn verify_plan_orchestrator() {\\n    verify_plan_for_changed_files();\\n}\\n\\npub fn plan() {}\\n",
+        "pub fn verify_plan_for_changed_files() {}\n\npub fn verify_plan_orchestrator() {\n    verify_plan_for_changed_files();\n}\n\npub fn plan() {}\n",
     );
 
     run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
@@ -90,7 +84,7 @@ fn milestone24_context_json_is_stable_with_relevance_scoring() {
     common::write_file(
         repo.path(),
         "src/lib.rs",
-        "pub fn verify_plan_for_changed_files() {}\\n\\npub fn verify_plan_orchestrator() {\\n    verify_plan_for_changed_files();\\n}\\n\\npub fn tests_for_symbol() {}\\n",
+        "pub fn verify_plan_for_changed_files() {}\n\npub fn verify_plan_orchestrator() {\n    verify_plan_for_changed_files();\n}\n\npub fn tests_for_symbol() {}\n",
     );
 
     run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
