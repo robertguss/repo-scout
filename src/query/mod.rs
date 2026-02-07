@@ -16,7 +16,7 @@ pub struct QueryMatch {
     pub score: f64,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct QueryScope {
     pub code_only: bool,
     pub exclude_tests: bool,
@@ -883,6 +883,15 @@ pub fn context_matches(
     task: &str,
     budget: usize,
 ) -> anyhow::Result<Vec<ContextMatch>> {
+    context_matches_scoped(db_path, task, budget, &QueryScope::default())
+}
+
+pub fn context_matches_scoped(
+    db_path: &Path,
+    task: &str,
+    budget: usize,
+    scope: &QueryScope,
+) -> anyhow::Result<Vec<ContextMatch>> {
     let connection = Connection::open(db_path)?;
     let keywords = extract_keywords(task);
     if keywords.is_empty() {
@@ -921,7 +930,7 @@ pub fn context_matches(
             .any(|keyword| keyword == &symbol.to_ascii_lowercase());
         let direct_score =
             context_direct_score(overlap_count, exact_symbol_match, symbol_tokens.len());
-        let key = format!("{file_path}:{start_line}:{symbol}:direct");
+        let key = format!("{file_path}:{start_line}:{symbol}:{kind}:direct");
         if seen.insert(key) {
             matches.push(ContextMatch {
                 file_path: file_path.clone(),
@@ -961,7 +970,7 @@ pub fn context_matches(
 
         for neighbor in neighbor_rows {
             let (n_file, n_symbol, n_kind, n_start, n_end) = neighbor?;
-            let neighbor_key = format!("{n_file}:{n_start}:{n_symbol}:neighbor");
+            let neighbor_key = format!("{n_file}:{n_start}:{n_symbol}:{n_kind}:neighbor");
             if seen.insert(neighbor_key) {
                 matches.push(ContextMatch {
                     file_path: n_file,
@@ -980,6 +989,11 @@ pub fn context_matches(
         }
     }
 
+    matches.retain(|item| {
+        (!scope.code_only || is_code_file_path(&item.file_path))
+            && (!scope.exclude_tests || !is_test_like_path(&item.file_path))
+    });
+
     matches.sort_by(|left, right| {
         right
             .score
@@ -988,6 +1002,9 @@ pub fn context_matches(
             .then(left.file_path.cmp(&right.file_path))
             .then(left.start_line.cmp(&right.start_line))
             .then(left.symbol.cmp(&right.symbol))
+            .then(left.kind.cmp(&right.kind))
+            .then(left.end_line.cmp(&right.end_line))
+            .then(left.why_included.cmp(&right.why_included))
     });
 
     let max_results = std::cmp::max(1, budget / 200);

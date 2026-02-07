@@ -32,9 +32,13 @@ non-code paths, and faster conversion from “what changed” to “what do I ru
 - [x] (2026-02-07 23:32Z) Captured baseline noise/focus evidence for fallback-heavy `refs`,
       context relevance distribution, and `diff-impact` changed-symbol flooding.
 - [x] (2026-02-07 23:32Z) Authored this Phase 6 ExecPlan as planning-only work.
-- [ ] Run required pre-milestone dogfood baseline for Milestone 27.
-- [ ] Complete Milestone 27 strict TDD slices for context scope controls.
-- [ ] Run Milestone 27 post-dogfood checks.
+- [x] (2026-02-07 23:38Z) Ran required pre-milestone dogfood baseline for Milestone 27.
+- [x] (2026-02-07 23:55Z) Completed Milestone 27 strict TDD slices for context scope controls
+      (`--exclude-tests`, `--code-only`, deterministic combined scope behavior).
+- [x] (2026-02-07 23:58Z) Ran Milestone 27 post-dogfood checks; `verify-plan --changed-line`,
+      `verify-plan --changed-symbol`, `diff-impact --changed-symbol`, `diff-impact --exclude-changed`,
+      `diff-impact --max-results`, and `refs --max-results` correctly fail as unsupported prior to
+      Milestones 28–30.
 - [ ] Run required pre-milestone dogfood baseline for Milestone 28.
 - [ ] Complete Milestone 28 strict TDD slices for verify-plan change-scope controls.
 - [ ] Run Milestone 28 post-dogfood checks.
@@ -67,6 +71,18 @@ non-code paths, and faster conversion from “what changed” to “what do I ru
   Evidence: `cargo run --quiet -- diff-impact --changed-file src/query/mod.rs --repo . --max-distance 3 --json | jq ...`
   reported `total: 57`, `d0: 56`, `d1: 0`, `d2: 0`, `d3: 0`.
 
+- Observation: post-milestone dogfood command packs include future-phase flags that are expected to
+  fail before their milestone is implemented.
+  Evidence: Milestone 27 post-checks reported clap errors for unsupported flags:
+  `verify-plan --changed-line`, `verify-plan --changed-symbol`, `diff-impact --changed-symbol`,
+  `diff-impact --exclude-changed`, `diff-impact --max-results`, and `refs --max-results`.
+
+- Observation: context dedupe previously collapsed same-path/same-line/same-symbol rows across
+  different symbol kinds, reducing determinism under tied scores.
+  Evidence: red transcript for
+  `milestone27_context_scope_flags_preserve_deterministic_json` only returned `kind=function`
+  until dedupe/sort keys were made kind-aware.
+
 ## Decision Log
 
 - Decision: prioritize option-driven narrowing controls over adding new command families.
@@ -91,6 +107,18 @@ non-code paths, and faster conversion from “what changed” to “what do I ru
   Rationale: precision controls must not remove core safety behavior from validation workflows.
   Date/Author: 2026-02-07 / Codex
 
+- Decision: run the post-milestone dogfood command set exactly as written at every milestone, and
+  treat unsupported-flag failures as expected until each owning milestone lands.
+  Rationale: this preserves consistent dogfood evidence while showing feature activation progress
+  from milestone to milestone.
+  Date/Author: 2026-02-07 / Codex
+
+- Decision: make context dedupe/sort kind-aware (`file_path/start_line/symbol/kind`) so combined
+  scope flags preserve deterministic output when equal-score symbol rows differ only by kind.
+  Rationale: without kind-aware keys/tie-breaks, valid rows can be dropped or left with unstable
+  ordering in same-symbol/same-location scenarios.
+  Date/Author: 2026-02-07 / Codex
+
 ## Outcomes & Retrospective
 
 Planning outcome: Phase 6 scope is constrained to high-impact precision controls for existing
@@ -102,6 +130,10 @@ fallback-heavy `find`/`refs` queries can be capped and ranked toward code-first 
 
 Expected residual work after this plan: deeper type-aware semantics for cross-language call/import
 resolution and broader benchmark corpora for recommendation-quality scoring.
+
+Milestone 27 outcome (2026-02-07): `context` now supports `--exclude-tests` and `--code-only`,
+and combined scoped JSON output is deterministic with kind-aware dedupe/sort behavior. Full-suite
+tests stayed green through each slice refactor gate.
 
 ## Context and Orientation
 
@@ -419,6 +451,71 @@ Baseline evidence captured before implementation:
 
 Add strict TDD transcripts per slice in this section as milestones execute.
 
+Milestone 27 strict TDD evidence:
+
+    # 27A red
+    cargo test milestone27_context_exclude_tests_omits_test_paths -- --nocapture
+    ...
+    error: unexpected argument '--exclude-tests' found
+
+    # 27A green
+    cargo test milestone27_context_exclude_tests_omits_test_paths -- --nocapture
+    ...
+    test milestone27_context_exclude_tests_omits_test_paths ... ok
+
+    # 27A refactor
+    cargo test
+    ...
+    test result: ok. (full suite)
+
+    # 27B red
+    cargo test milestone27_context_code_only_restricts_to_code_extensions -- --nocapture
+    ...
+    error: unexpected argument '--code-only' found
+
+    # 27B green
+    cargo test milestone27_context_code_only_restricts_to_code_extensions -- --nocapture
+    ...
+    test milestone27_context_code_only_restricts_to_code_extensions ... ok
+
+    # 27B refactor
+    cargo test
+    ...
+    test result: ok. (full suite)
+
+    # 27C red
+    cargo test milestone27_context_scope_flags_preserve_deterministic_json -- --nocapture
+    ...
+    assertion `left == right` failed
+    left: ["function"]
+    right: ["function", "type_alias"]
+
+    # 27C green
+    cargo test milestone27_context_scope_flags_preserve_deterministic_json -- --nocapture
+    ...
+    test milestone27_context_scope_flags_preserve_deterministic_json ... ok
+
+    # 27C refactor
+    cargo test
+    ...
+    test result: ok. (full suite)
+
+Milestone 27 post-dogfood evidence:
+
+    cargo run -- index --repo .
+    cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --json
+    cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --exclude-tests --json
+    cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --code-only --exclude-tests --json
+    cargo run -- verify-plan --changed-file src/query/mod.rs --changed-line src/query/mod.rs:1094:1165 --changed-symbol verify_plan_for_changed_files --repo . --json
+    cargo run -- diff-impact --changed-file src/query/mod.rs --changed-symbol verify_plan_for_changed_files --exclude-changed --max-results 12 --repo . --json
+    cargo run -- refs helper --repo . --max-results 10 --json
+    cargo test
+
+    # expected at Milestone 27:
+    # - context scoped commands succeed
+    # - verify-plan/diff-impact/refs new-flag commands fail with "unexpected argument"
+    # - full cargo test suite passes
+
 ## Interfaces and Dependencies
 
 Phase 6 should not require new external crates by default. Continue using the current dependency
@@ -461,3 +558,7 @@ Revision Note (2026-02-07): Created initial Phase 6 execution plan focused on ch
 precision controls for `context`, `verify-plan`, and `diff-impact`, plus fallback focus controls
 for `find`/`refs`, based on post-Phase-5 dogfood evidence. No production code changes were made as
 part of this planning step.
+
+Revision Note (2026-02-07): Updated live plan during Milestone 27 implementation with strict TDD
+transcripts, post-dogfood command evidence, milestone outcomes, and explicit rationale for running
+future-flag dogfood commands before their owning milestones.

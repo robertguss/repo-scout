@@ -9,7 +9,8 @@ use clap::Parser;
 use crate::cli::{Cli, Command};
 use crate::indexer::index_repository;
 use crate::query::{
-    ChangedLineRange, DiffImpactOptions, context_matches, diff_impact_for_changed_files,
+    ChangedLineRange, DiffImpactOptions, QueryScope, context_matches, context_matches_scoped,
+    diff_impact_for_changed_files,
     explain_symbol, find_matches_scoped, impact_matches, refs_matches_scoped, tests_for_symbol,
     verify_plan_for_changed_files,
 };
@@ -193,12 +194,22 @@ fn run_impact(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
 ///     task: "build".into(),
 ///     budget: 10,
 ///     json: false,
+///     code_only: false,
+///     exclude_tests: false,
 /// };
 /// let _ = crate::run_context(args);
 /// ```
 fn run_context(args: crate::cli::ContextArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
-    let matches = context_matches(&store.db_path, &args.task, args.budget)?;
+    let scope = QueryScope {
+        code_only: args.code_only,
+        exclude_tests: args.exclude_tests,
+    };
+    let matches = if scope == QueryScope::default() {
+        context_matches(&store.db_path, &args.task, args.budget)?
+    } else {
+        context_matches_scoped(&store.db_path, &args.task, args.budget, &scope)?
+    };
     if args.json {
         output::print_context_json(&args.task, args.budget, &matches)?;
     } else {

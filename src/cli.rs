@@ -75,6 +75,10 @@ pub struct ContextArgs {
     pub json: bool,
     #[arg(long, default_value_t = 1200)]
     pub budget: usize,
+    #[arg(long, default_value_t = false)]
+    pub code_only: bool,
+    #[arg(long, default_value_t = false)]
+    pub exclude_tests: bool,
 }
 
 #[derive(Debug, Args)]
