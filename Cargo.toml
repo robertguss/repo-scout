@@ -1,5 +1,5 @@
 [package]
-name = "codex-5-3"
+name = "repo-scout"
 version = "0.1.0"
 edition = "2024"
 
@@ -8,11 +8,11 @@ anyhow = "1.0.100"
 blake3 = "1.8.2"
 clap = { version = "4.5.53", features = ["derive"] }
 ignore = "0.4.25"
-rusqlite = { version = "0.37.0", features = ["bundled"] }
+rusqlite = { version = "0.38.0", features = ["bundled"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 thiserror = "2.0.17"
-tree-sitter = "0.25.10"
+tree-sitter = "0.26.5"
 tree-sitter-rust = "0.24.0"
 tree-sitter-typescript = "0.23.2"
 tree-sitter-python = "0.25.0"
