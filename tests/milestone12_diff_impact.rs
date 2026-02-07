@@ -134,7 +134,7 @@ fn milestone12_diff_impact_includes_tests() {
             && item["target"] == "tests/plan_test.rs"
             && item["target_kind"] == "integration_test_file"
             && item["confidence"].is_string()
-            && item["provenance"] == "call_resolution"
+            && item["provenance"] == "text_fallback"
     }));
 }
 

@@ -405,7 +405,7 @@ In `src/indexer/mod.rs`, update resolver signature:
 Resolver ordering contract:
 
 1. match `qualified_symbol` exactly when present.
-2. else match `(file_path, symbol)` with deterministic non-import preference.
+2. else match `(file_path, symbol)`; if multiple rows match, prefer non-`import` kinds over `import` kinds and then apply stable ordering.
 3. else match unique global `symbol`.
 4. else unresolved (`None`).
 

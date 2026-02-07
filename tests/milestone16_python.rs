@@ -50,7 +50,7 @@ fn milestone16_python_definitions() {
     }
 
     assert!(symbols.iter().any(|(symbol, kind, language, _)| {
-        symbol == "CONSTANT" && kind == "constant" && language == "python"
+        symbol == "CONSTANT" && kind == "const" && language == "python"
     }));
     assert!(
         symbols
@@ -68,6 +68,58 @@ fn milestone16_python_definitions() {
             && language == "python"
             && container.as_deref() == Some("Runner")
     }));
+}
+
+#[test]
+fn milestone16_python_dotted_imports_bind_top_level_package() {
+    let repo = common::temp_repo();
+    common::write_file(repo.path(), "src/package/module.py", "VALUE = 1\n");
+    common::write_file(
+        repo.path(),
+        "src/app.py",
+        "import package.module\n\ndef invoke():\n    return package.module.VALUE\n",
+    );
+
+    run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
+
+    let db_path = repo.path().join(".repo-scout").join("index.db");
+    let connection = Connection::open(db_path).expect("db should open");
+    let mut statement = connection
+        .prepare(
+            "SELECT symbol
+             FROM symbols_v2
+             WHERE file_path = 'src/app.py' AND kind = 'import'
+             ORDER BY symbol ASC",
+        )
+        .expect("import symbol query should prepare");
+    let rows = statement
+        .query_map([], |row| row.get::<_, String>(0))
+        .expect("import symbol rows should be queryable");
+    let mut import_symbols = Vec::new();
+    for row in rows {
+        import_symbols.push(row.expect("row should decode"));
+    }
+
+    assert!(import_symbols.contains(&"package".to_string()));
+    assert!(!import_symbols.contains(&"module".to_string()));
+
+    let refs_out = run_stdout(&[
+        "refs",
+        "package",
+        "--repo",
+        repo.path().to_str().unwrap(),
+        "--json",
+    ]);
+    let refs_payload: serde_json::Value =
+        serde_json::from_str(&refs_out).expect("refs json should parse");
+    let refs_results = refs_payload["results"]
+        .as_array()
+        .expect("refs results should be an array");
+    assert!(
+        refs_results
+            .iter()
+            .any(|item| item["file_path"] == "src/app.py")
+    );
 }
 
 #[test]

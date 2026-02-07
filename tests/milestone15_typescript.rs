@@ -1,5 +1,6 @@
 mod common;
 
+use predicates::str::contains;
 use rusqlite::Connection;
 
 fn run_stdout(args: &[&str]) -> String {
@@ -19,8 +20,11 @@ fn milestone15_typescript_definitions() {
     );
 
     run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
-    let find_out = run_stdout(&["find", "helper", "--repo", repo.path().to_str().unwrap()]);
-    assert!(find_out.contains("[ast_definition ast_exact]"));
+    common::repo_scout_cmd()
+        .args(["find", "helper", "--repo", repo.path().to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(contains("[ast_definition ast_exact]"));
 
     let db_path = repo.path().join(".repo-scout").join("index.db");
     let connection = Connection::open(db_path).expect("db should open");
@@ -87,12 +91,17 @@ fn milestone15_typescript_references_and_calls() {
 
     run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
 
-    let refs_out = run_stdout(&["refs", "helper", "--repo", repo.path().to_str().unwrap()]);
-    assert!(refs_out.contains("[ast_reference ast_likely]"));
-
-    let impact_out = run_stdout(&["impact", "helper", "--repo", repo.path().to_str().unwrap()]);
-    assert!(impact_out.contains("called_by"));
-    assert!(impact_out.contains("invoke"));
+    common::repo_scout_cmd()
+        .args(["refs", "helper", "--repo", repo.path().to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(contains("[ast_reference ast_likely]"));
+    common::repo_scout_cmd()
+        .args(["impact", "helper", "--repo", repo.path().to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(contains("called_by"))
+        .stdout(contains("invoke"));
 }
 
 #[test]
@@ -116,8 +125,11 @@ fn milestone15_typescript_edges_and_queries() {
 
     run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
 
-    let impact_out = run_stdout(&["impact", "helper", "--repo", repo.path().to_str().unwrap()]);
-    assert!(impact_out.contains("imported_by"));
+    common::repo_scout_cmd()
+        .args(["impact", "helper", "--repo", repo.path().to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(contains("imported_by"));
 
     let diff_out = run_stdout(&[
         "diff-impact",

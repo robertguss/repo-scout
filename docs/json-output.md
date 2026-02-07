@@ -247,7 +247,7 @@ These contracts are intentionally additive and do not change schema 1 or schema 
       "language": "rust",
       "why_included": "references impacted symbol 'impact_matches'",
       "confidence": "graph_likely",
-      "provenance": "call_resolution",
+      "provenance": "text_fallback",
       "score": 0.86
     }
   ]

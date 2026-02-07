@@ -301,7 +301,7 @@ pub fn diff_impact_for_changed_files(
                         language: language_for_file_path(&target).to_string(),
                         why_included: format!("references impacted symbol '{symbol}'"),
                         confidence: confidence.to_string(),
-                        provenance: "call_resolution".to_string(),
+                        provenance: "text_fallback".to_string(),
                         score,
                     },
                 );

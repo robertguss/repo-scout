@@ -122,26 +122,54 @@ fn relation_hints(content: &str) -> Vec<(String, String, String, f64, String)> {
             }
         }
 
-        if let Some(rest) = trimmed.strip_prefix("impl ")
-            && let Some((trait_part, type_part)) = rest.split_once(" for ")
-        {
-            let Some(trait_symbol) = last_rust_identifier(trait_part) else {
+        if let Some(rest) = trimmed.strip_prefix("impl") {
+            let rest = rest.trim_start();
+            let Some(rest) = strip_leading_impl_generics(rest) else {
                 continue;
             };
-            let Some(type_symbol) = last_rust_identifier(type_part) else {
-                continue;
-            };
-            edges.push((
-                type_symbol,
-                trait_symbol,
-                "implements".to_string(),
-                0.95,
-                "ast_reference".to_string(),
-            ));
+            let rest = rest.trim_start();
+            if let Some((trait_part, type_part)) = rest.split_once(" for ") {
+                let trait_head = trait_part.split('<').next().unwrap_or(trait_part);
+                let type_head = type_part.split('<').next().unwrap_or(type_part);
+                let Some(trait_symbol) = last_rust_identifier(trait_head) else {
+                    continue;
+                };
+                let Some(type_symbol) = last_rust_identifier(type_head) else {
+                    continue;
+                };
+                edges.push((
+                    type_symbol,
+                    trait_symbol,
+                    "implements".to_string(),
+                    0.95,
+                    "ast_reference".to_string(),
+                ));
+            }
         }
     }
 
     edges
+}
+
+fn strip_leading_impl_generics(segment: &str) -> Option<&str> {
+    if !segment.starts_with('<') {
+        return Some(segment);
+    }
+
+    let mut depth = 0i32;
+    for (index, ch) in segment.char_indices() {
+        match ch {
+            '<' => depth += 1,
+            '>' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(&segment[index + 1..]);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 fn last_rust_identifier(segment: &str) -> Option<String> {

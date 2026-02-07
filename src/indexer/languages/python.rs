@@ -320,7 +320,7 @@ fn module_constants(file_path: &str, language: &str, source: &str) -> Vec<Extrac
         symbols.push(ExtractedSymbol {
             symbol: candidate.to_string(),
             qualified_symbol: Some(format!("{language}:{file_path}::{candidate}")),
-            kind: "constant".to_string(),
+            kind: "const".to_string(),
             language: language.to_string(),
             container: None,
             start_line: line_no,
@@ -377,7 +377,7 @@ fn import_bindings(node: Node<'_>, source: &str) -> Vec<ImportBinding> {
                 } else {
                     (specifier, None)
                 };
-            let Some(imported_symbol) = last_identifier(imported_path) else {
+            let Some(imported_symbol) = first_identifier(imported_path) else {
                 continue;
             };
             let local_symbol = local_alias
@@ -440,6 +440,12 @@ fn last_identifier(text: &str) -> Option<String> {
     text.split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
         .filter(|part| !part.is_empty())
         .last()
+        .map(str::to_string)
+}
+
+fn first_identifier(text: &str) -> Option<String> {
+    text.split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
+        .find(|part| !part.is_empty())
         .map(str::to_string)
 }
 
