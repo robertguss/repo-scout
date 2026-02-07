@@ -150,6 +150,8 @@ pub struct DiffImpactOptions {
     pub changed_lines: Vec<ChangedLineRange>,
 }
 
+pub const DEFAULT_VERIFY_PLAN_MAX_TARGETED: usize = 8;
+
 pub fn diff_impact_for_changed_files(
     db_path: &Path,
     changed_files: &[String],
@@ -1026,13 +1028,14 @@ pub fn tests_for_symbol(
 /// use std::path::Path;
 /// let db = Path::new("code_index.sqlite");
 /// let changed = vec!["src/lib.rs".to_string(), "tests/my_test.rs".to_string()];
-/// let steps = verify_plan_for_changed_files(db, &changed).unwrap();
+/// let steps = verify_plan_for_changed_files(db, &changed, None).unwrap();
 /// // `steps` is a Vec<VerificationStep> describing targeted test commands and a final
 /// // "cargo test" full-suite step.
 /// ```
 pub fn verify_plan_for_changed_files(
     db_path: &Path,
     changed_files: &[String],
+    max_targeted: Option<usize>,
 ) -> anyhow::Result<Vec<VerificationStep>> {
     let connection = Connection::open(db_path)?;
 
@@ -1063,6 +1066,9 @@ pub fn verify_plan_for_changed_files(
 
         for symbol_row in symbol_rows {
             let symbol = symbol_row?;
+            if is_generic_changed_symbol(&symbol) {
+                continue;
+            }
             for (target, hit_count) in test_targets_for_symbol(&connection, &symbol)? {
                 if let Some(command) = test_command_for_target(&target) {
                     let (confidence, score) = if hit_count > 1 {
@@ -1087,18 +1093,54 @@ pub fn verify_plan_for_changed_files(
         }
     }
 
-    upsert_verification_step(
-        &mut steps_by_command,
-        VerificationStep {
-            step: "cargo test".to_string(),
-            scope: "full_suite".to_string(),
-            why_included: "required safety gate after refactor".to_string(),
-            confidence: "context_high".to_string(),
-            score: 1.0,
-        },
-    );
+    let mut steps = steps_by_command
+        .into_values()
+        .filter(|step| step.scope == "targeted")
+        .collect::<Vec<_>>();
+    steps.sort_by(|left, right| {
+        right
+            .score
+            .partial_cmp(&left.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(confidence_rank(&right.confidence).cmp(&confidence_rank(&left.confidence)))
+            .then(left.step.cmp(&right.step))
+            .then(left.why_included.cmp(&right.why_included))
+    });
+    let mut prioritized = steps
+        .iter()
+        .filter(|step| is_changed_test_target_reason(&step.why_included))
+        .cloned()
+        .collect::<Vec<_>>();
+    prioritized.sort_by(|left, right| {
+        left.step
+            .cmp(&right.step)
+            .then(left.why_included.cmp(&right.why_included))
+    });
 
-    let mut steps = steps_by_command.into_values().collect::<Vec<_>>();
+    let targeted_cap = max_targeted.unwrap_or(DEFAULT_VERIFY_PLAN_MAX_TARGETED);
+    let mut capped = Vec::new();
+    let mut capped_count = 0usize;
+    for step in steps {
+        if is_changed_test_target_reason(&step.why_included) {
+            continue;
+        }
+        if capped_count >= targeted_cap {
+            continue;
+        }
+        capped_count += 1;
+        capped.push(step);
+    }
+
+    let mut steps = prioritized;
+    steps.extend(capped);
+
+    steps.push(VerificationStep {
+        step: "cargo test".to_string(),
+        scope: "full_suite".to_string(),
+        why_included: "required safety gate after refactor".to_string(),
+        confidence: "context_high".to_string(),
+        score: 1.0,
+    });
 
     steps.sort_by(|left, right| {
         verification_scope_rank(&left.scope)
@@ -1522,4 +1564,18 @@ fn confidence_rank(confidence: &str) -> u8 {
         "context_medium" => 1,
         _ => 0,
     }
+}
+
+fn is_generic_changed_symbol(symbol: &str) -> bool {
+    const GENERIC_SYMBOLS: &[&str] = &[
+        "args", "common", "error", "file", "files", "json", "main", "mod", "output", "path",
+        "query", "repo", "result", "run", "symbol", "test", "tests", "value",
+    ];
+
+    let lowered = symbol.to_ascii_lowercase();
+    lowered.len() <= 3 || GENERIC_SYMBOLS.contains(&lowered.as_str())
+}
+
+fn is_changed_test_target_reason(why_included: &str) -> bool {
+    why_included.starts_with("changed file '") && why_included.ends_with("is itself a test target")
 }

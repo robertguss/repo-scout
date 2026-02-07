@@ -45,7 +45,17 @@ User-visible outcome: a tighter “what should I run next” loop with higher-si
 - [x] (2026-02-07 22:51Z) Ran Milestone 22 post-dogfood checks; observed expected
       `verify-plan --max-targeted` CLI failure pending Milestone 23 implementation.
 - [x] (2026-02-07 22:51Z) Milestone 22 complete: `tests-for` target-quality contracts and implementation.
-- [ ] Milestone 23 complete: `verify-plan` high-signal recommendation contracts and implementation.
+- [x] (2026-02-07 22:56Z) Ran required pre-milestone dogfood baseline for Milestone 23:
+      `cargo run -- index --repo .`,
+      `cargo run -- find verify_plan_for_changed_files --repo . --json`,
+      `cargo run -- refs verify_plan_for_changed_files --repo . --json`.
+- [x] (2026-02-07 22:56Z) Completed Milestone 23 strict TDD slices:
+      `milestone23_verify_plan_downranks_generic_changed_symbols`,
+      `milestone23_verify_plan_applies_targeted_cap_deterministically`,
+      `milestone23_verify_plan_preserves_changed_test_target_and_full_suite_gate`.
+- [x] (2026-02-07 22:56Z) Ran Milestone 23 post-dogfood checks with passing
+      `verify-plan --max-targeted` behavior and deterministic targeted capping.
+- [x] (2026-02-07 22:56Z) Milestone 23 complete: `verify-plan` high-signal recommendation contracts and implementation.
 - [ ] Milestone 24 complete: `context` relevance/recall contracts and implementation.
 - [ ] Milestone 25 complete: true multi-hop `diff-impact` traversal contracts and implementation.
 - [ ] Phase 5 docs and dogfood evidence updates complete.
@@ -82,6 +92,14 @@ User-visible outcome: a tighter “what should I run next” loop with higher-si
   Evidence: default `tests-for Path --json` no longer emits `tests/common/mod.rs`; with
   `--include-support`, the row appears as `target_kind: "support_test_file"`.
 
+- Observation: strict per-slice TDD required staging future-slice tests after each refactor gate.
+  Evidence: adding Milestone 23 tests for slices 23B/23C before finishing 23A caused the 23A
+  full-suite refactor gate to fail; resolved by re-adding tests slice-by-slice.
+
+- Observation: post-Milestone-23 verify-plan output for `src/main.rs` shrank to high-signal rows.
+  Evidence: required dogfood now returns 2 targeted rows (`milestone14_adapter`,
+  `milestone6_schema_migration`) plus the full-suite gate instead of broad 20+ targeted rows.
+
 ## Decision Log
 
 - Decision: prioritize recommendation precision and actionability before adding any new command
@@ -115,6 +133,16 @@ User-visible outcome: a tighter “what should I run next” loop with higher-si
   milestone.
   Date/Author: 2026-02-07 / Codex
 
+- Decision: set default verify-plan targeted cap to `DEFAULT_VERIFY_PLAN_MAX_TARGETED = 8` and
+  apply `--max-targeted` only to symbol-derived targeted recommendations.
+  Rationale: keeps omitted behavior bounded/non-zero while preserving deterministic command quality.
+  Date/Author: 2026-02-07 / Codex
+
+- Decision: preserve changed runnable test targets even when `--max-targeted=0`.
+  Rationale: changed test files are high-priority safety steps and should not be dropped by
+  symbol-target truncation.
+  Date/Author: 2026-02-07 / Codex
+
 ## Outcomes & Retrospective
 
 Planning outcome: Phase 5 scope is constrained to recommendation quality and traversal fidelity on
@@ -131,6 +159,10 @@ corpora, and potential language-server-backed confidence upgrades.
 Milestone 22 outcome: `tests-for` now defaults to runnable integration targets, ranks runnable
 targets ahead of support paths, and supports explicit support-path restoration through
 `--include-support` without changing schema envelopes.
+
+Milestone 23 outcome: `verify-plan` now dampens generic changed symbols, supports deterministic
+targeted capping via `--max-targeted`, and preserves changed runnable test targets alongside the
+required full-suite gate.
 
 ## Context and Orientation
 
@@ -502,6 +534,52 @@ Milestone 22 post-dogfood evidence:
     cargo run -- verify-plan --changed-file src/main.rs --repo . --max-targeted 6 --json
     # observed: unexpected argument '--max-targeted' found (expected before Milestone 23)
 
+Milestone 23 strict TDD evidence:
+
+    # Slice 23A red
+    cargo test milestone23_verify_plan_downranks_generic_changed_symbols -- --nocapture
+    # observed: FAILED (verify-plan still recommended generic_output/generic_path)
+
+    # Slice 23A green
+    cargo test milestone23_verify_plan_downranks_generic_changed_symbols -- --nocapture
+    # observed: ok
+
+    # Slice 23A refactor gate
+    cargo test
+    # observed: full suite passed
+
+    # Slice 23B red
+    cargo test milestone23_verify_plan_applies_targeted_cap_deterministically -- --nocapture
+    # observed: FAILED (CLI rejected --max-targeted)
+
+    # Slice 23B green
+    cargo test milestone23_verify_plan_applies_targeted_cap_deterministically -- --nocapture
+    # observed: ok
+
+    # Slice 23B refactor gate
+    cargo test
+    # observed: full suite passed
+
+    # Slice 23C red
+    cargo test milestone23_verify_plan_preserves_changed_test_target_and_full_suite_gate -- --nocapture
+    # observed: FAILED (changed runnable test target dropped at --max-targeted=0)
+
+    # Slice 23C green
+    cargo test milestone23_verify_plan_preserves_changed_test_target_and_full_suite_gate -- --nocapture
+    # observed: ok
+
+    # Slice 23C refactor gate
+    cargo test
+    # observed: full suite passed
+
+Milestone 23 post-dogfood evidence:
+
+    cargo run -- verify-plan --changed-file src/main.rs --repo . --json
+    # observed: 2 targeted rows + full-suite gate
+
+    cargo run -- verify-plan --changed-file src/main.rs --repo . --max-targeted 6 --json
+    # observed: deterministic output identical to capped baseline for this fixture
+
 ## Interfaces and Dependencies
 
 Phase 5 should not require new external crates by default. Continue using existing dependencies
@@ -537,3 +615,6 @@ post-Phase-4 dogfooding. No production code changes were made as part of this pl
 
 Revision Note (2026-02-07): Updated progress, decisions, surprises, outcomes, and artifacts with
 Milestone 22 implementation details, strict TDD transcripts, and post-milestone dogfood evidence.
+
+Revision Note (2026-02-07): Updated progress, decisions, surprises, outcomes, and artifacts with
+Milestone 23 implementation details, strict TDD transcripts, and capped verify-plan dogfood evidence.
