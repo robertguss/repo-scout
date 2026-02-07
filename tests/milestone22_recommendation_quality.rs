@@ -47,15 +47,21 @@ fn milestone22_tests_for_excludes_support_paths_by_default() {
         .as_array()
         .expect("results should be array");
 
-    assert!(results
-        .iter()
-        .any(|row| row["target"] == "tests/milestone22_target.rs"));
-    assert!(!results
-        .iter()
-        .any(|row| row["target"] == "tests/common/mod.rs"));
-    assert!(!results
-        .iter()
-        .any(|row| row["target"] == "tests/helpers/support.rs"));
+    assert!(
+        results
+            .iter()
+            .any(|row| row["target"] == "tests/milestone22_target.rs")
+    );
+    assert!(
+        !results
+            .iter()
+            .any(|row| row["target"] == "tests/common/mod.rs")
+    );
+    assert!(
+        !results
+            .iter()
+            .any(|row| row["target"] == "tests/helpers/support.rs")
+    );
 }
 
 #[test]
@@ -95,9 +101,11 @@ fn milestone22_tests_for_prefers_runnable_targets() {
     let first = results.first().expect("expected at least one result");
     assert_eq!(first["target"], "tests/milestone22_preferred.rs");
     assert_eq!(first["target_kind"], "integration_test_file");
-    assert!(results
-        .iter()
-        .any(|row| row["target"] == "tests/common/mod.rs"));
+    assert!(
+        results
+            .iter()
+            .any(|row| row["target"] == "tests/common/mod.rs")
+    );
 }
 
 #[test]
@@ -133,9 +141,11 @@ fn milestone22_tests_for_include_support_restores_paths() {
     let default_results = default_payload["results"]
         .as_array()
         .expect("results should be array");
-    assert!(!default_results
-        .iter()
-        .any(|row| row["target"] == "tests/common/mod.rs"));
+    assert!(
+        !default_results
+            .iter()
+            .any(|row| row["target"] == "tests/common/mod.rs")
+    );
 
     let include_support_out = run_stdout(&[
         "tests-for",
@@ -156,8 +166,10 @@ fn milestone22_tests_for_include_support_restores_paths() {
         .find(|row| row["target"] == "tests/common/mod.rs")
         .expect("support path should be restored when include-support is set");
     assert_eq!(support_row["target_kind"], "support_test_file");
-    assert!(support_row["why_included"]
-        .as_str()
-        .expect("why_included should be string")
-        .contains("support path"));
+    assert!(
+        support_row["why_included"]
+            .as_str()
+            .expect("why_included should be string")
+            .contains("support path")
+    );
 }

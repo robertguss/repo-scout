@@ -78,7 +78,27 @@ User-visible outcome: a tighter “what should I run next” loop with higher-si
 - [x] (2026-02-07 23:07Z) Ran Milestone 25 post-dogfood checks with deterministic multi-hop
       traversal output and bounded distance behavior.
 - [x] (2026-02-07 23:07Z) Milestone 25 complete: true multi-hop `diff-impact` traversal contracts and implementation.
-- [ ] Phase 5 docs and dogfood evidence updates complete.
+- [x] (2026-02-07 23:07Z) Ran required pre-milestone dogfood baseline for Milestone 26:
+      `cargo run -- index --repo .`,
+      `cargo run -- find verify_plan_for_changed_files --repo . --json`,
+      `cargo run -- refs verify_plan_for_changed_files --repo . --json`.
+- [x] (2026-02-07 23:07Z) Updated Phase 5 docs and evidence artifacts:
+      `README.md`,
+      `docs/cli-reference.md`,
+      `docs/json-output.md`,
+      `docs/architecture.md`,
+      `docs/dogfood-log.md`,
+      `docs/performance-baseline.md`.
+- [x] (2026-02-07 23:07Z) Re-ran required post-milestone dogfood checks after docs refresh:
+      `cargo run -- index --repo .`,
+      `cargo run -- tests-for Path --repo . --json`,
+      `cargo run -- tests-for Path --repo . --include-support --json`,
+      `cargo run -- verify-plan --changed-file src/main.rs --repo . --json`,
+      `cargo run -- verify-plan --changed-file src/main.rs --repo . --max-targeted 6 --json`,
+      `cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --json`,
+      `cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --max-distance 3 --json`,
+      `cargo test`.
+- [x] (2026-02-07 23:07Z) Phase 5 docs and dogfood evidence updates complete.
 
 ## Surprises & Discoveries
 
@@ -129,6 +149,10 @@ User-visible outcome: a tighter “what should I run next” loop with higher-si
   files seed many symbols by default.
   Evidence: slice-25C red test showed `changed_c` emitted as an impacted symbol in a cycle until
   traversal suppressed symbol re-entry for all changed-seed IDs.
+
+- Observation: documentation drifted behind behavior for `context` and `diff-impact` details.
+  Evidence: pre-update docs still described one-hop `diff-impact` output and pre-Phase-5 context
+  rationale wording.
 
 ## Decision Log
 
@@ -191,6 +215,11 @@ User-visible outcome: a tighter “what should I run next” loop with higher-si
   deterministic while honoring `--max-distance`.
   Date/Author: 2026-02-07 / Codex
 
+- Decision: keep schema envelopes unchanged for Milestone 26 docs refresh and document Phase 5 as
+  behavior/option semantics over existing schema 1/2/3 payloads.
+  Rationale: avoids contract churn while making option-driven behavior explicit to users.
+  Date/Author: 2026-02-07 / Codex
+
 ## Outcomes & Retrospective
 
 Planning outcome: Phase 5 scope is constrained to recommendation quality and traversal fidelity on
@@ -219,6 +248,10 @@ JSON output across repeated runs.
 Milestone 25 outcome: `diff-impact` now performs bounded true multi-hop inbound traversal with
 deterministic dedupe, emits valid distance-2 neighbors on chain fixtures, and avoids cycle-driven
 duplicate growth while preserving schema-3 output shape.
+
+Milestone 26 outcome: user and contributor docs now reflect Phase 5 recommendation-quality and
+multi-hop traversal behavior, with updated command examples, schema notes, dogfood transcripts,
+and performance-baseline command coverage.
 
 ## Context and Orientation
 
@@ -731,6 +764,23 @@ Milestone 25 post-dogfood evidence:
     cargo run -- verify-plan --changed-file src/main.rs --repo . --max-targeted 6 --json
     # observed: deterministic capped targeted steps plus full-suite gate
 
+Milestone 26 post-dogfood evidence:
+
+    cargo run -- tests-for Path --repo . --json
+    # observed: runnable-only deterministic target list
+
+    cargo run -- tests-for Path --repo . --include-support --json
+    # observed: support path restored with target_kind "support_test_file"
+
+    cargo run -- verify-plan --changed-file src/main.rs --repo . --max-targeted 6 --json
+    # observed: bounded targeted rows remained deterministic; full-suite gate retained
+
+    cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --json
+    # observed: token-overlap rationale rows remained stable at schema_version 2
+
+    cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --max-distance 3 --json
+    # observed: schema_version 3 output remained deterministic with bounded traversal
+
 ## Interfaces and Dependencies
 
 Phase 5 should not require new external crates by default. Continue using existing dependencies
@@ -775,3 +825,6 @@ Milestone 24 context relevance work, strict TDD transcripts, and refreshed dogfo
 
 Revision Note (2026-02-07): Updated progress, decisions, surprises, outcomes, and artifacts with
 Milestone 25 multi-hop traversal work, strict TDD transcripts, and post-milestone dogfood evidence.
+
+Revision Note (2026-02-07): Updated Phase 5 documentation set (`README`, CLI/JSON/architecture,
+dogfood log, performance baseline) and marked Milestone 26 completion in the living plan.

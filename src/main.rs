@@ -270,8 +270,7 @@ fn run_verify_plan(args: crate::cli::VerifyPlanArgs) -> anyhow::Result<()> {
     changed_files.sort();
     changed_files.dedup();
 
-    let steps =
-        verify_plan_for_changed_files(&store.db_path, &changed_files, args.max_targeted)?;
+    let steps = verify_plan_for_changed_files(&store.db_path, &changed_files, args.max_targeted)?;
     if args.json {
         output::print_verify_plan_json(&changed_files, &steps)?;
     } else {

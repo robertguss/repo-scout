@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the current `repo-scout` architecture after Phase 4.
+This document describes the current `repo-scout` architecture after Phase 5.
 
 ## High-Level Flow
 
@@ -102,22 +102,28 @@ Lifecycle guarantees covered by integration tests include stale-file pruning, re
 
 ### `context`
 
-- Extract task keywords (ASCII alnum + `_`, lowercased, deduped, min length 3).
-- Add direct symbol definition hits.
-- Expand one-hop neighbors from edges.
+- Extract normalized task keywords (ASCII alnum + `_`, lowercased, deduped, stopword-filtered).
+- Score direct symbol definition hits using deterministic token-overlap relevance.
+- Expand one-hop neighbors from edges with deterministic neighbor scoring.
 - Sort deterministically and truncate to `max(1, budget / 200)`.
 
 ### `tests-for`
 
 - Find direct symbol occurrences in test-like files.
-- Group by file path, score by hit count, return deterministic ordering.
+- Classify targets as runnable integration test files or support paths.
+- By default return runnable targets only; `--include-support` restores support paths additively.
+- Score and sort deterministically with runnable targets first.
 
 ### `verify-plan`
 
 - Normalize and dedupe `--changed-file` inputs.
+- Skip generic changed symbols to reduce low-signal targeted recommendations.
 - Suggest targeted test commands from:
   - changed file itself when it is a runnable test target,
   - tests referencing symbols defined in changed files.
+- Apply deterministic targeted capping (`DEFAULT_VERIFY_PLAN_MAX_TARGETED = 8` or
+  `--max-targeted` override).
+- Preserve changed runnable test targets regardless cap value.
 - Keep best evidence for duplicate commands.
 - Always append `cargo test` full-suite gate.
 
@@ -128,7 +134,9 @@ Lifecycle guarantees covered by integration tests include stale-file pruning, re
 - Exclude `kind=import` changed-symbol seeds by default.
 - Re-include import seeds only when `--include-imports` is set.
 - Optionally constrain changed-symbol seeds by `--changed-line path:start[:end]` overlap.
-- Expand one-hop incoming neighbors from `symbol_edges_v2`.
+- Expand bounded multi-hop incoming neighbors from `symbol_edges_v2` up to `--max-distance`.
+- Use per-seed minimum-distance tracking and changed-seed suppression to avoid cycle-driven
+  duplicate growth.
 - Optionally attach ranked test targets.
 - Sort mixed result kinds deterministically.
 

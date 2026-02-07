@@ -35,8 +35,16 @@ fn milestone24_context_matches_relevant_symbols_for_paraphrased_task() {
         .as_array()
         .expect("results should be array");
 
-    assert!(results.iter().any(|row| row["symbol"] == "verify_plan_for_changed_files"));
-    assert!(results.iter().any(|row| row["symbol"] == "tests_for_symbol"));
+    assert!(
+        results
+            .iter()
+            .any(|row| row["symbol"] == "verify_plan_for_changed_files")
+    );
+    assert!(
+        results
+            .iter()
+            .any(|row| row["symbol"] == "tests_for_symbol")
+    );
 }
 
 #[test]

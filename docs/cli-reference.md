@@ -130,9 +130,10 @@ Build a ranked, budgeted context bundle for an editing task.
 
 Behavior:
 
-- Extracts deduplicated lowercase keywords from task text.
-- Prioritizes direct symbol definition hits (`confidence=context_high`, `score=0.95`).
-- Adds one-hop graph neighbors (`context_medium`, `0.7`).
+- Extracts normalized task keywords (lowercased, deduped, stopword-filtered).
+- Uses deterministic token-overlap relevance between task keywords and symbol tokens.
+- Prioritizes direct symbol definition hits (typically `context_high`, score up to `0.98`).
+- Adds one-hop graph neighbors (`context_medium`, score derived from direct match score).
 - Truncates to `max(1, budget / 200)` results.
 
 Example:
@@ -142,7 +143,7 @@ cargo run -- context --task "update run and verify refs behavior" --repo . --bud
 cargo run -- context --task "update run and verify refs behavior" --repo . --budget 400 --json
 ```
 
-### `tests-for <SYMBOL> --repo <PATH> [--json]`
+### `tests-for <SYMBOL> --repo <PATH> [--include-support] [--json]`
 
 Return test targets likely relevant to `SYMBOL`.
 
@@ -155,19 +156,23 @@ Current target discovery:
 Output rows include:
 
 - `target`
-- `target_kind` (currently `integration_test_file`)
+- `target_kind` (`integration_test_file` or additive `support_test_file`)
 - `why_included`
 - `confidence`
 - `score`
+
+Default behavior returns runnable integration targets only. Set `--include-support` to restore
+support paths (for example `tests/common/mod.rs`) in deterministic ranked order.
 
 Example:
 
 ```bash
 cargo run -- tests-for run --repo .
 cargo run -- tests-for run --repo . --json
+cargo run -- tests-for run --repo . --include-support --json
 ```
 
-### `verify-plan --changed-file <PATH> [--changed-file <PATH> ...] --repo <PATH> [--json]`
+### `verify-plan --changed-file <PATH> [--changed-file <PATH> ...] --repo <PATH> [--max-targeted <N>] [--json]`
 
 Generate deterministic validation steps for changed files.
 
@@ -175,7 +180,11 @@ Behavior:
 
 - Normalizes changed-file paths to repo-relative form.
 - Deduplicates repeated changed-file inputs.
+- Dampens high-frequency generic changed symbols (for example `Path`, `output`) for better signal.
 - Suggests runnable targeted commands only (`cargo test --test <name>` for direct `tests/<file>.rs` targets).
+- Caps symbol-derived targeted rows to `8` by default.
+- `--max-targeted 0` suppresses symbol-derived targeted rows, while still preserving changed
+  runnable test targets and the required full-suite gate.
 - Always appends a full-suite safety gate: `cargo test`.
 
 Example:
@@ -183,6 +192,7 @@ Example:
 ```bash
 cargo run -- verify-plan --changed-file src/query/mod.rs --repo .
 cargo run -- verify-plan --changed-file src/query/mod.rs --changed-file ./src/query/mod.rs --repo . --json
+cargo run -- verify-plan --changed-file src/main.rs --repo . --max-targeted 6 --json
 ```
 
 ### `diff-impact --changed-file <PATH> [--changed-file <PATH> ...] --repo <PATH> [--max-distance <N>] [--include-tests] [--include-imports] [--changed-line <path:start[:end]>] [--json]`
@@ -195,8 +205,10 @@ Behavior:
 - Emits changed symbols (`distance = 0`, `relationship = changed_symbol`).
 - Excludes `kind=import` from changed-symbol seeds unless `--include-imports` is set.
 - Applies `--changed-line` filters to changed-symbol seeds for matching files only.
-- Emits one-hop incoming neighbors (`called_by`, `contained_by`, `imported_by`, `implemented_by`)
-  when `max_distance >= 1`.
+- Emits bounded multi-hop incoming neighbors (`called_by`, `contained_by`, `imported_by`,
+  `implemented_by`) up to `--max-distance`.
+- Uses cycle-safe, deterministic dedupe to prevent duplicate growth and changed-symbol echo rows at
+  non-zero distances.
 - Optionally emits test targets (`result_kind = test_target`).
 
 `--changed-line` parsing rules:

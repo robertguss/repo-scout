@@ -48,15 +48,21 @@ fn milestone23_verify_plan_downranks_generic_changed_symbols() {
         .as_array()
         .expect("results should be array");
 
-    assert!(results
-        .iter()
-        .any(|row| row["step"] == "cargo test --test specific_verify_signal"));
-    assert!(!results
-        .iter()
-        .any(|row| row["step"] == "cargo test --test generic_output"));
-    assert!(!results
-        .iter()
-        .any(|row| row["step"] == "cargo test --test generic_path"));
+    assert!(
+        results
+            .iter()
+            .any(|row| row["step"] == "cargo test --test specific_verify_signal")
+    );
+    assert!(
+        !results
+            .iter()
+            .any(|row| row["step"] == "cargo test --test generic_output")
+    );
+    assert!(
+        !results
+            .iter()
+            .any(|row| row["step"] == "cargo test --test generic_path")
+    );
 }
 
 #[test]
@@ -122,9 +128,11 @@ fn milestone23_verify_plan_applies_targeted_cap_deterministically() {
         .filter(|row| row["scope"] == "targeted")
         .count();
     assert_eq!(capped_targeted, 2);
-    assert!(capped_results
-        .iter()
-        .any(|row| row["scope"] == "full_suite" && row["step"] == "cargo test"));
+    assert!(
+        capped_results
+            .iter()
+            .any(|row| row["scope"] == "full_suite" && row["step"] == "cargo test")
+    );
 
     let zero_out = run_stdout(&[
         "verify-plan",
@@ -184,10 +192,14 @@ fn milestone23_verify_plan_preserves_changed_test_target_and_full_suite_gate() {
         .as_array()
         .expect("results should be array");
 
-    assert!(results
-        .iter()
-        .any(|row| row["step"] == "cargo test --test changed_focus"));
-    assert!(results
-        .iter()
-        .any(|row| row["step"] == "cargo test" && row["scope"] == "full_suite"));
+    assert!(
+        results
+            .iter()
+            .any(|row| row["step"] == "cargo test --test changed_focus")
+    );
+    assert!(
+        results
+            .iter()
+            .any(|row| row["step"] == "cargo test" && row["scope"] == "full_suite")
+    );
 }
