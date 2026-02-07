@@ -67,7 +67,17 @@ User-visible outcome: a tighter “what should I run next” loop with higher-si
 - [x] (2026-02-07 23:00Z) Ran Milestone 24 post-dogfood checks with richer context recall and
       deterministic relevance-scored JSON output.
 - [x] (2026-02-07 23:00Z) Milestone 24 complete: `context` relevance/recall contracts and implementation.
-- [ ] Milestone 25 complete: true multi-hop `diff-impact` traversal contracts and implementation.
+- [x] (2026-02-07 23:07Z) Ran required pre-milestone dogfood baseline for Milestone 25:
+      `cargo run -- index --repo .`,
+      `cargo run -- find verify_plan_for_changed_files --repo . --json`,
+      `cargo run -- refs verify_plan_for_changed_files --repo . --json`.
+- [x] (2026-02-07 23:07Z) Completed Milestone 25 strict TDD slices:
+      `milestone25_diff_impact_max_distance_two_emits_distance_two_neighbors`,
+      `milestone25_diff_impact_respects_max_distance_bound`,
+      `milestone25_diff_impact_handles_cycles_without_duplicate_growth`.
+- [x] (2026-02-07 23:07Z) Ran Milestone 25 post-dogfood checks with deterministic multi-hop
+      traversal output and bounded distance behavior.
+- [x] (2026-02-07 23:07Z) Milestone 25 complete: true multi-hop `diff-impact` traversal contracts and implementation.
 - [ ] Phase 5 docs and dogfood evidence updates complete.
 
 ## Surprises & Discoveries
@@ -114,6 +124,11 @@ User-visible outcome: a tighter “what should I run next” loop with higher-si
   when task wording overlaps many verification terms.
   Evidence: post-Milestone-24 dogfood `context` returned 6 high-score rows, including
   `tests/milestone10_validation.rs` and `tests/milestone23_verify_plan_precision.rs` symbols.
+
+- Observation: multi-hop traversal can reintroduce changed symbols at `distance > 0` when changed
+  files seed many symbols by default.
+  Evidence: slice-25C red test showed `changed_c` emitted as an impacted symbol in a cycle until
+  traversal suppressed symbol re-entry for all changed-seed IDs.
 
 ## Decision Log
 
@@ -170,6 +185,12 @@ User-visible outcome: a tighter “what should I run next” loop with higher-si
   stable, auditable recommendation rationale.
   Date/Author: 2026-02-07 / Codex
 
+- Decision: enforce cycle-safe multi-hop traversal by tracking minimum discovered distance per seed
+  and suppressing changed-seed symbol re-entry at non-zero distance.
+  Rationale: prevents duplicate growth, avoids changed-symbol echo rows, and keeps traversal
+  deterministic while honoring `--max-distance`.
+  Date/Author: 2026-02-07 / Codex
+
 ## Outcomes & Retrospective
 
 Planning outcome: Phase 5 scope is constrained to recommendation quality and traversal fidelity on
@@ -194,6 +215,10 @@ required full-suite gate.
 Milestone 24 outcome: `context` now matches paraphrased task text using deterministic token-overlap
 relevance scoring, ranks meaningful definitions above incidental short tokens, and keeps stable
 JSON output across repeated runs.
+
+Milestone 25 outcome: `diff-impact` now performs bounded true multi-hop inbound traversal with
+deterministic dedupe, emits valid distance-2 neighbors on chain fixtures, and avoids cycle-driven
+duplicate growth while preserving schema-3 output shape.
 
 ## Context and Orientation
 
@@ -654,6 +679,58 @@ Milestone 24 post-dogfood evidence:
     cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --json
     # observed: 6 deterministic high-signal rows with token-overlap rationale text
 
+Milestone 25 strict TDD evidence:
+
+    # Slice 25A red
+    cargo test milestone25_diff_impact_max_distance_two_emits_distance_two_neighbors -- --nocapture
+    # observed: FAILED (no distance=2 impacted row before multi-hop traversal)
+
+    # Slice 25A green
+    cargo test milestone25_diff_impact_max_distance_two_emits_distance_two_neighbors -- --nocapture
+    # observed: ok
+
+    # Slice 25A refactor gate
+    cargo test
+    # observed: full suite passed
+
+    # Slice 25B red
+    cargo test milestone25_diff_impact_respects_max_distance_bound -- --nocapture
+    # observed: FAILED (distance exceeded requested bound before traversal cap enforcement)
+
+    # Slice 25B green
+    cargo test milestone25_diff_impact_respects_max_distance_bound -- --nocapture
+    # observed: ok
+
+    # Slice 25B refactor gate
+    cargo test
+    # observed: full suite passed
+
+    # Slice 25C red
+    cargo test milestone25_diff_impact_handles_cycles_without_duplicate_growth -- --nocapture
+    # observed: FAILED (cycle traversal re-emitted changed symbol at non-zero distance)
+
+    # Slice 25C green
+    cargo test milestone25_diff_impact_handles_cycles_without_duplicate_growth -- --nocapture
+    # observed: ok
+
+    # Slice 25C refactor gate
+    cargo test
+    # observed: full suite passed
+
+Milestone 25 post-dogfood evidence:
+
+    cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --max-distance 3 --json
+    # observed: command succeeded with deterministic schema-3 payload and bounded distances
+
+    cargo run -- tests-for Path --repo . --json
+    # observed: runnable-only targets by default (no support path rows)
+
+    cargo run -- tests-for Path --repo . --include-support --json
+    # observed: support row restored as target_kind "support_test_file"
+
+    cargo run -- verify-plan --changed-file src/main.rs --repo . --max-targeted 6 --json
+    # observed: deterministic capped targeted steps plus full-suite gate
+
 ## Interfaces and Dependencies
 
 Phase 5 should not require new external crates by default. Continue using existing dependencies
@@ -695,3 +772,6 @@ Milestone 23 implementation details, strict TDD transcripts, and capped verify-p
 
 Revision Note (2026-02-07): Updated progress, decisions, surprises, outcomes, and artifacts with
 Milestone 24 context relevance work, strict TDD transcripts, and refreshed dogfood evidence.
+
+Revision Note (2026-02-07): Updated progress, decisions, surprises, outcomes, and artifacts with
+Milestone 25 multi-hop traversal work, strict TDD transcripts, and post-milestone dogfood evidence.

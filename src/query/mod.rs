@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::Path;
 
@@ -231,73 +231,111 @@ pub fn diff_impact_for_changed_files(
         }
     }
 
+    let changed_symbol_id_set = changed_symbol_ids
+        .iter()
+        .map(|(symbol_id, _)| *symbol_id)
+        .collect::<HashSet<_>>();
+
     if options.max_distance >= 1 {
+        let traversal_limit = options.max_distance;
         for (changed_symbol_id, changed_symbol) in changed_symbol_ids {
-            let mut incoming_statement = connection.prepare(
-                "SELECT fs.symbol, fs.kind, fs.file_path, fs.start_line, fs.start_column, fs.language, fs.qualified_symbol, e.edge_kind, e.confidence, e.provenance
-                 FROM symbol_edges_v2 e
-                 JOIN symbols_v2 fs ON fs.symbol_id = e.from_symbol_id
-                 WHERE e.to_symbol_id = ?1
-                 ORDER BY fs.file_path ASC, fs.start_line ASC, fs.start_column ASC, fs.symbol ASC",
-            )?;
-            let incoming_rows =
-                incoming_statement.query_map(params![changed_symbol_id], |row| {
+            let mut frontier = VecDeque::new();
+            let mut min_distance_by_symbol = HashMap::new();
+            frontier.push_back((changed_symbol_id, 0_u32));
+            min_distance_by_symbol.insert(changed_symbol_id, 0_u32);
+
+            while let Some((to_symbol_id, distance)) = frontier.pop_front() {
+                if distance >= traversal_limit {
+                    continue;
+                }
+                let next_distance = distance + 1;
+
+                let mut incoming_statement = connection.prepare(
+                    "SELECT fs.symbol_id, fs.symbol, fs.kind, fs.file_path, fs.start_line, fs.start_column, fs.language, fs.qualified_symbol, e.edge_kind, e.confidence, e.provenance
+                     FROM symbol_edges_v2 e
+                     JOIN symbols_v2 fs ON fs.symbol_id = e.from_symbol_id
+                     WHERE e.to_symbol_id = ?1
+                     ORDER BY fs.file_path ASC, fs.start_line ASC, fs.start_column ASC, fs.symbol ASC",
+                )?;
+                let incoming_rows = incoming_statement.query_map(params![to_symbol_id], |row| {
                     Ok((
-                        row.get::<_, String>(0)?,
+                        row.get::<_, i64>(0)?,
                         row.get::<_, String>(1)?,
                         row.get::<_, String>(2)?,
-                        row.get::<_, i64>(3)? as u32,
+                        row.get::<_, String>(3)?,
                         row.get::<_, i64>(4)? as u32,
-                        row.get::<_, String>(5)?,
-                        row.get::<_, Option<String>>(6)?,
-                        row.get::<_, String>(7)?,
-                        row.get::<_, f64>(8)?,
-                        row.get::<_, String>(9)?,
+                        row.get::<_, i64>(5)? as u32,
+                        row.get::<_, String>(6)?,
+                        row.get::<_, Option<String>>(7)?,
+                        row.get::<_, String>(8)?,
+                        row.get::<_, f64>(9)?,
+                        row.get::<_, String>(10)?,
                     ))
                 })?;
 
-            for incoming in incoming_rows {
-                let (
-                    symbol,
-                    kind,
-                    file_path,
-                    line,
-                    column,
-                    language,
-                    qualified_symbol,
-                    edge_kind,
-                    score,
-                    provenance,
-                ) = incoming?;
-                let language = normalized_language(&language, &file_path).to_string();
-                let qualified_symbol =
-                    qualified_symbol.unwrap_or_else(|| format!("{language}:{file_path}::{symbol}"));
-                let relationship = edge_kind_relationship(&edge_kind);
-                let provenance = normalized_provenance(&provenance, &edge_kind);
-                let key = format!(
-                    "{file_path}:{line}:{column}:{qualified_symbol}:{relationship}:distance1"
-                );
-                if !seen.insert(key) {
-                    continue;
-                }
+                for incoming in incoming_rows {
+                    let (
+                        from_symbol_id,
+                        symbol,
+                        kind,
+                        file_path,
+                        line,
+                        column,
+                        language,
+                        qualified_symbol,
+                        edge_kind,
+                        score,
+                        provenance,
+                    ) = incoming?;
+                    if changed_symbol_id_set.contains(&from_symbol_id) {
+                        continue;
+                    }
+                    if min_distance_by_symbol
+                        .get(&from_symbol_id)
+                        .is_some_and(|known| *known < next_distance)
+                    {
+                        continue;
+                    }
 
-                results.push(DiffImpactMatch::ImpactedSymbol {
-                    symbol,
-                    qualified_symbol,
-                    kind,
-                    language,
-                    file_path,
-                    line,
-                    column,
-                    distance: 1,
-                    relationship: relationship.to_string(),
-                    why_included: format!(
-                        "direct {relationship} neighbor of changed symbol '{changed_symbol}'"
-                    ),
-                    confidence: "graph_likely".to_string(),
-                    provenance,
-                    score,
-                });
+                    let known_distance = min_distance_by_symbol.get(&from_symbol_id).copied();
+                    let should_expand_frontier = known_distance != Some(next_distance);
+                    if known_distance.is_none_or(|known| next_distance < known) {
+                        min_distance_by_symbol.insert(from_symbol_id, next_distance);
+                    }
+
+                    let language = normalized_language(&language, &file_path).to_string();
+                    let qualified_symbol = qualified_symbol
+                        .unwrap_or_else(|| format!("{language}:{file_path}::{symbol}"));
+                    let relationship = edge_kind_relationship(&edge_kind);
+                    let provenance = normalized_provenance(&provenance, &edge_kind);
+                    let key = format!(
+                        "{file_path}:{line}:{column}:{qualified_symbol}:{relationship}:distance{next_distance}"
+                    );
+                    if !seen.insert(key) {
+                        continue;
+                    }
+
+                    results.push(DiffImpactMatch::ImpactedSymbol {
+                        symbol: symbol.clone(),
+                        qualified_symbol,
+                        kind,
+                        language,
+                        file_path,
+                        line,
+                        column,
+                        distance: next_distance,
+                        relationship: relationship.to_string(),
+                        why_included: format!(
+                            "direct {relationship} neighbor of changed symbol '{changed_symbol}'"
+                        ),
+                        confidence: "graph_likely".to_string(),
+                        provenance,
+                        score,
+                    });
+                    if should_expand_frontier {
+                        frontier.push_back((from_symbol_id, next_distance));
+                    }
+                }
             }
         }
     }
@@ -878,7 +916,9 @@ pub fn context_matches(
             continue;
         }
         let overlap_count = matched_keywords.len();
-        let exact_symbol_match = keywords.iter().any(|keyword| keyword == &symbol.to_ascii_lowercase());
+        let exact_symbol_match = keywords
+            .iter()
+            .any(|keyword| keyword == &symbol.to_ascii_lowercase());
         let direct_score =
             context_direct_score(overlap_count, exact_symbol_match, symbol_tokens.len());
         let key = format!("{file_path}:{start_line}:{symbol}:direct");
