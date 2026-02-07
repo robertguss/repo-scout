@@ -2,7 +2,8 @@
 
 `repo-scout` is a local, deterministic CLI for indexing a repository and answering code-navigation questions fast.
 
-Phase 3 is fully implemented and adds deterministic changed-file and symbol-dossier workflows.
+Phase 4 is fully implemented and adds precision/disambiguation/noise-control workflows on the
+existing command surface.
 
 ## What It Does
 
@@ -50,6 +51,11 @@ cargo run -- tests-for launch --repo /path/to/repo
 cargo run -- verify-plan --changed-file src/lib.rs --repo /path/to/repo
 cargo run -- diff-impact --changed-file src/lib.rs --repo /path/to/repo
 cargo run -- explain impact_matches --repo /path/to/repo
+
+# Phase 4 controls
+cargo run -- refs launch --repo /path/to/repo --code-only --exclude-tests
+cargo run -- diff-impact --changed-file src/lib.rs --changed-line src/lib.rs:20:80 --repo /path/to/repo
+cargo run -- diff-impact --changed-file src/lib.rs --include-imports --repo /path/to/repo
 ```
 
 JSON output is supported by query commands:
@@ -68,10 +74,11 @@ cargo run -- explain impact_matches --repo /path/to/repo --json
   - Prints `index_path`, `schema_version`, `indexed_files`, and `skipped_files`.
 - `status --repo <PATH>`
   - Prints index path and schema version.
-- `find <SYMBOL> --repo <PATH> [--json]`
+- `find <SYMBOL> --repo <PATH> [--json] [--code-only] [--exclude-tests]`
   - Prefers AST definitions (`ast_definition`), then falls back to text ranking.
-- `refs <SYMBOL> --repo <PATH> [--json]`
+- `refs <SYMBOL> --repo <PATH> [--json] [--code-only] [--exclude-tests]`
   - Prefers AST references (`ast_reference`), then falls back to text ranking.
+  - Scope flags apply to text fallback only; AST-priority behavior is unchanged.
 - `impact <SYMBOL> --repo <PATH> [--json]`
   - Returns one-hop incoming graph neighbors (`called_by`, `contained_by`, `imported_by`, `implemented_by`).
 - `context --task <TEXT> --repo <PATH> [--budget <N>] [--json]`
@@ -80,8 +87,10 @@ cargo run -- explain impact_matches --repo /path/to/repo --json
   - Finds test-like files that directly reference a symbol.
 - `verify-plan --changed-file <PATH> --repo <PATH> [--json]`
   - Produces deterministic verification steps (targeted test commands + `cargo test`).
-- `diff-impact --changed-file <PATH> --repo <PATH> [--max-distance <N>] [--include-tests] [--json]`
+- `diff-impact --changed-file <PATH> --repo <PATH> [--max-distance <N>] [--include-tests] [--include-imports] [--changed-line <path:start[:end]>] [--json]`
   - Emits changed-symbol rows plus deterministic one-hop impacted symbols/test targets.
+  - By default, changed-symbol seeds exclude import definitions unless `--include-imports` is set.
+  - `--changed-line` limits changed-symbol seeds to symbols overlapping the provided ranges.
 - `explain <SYMBOL> --repo <PATH> [--include-snippets] [--json]`
   - Produces a deterministic symbol dossier with spans, signature, and relationship counts.
 

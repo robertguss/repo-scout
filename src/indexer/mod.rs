@@ -54,7 +54,13 @@ pub fn index_repository(repo: &Path, db_path: &Path) -> anyhow::Result<IndexSumm
 
     let mut indexed_files = 0usize;
     let mut skipped_files = 0usize;
-    let mut deferred_edges: Vec<(String, String, String, f64, String)> = Vec::new();
+    let mut deferred_edges: Vec<(
+        languages::SymbolKey,
+        languages::SymbolKey,
+        String,
+        f64,
+        String,
+    )> = Vec::new();
 
     for file in source_files {
         let existing_hash: Option<String> = connection
@@ -123,12 +129,18 @@ pub fn index_repository(repo: &Path, db_path: &Path) -> anyhow::Result<IndexSumm
             )?;
         }
 
-        let pending_edges: Vec<(String, String, String, f64, String)> = extracted_edges
+        let pending_edges: Vec<(
+            languages::SymbolKey,
+            languages::SymbolKey,
+            String,
+            f64,
+            String,
+        )> = extracted_edges
             .into_iter()
             .map(|edge| {
                 (
-                    edge.from_symbol_key.symbol,
-                    edge.to_symbol_key.symbol,
+                    edge.from_symbol_key,
+                    edge.to_symbol_key,
                     edge.edge_kind,
                     edge.confidence,
                     edge.provenance,
@@ -202,19 +214,37 @@ pub fn index_repository(repo: &Path, db_path: &Path) -> anyhow::Result<IndexSumm
             )?;
         }
 
-        for (from_symbol, to_symbol, edge_kind, confidence, provenance) in pending_edges {
-            let Some(from_symbol_id) = resolve_symbol_id_in_tx(&tx, &from_symbol)? else {
-                deferred_edges.push((from_symbol, to_symbol, edge_kind, confidence, provenance));
+        for (from_symbol_key, to_symbol_key, edge_kind, confidence, provenance) in pending_edges {
+            let Some(from_symbol_id) = resolve_symbol_id_in_tx(&tx, &from_symbol_key)? else {
+                deferred_edges.push((
+                    from_symbol_key,
+                    to_symbol_key,
+                    edge_kind,
+                    confidence,
+                    provenance,
+                ));
                 continue;
             };
-            let Some(to_symbol_id) = resolve_symbol_id_in_tx(&tx, &to_symbol)? else {
-                deferred_edges.push((from_symbol, to_symbol, edge_kind, confidence, provenance));
+            let Some(to_symbol_id) = resolve_symbol_id_in_tx(&tx, &to_symbol_key)? else {
+                deferred_edges.push((
+                    from_symbol_key,
+                    to_symbol_key,
+                    edge_kind,
+                    confidence,
+                    provenance,
+                ));
                 continue;
             };
             if matches!(edge_kind.as_str(), "imports" | "implements")
                 && symbol_kind_by_id_in_tx(&tx, to_symbol_id)?.as_deref() == Some("import")
             {
-                deferred_edges.push((from_symbol, to_symbol, edge_kind, confidence, provenance));
+                deferred_edges.push((
+                    from_symbol_key,
+                    to_symbol_key,
+                    edge_kind,
+                    confidence,
+                    provenance,
+                ));
                 continue;
             }
 
@@ -240,13 +270,18 @@ pub fn index_repository(repo: &Path, db_path: &Path) -> anyhow::Result<IndexSumm
 
     if !deferred_edges.is_empty() {
         let tx = connection.transaction()?;
-        for (from_symbol, to_symbol, edge_kind, confidence, provenance) in deferred_edges {
-            let Some(from_symbol_id) = resolve_symbol_id_in_tx(&tx, &from_symbol)? else {
+        for (from_symbol_key, to_symbol_key, edge_kind, confidence, provenance) in deferred_edges {
+            let Some(from_symbol_id) = resolve_symbol_id_in_tx(&tx, &from_symbol_key)? else {
                 continue;
             };
-            let Some(to_symbol_id) = resolve_symbol_id_in_tx(&tx, &to_symbol)? else {
+            let Some(to_symbol_id) = resolve_symbol_id_in_tx(&tx, &to_symbol_key)? else {
                 continue;
             };
+            if matches!(edge_kind.as_str(), "imports" | "implements")
+                && symbol_kind_by_id_in_tx(&tx, to_symbol_id)?.as_deref() == Some("import")
+            {
+                continue;
+            }
 
             tx.execute(
                 "INSERT INTO symbol_edges_v2(from_symbol_id, to_symbol_id, edge_kind, confidence, provenance)
@@ -339,23 +374,30 @@ fn prune_stale_file_rows(
     Ok(())
 }
 
-/// Finds the database `symbol_id` for the given symbol name within the provided transaction.
+/// Resolves a symbol row using deterministic disambiguation hints.
 ///
-/// This queries the `symbols_v2` table for rows matching `symbol` and returns the first
-/// `symbol_id` ordered by `file_path`, `start_line`, then `start_column`. Order ties are
-/// resolved by that ordering so the returned ID is the earliest occurrence by location.
+/// Resolution order is:
+/// 1. exact `qualified_symbol` match,
+/// 2. exact `(file_path, symbol)` match with non-import preference,
+/// 3. unique global `symbol` match,
+/// 4. unresolved (`None`) when ambiguous.
 ///
 /// # Returns
 ///
-/// `Ok(Some(symbol_id))` with the matching symbol ID if one exists, `Ok(None)` if no row matches,
-/// or an `Err` if the database query fails.
+/// `Ok(Some(symbol_id))` when a deterministic match exists, `Ok(None)` when unresolved, or an
+/// error if the query fails.
 ///
 /// # Examples
 ///
 /// ```ignore
 /// // Illustrative usage (not compiled in doctest):
 /// let tx: rusqlite::Transaction = /* obtain a transaction */ unimplemented!();
-/// let id = resolve_symbol_id_in_tx(&tx, "my_crate::MyType")?;
+/// let id = resolve_symbol_id_in_tx(&tx, &crate::indexer::languages::SymbolKey {
+///     symbol: "my_symbol".to_string(),
+///     qualified_symbol: Some("rust:src/lib.rs::my_symbol".to_string()),
+///     file_path: Some("src/lib.rs".to_string()),
+///     language: Some("rust".to_string()),
+/// })?;
 /// if let Some(symbol_id) = id {
 ///     println!("Found symbol id: {}", symbol_id);
 /// } else {
@@ -364,21 +406,79 @@ fn prune_stale_file_rows(
 /// ```
 fn resolve_symbol_id_in_tx(
     tx: &rusqlite::Transaction<'_>,
-    symbol: &str,
+    key: &languages::SymbolKey,
 ) -> anyhow::Result<Option<i64>> {
-    let symbol_id = tx
-        .query_row(
+    if let Some(qualified_symbol) = key.qualified_symbol.as_deref() {
+        let qualified_match = tx
+            .query_row(
+                "SELECT symbol_id
+                 FROM symbols_v2
+                 WHERE qualified_symbol = ?1
+                 ORDER BY CASE WHEN kind = 'import' THEN 1 ELSE 0 END ASC,
+                          file_path ASC, start_line ASC, start_column ASC
+                 LIMIT 1",
+                [qualified_symbol],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()?;
+        if qualified_match.is_some() {
+            return Ok(qualified_match);
+        }
+    }
+
+    if let Some(file_path) = key.file_path.as_deref() {
+        let scoped_match = tx
+            .query_row(
+                "SELECT symbol_id
+                 FROM symbols_v2
+                 WHERE file_path = ?1
+                   AND symbol = ?2
+                 ORDER BY CASE WHEN kind = 'import' THEN 1 ELSE 0 END ASC,
+                          start_line ASC, start_column ASC
+                 LIMIT 1",
+                params![file_path, key.symbol],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()?;
+        if scoped_match.is_some() {
+            return Ok(scoped_match);
+        }
+    }
+
+    let mut statement = if key.language.is_some() {
+        tx.prepare(
+            "SELECT symbol_id
+             FROM symbols_v2
+             WHERE symbol = ?1
+               AND language = ?2
+             ORDER BY CASE WHEN kind = 'import' THEN 1 ELSE 0 END ASC,
+                      file_path ASC, start_line ASC, start_column ASC
+             LIMIT 2",
+        )?
+    } else {
+        tx.prepare(
             "SELECT symbol_id
              FROM symbols_v2
              WHERE symbol = ?1
              ORDER BY CASE WHEN kind = 'import' THEN 1 ELSE 0 END ASC,
                       file_path ASC, start_line ASC, start_column ASC
-             LIMIT 1",
-            [symbol],
-            |row| row.get::<_, i64>(0),
-        )
-        .optional()?;
-    Ok(symbol_id)
+             LIMIT 2",
+        )?
+    };
+    let mut rows = if let Some(language) = key.language.as_deref() {
+        statement.query(params![key.symbol, language])?
+    } else {
+        statement.query([key.symbol.as_str()])?
+    };
+    let Some(first_row) = rows.next()? else {
+        return Ok(None);
+    };
+    let first_symbol_id = first_row.get::<_, i64>(0)?;
+    if rows.next()?.is_some() {
+        return Ok(None);
+    }
+
+    Ok(Some(first_symbol_id))
 }
 
 fn symbol_kind_by_id_in_tx(

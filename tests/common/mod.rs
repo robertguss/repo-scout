@@ -6,10 +6,10 @@ use tempfile::TempDir;
 
 pub fn repo_scout_cmd() -> Command {
     let env_candidates = [
-        "CARGO_BIN_EXE_codex-5-3",
-        "CARGO_BIN_EXE_codex_5_3",
-        "CARGO_BIN_EXE_repo-scout",
         "CARGO_BIN_EXE_repo_scout",
+        "CARGO_BIN_EXE_repo-scout",
+        "CARGO_BIN_EXE_codex_5_3",
+        "CARGO_BIN_EXE_codex-5-3",
     ];
 
     for name in env_candidates {
@@ -26,7 +26,7 @@ pub fn repo_scout_cmd() -> Command {
         target_dir.pop();
     }
 
-    let bin_candidates = ["codex-5-3", "repo-scout"];
+    let bin_candidates = ["repo-scout", "codex-5-3"];
     for bin_name in bin_candidates {
         let path = target_dir.join(format!("{bin_name}{}", std::env::consts::EXE_SUFFIX));
         if path.is_file() {

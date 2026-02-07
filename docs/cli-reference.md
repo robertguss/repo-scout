@@ -59,7 +59,7 @@ Example:
 cargo run -- status --repo .
 ```
 
-### `find <SYMBOL> --repo <PATH> [--json]`
+### `find <SYMBOL> --repo <PATH> [--json] [--code-only] [--exclude-tests]`
 
 Find likely symbol definitions.
 
@@ -69,6 +69,13 @@ Ranking strategy:
 2. Text exact token fallback (`exact_symbol_name`, `text_fallback`, `0.8`).
 3. Text substring fallback (`text_substring_match`, `text_fallback`, `0.4`).
 
+Scope controls for fallback rows:
+
+- `--code-only`: restricts fallback matches to `.rs`, `.ts`, `.tsx`, `.py` paths.
+- `--exclude-tests`: omits fallback matches in test-like paths (`tests/`, `/tests/`, `*_test.rs`).
+
+AST definition matches remain highest priority and are returned unchanged when present.
+
 Example:
 
 ```bash
@@ -76,7 +83,7 @@ cargo run -- find run --repo .
 cargo run -- find run --repo . --json
 ```
 
-### `refs <SYMBOL> --repo <PATH> [--json]`
+### `refs <SYMBOL> --repo <PATH> [--json] [--code-only] [--exclude-tests]`
 
 Find likely references/usages.
 
@@ -84,6 +91,13 @@ Ranking strategy:
 
 1. AST reference matches (`why_matched=ast_reference`, `confidence=ast_likely`, `score=0.95`).
 2. Same text fallback sequence as `find`.
+
+Scope controls for fallback rows:
+
+- `--code-only`: restricts fallback matches to `.rs`, `.ts`, `.tsx`, `.py` paths.
+- `--exclude-tests`: omits fallback matches in test-like paths (`tests/`, `/tests/`, `*_test.rs`).
+
+AST reference matches remain highest priority and are returned unchanged when present.
 
 Example:
 
@@ -171,7 +185,7 @@ cargo run -- verify-plan --changed-file src/query/mod.rs --repo .
 cargo run -- verify-plan --changed-file src/query/mod.rs --changed-file ./src/query/mod.rs --repo . --json
 ```
 
-### `diff-impact --changed-file <PATH> [--changed-file <PATH> ...] --repo <PATH> [--max-distance <N>] [--include-tests] [--json]`
+### `diff-impact --changed-file <PATH> [--changed-file <PATH> ...] --repo <PATH> [--max-distance <N>] [--include-tests] [--include-imports] [--changed-line <path:start[:end]>] [--json]`
 
 Generate deterministic changed-file impact results.
 
@@ -179,9 +193,18 @@ Behavior:
 
 - Normalizes and deduplicates changed-file paths.
 - Emits changed symbols (`distance = 0`, `relationship = changed_symbol`).
+- Excludes `kind=import` from changed-symbol seeds unless `--include-imports` is set.
+- Applies `--changed-line` filters to changed-symbol seeds for matching files only.
 - Emits one-hop incoming neighbors (`called_by`, `contained_by`, `imported_by`, `implemented_by`)
   when `max_distance >= 1`.
 - Optionally emits test targets (`result_kind = test_target`).
+
+`--changed-line` parsing rules:
+
+- Format: `path:start[:end]`
+- `start`/`end` are 1-based positive line numbers.
+- `end` defaults to `start` when omitted.
+- Invalid specs return an actionable error that includes the malformed token and expected format.
 
 Examples:
 

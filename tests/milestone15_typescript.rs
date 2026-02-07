@@ -168,3 +168,47 @@ fn milestone15_typescript_edges_and_queries() {
     assert_eq!(explain_results[0]["outbound"]["implements"], 1);
     assert_eq!(explain_results[0]["outbound"]["contains"], 1);
 }
+
+#[test]
+fn milestone15_typescript_default_and_named_import_hints_disambiguate_implements_target() {
+    let repo = common::temp_repo();
+    common::write_file(
+        repo.path(),
+        "src/contracts_a.ts",
+        "export default interface Contract {\n  run(): void;\n}\n\nexport const TOKEN = 1;\n",
+    );
+    common::write_file(
+        repo.path(),
+        "src/contracts_b.ts",
+        "export interface Contract {\n  run(): void;\n}\n",
+    );
+    common::write_file(
+        repo.path(),
+        "src/app.ts",
+        "import Contract, { TOKEN } from \"./contracts_a\";\n\nvoid TOKEN;\n\nexport class Runner implements Contract {\n  run(): void {}\n}\n",
+    );
+
+    run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
+
+    let db_path = repo.path().join(".repo-scout").join("index.db");
+    let connection = Connection::open(db_path).expect("db should open");
+    let mut statement = connection
+        .prepare(
+            "SELECT ts.file_path
+             FROM symbol_edges_v2 e
+             JOIN symbols_v2 fs ON fs.symbol_id = e.from_symbol_id
+             JOIN symbols_v2 ts ON ts.symbol_id = e.to_symbol_id
+             WHERE fs.symbol = 'Runner' AND e.edge_kind = 'implements'
+             ORDER BY ts.file_path ASC",
+        )
+        .expect("edge query should prepare");
+    let rows = statement
+        .query_map([], |row| row.get::<_, String>(0))
+        .expect("edge rows should be queryable");
+    let mut target_paths = Vec::new();
+    for row in rows {
+        target_paths.push(row.expect("row should decode"));
+    }
+
+    assert_eq!(target_paths, vec!["src/contracts_a.ts".to_string()]);
+}

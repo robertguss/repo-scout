@@ -36,14 +36,33 @@ editing loops, especially in repositories where repeated symbol names exist acro
       `src/b.rs::run`).
 - [x] (2026-02-07 01:24Z) Authored this Phase 4 ExecPlan as planning-only work (no production code
       changes outside plan docs).
-- [ ] Milestone 18 complete: precision contract tests for duplicate symbol disambiguation and
-      ambiguous-call safety.
-- [ ] Milestone 19 complete: symbol-key and edge-resolution implementation through adapter and
-      indexer boundaries.
-- [ ] Milestone 20 complete: `diff-impact` high-signal seed controls (`--include-imports`,
-      `--changed-line`) with deterministic output behavior.
-- [ ] Milestone 21 complete: `find`/`refs` scope controls (`--code-only`, `--exclude-tests`) plus
-      docs, dogfood transcript, and full validation pass.
+- [x] (2026-02-07 15:47Z) Created branch stack per workflow:
+      `codex/phase4-plan-and-precision-contracts` from `main`, then
+      `codex/phase4-implementation` for execution work.
+- [x] (2026-02-07 15:47Z) Ran required pre-milestone dogfood baseline:
+      `cargo run -- index --repo .`,
+      `cargo run -- find verify_plan_for_changed_files --repo . --json`,
+      `cargo run -- refs verify_plan_for_changed_files --repo . --json`.
+- [x] (2026-02-07 15:47Z) Milestone 18 complete: added
+      `tests/fixtures/phase4/ambiguity/{disambiguated,ambiguous}/` and
+      `tests/milestone18_precision_graph.rs` with strict red evidence for slices 18A/18B/18C.
+- [x] (2026-02-07 15:55Z) Milestone 19 complete: shipped `SymbolKey` disambiguator fields,
+      resolver hardening in `src/indexer/mod.rs`, adapter-emitted scoped keys across
+      Rust/TypeScript/Python, and green/refactor validation for all Milestone 18 contracts plus
+      full suite.
+- [x] (2026-02-07 15:58Z) Milestone 20 complete: added
+      `tests/milestone20_diff_impact_precision.rs`, implemented `--include-imports` and
+      `--changed-line` parsing/normalization, and updated `diff-impact` seed selection logic with
+      deterministic range filtering and actionable malformed-spec errors.
+- [x] (2026-02-07 16:02Z) Milestone 21 complete: added
+      `tests/milestone21_query_scope.rs`, shipped `find`/`refs` fallback scope controls
+      (`--code-only`, `--exclude-tests`), and validated AST-priority determinism.
+- [x] (2026-02-07 16:02Z) Updated Phase 4 docs and evidence artifacts:
+      `README.md`, `docs/cli-reference.md`, `docs/json-output.md`,
+      `docs/architecture.md`, `docs/dogfood-log.md`, `docs/performance-baseline.md`.
+- [x] (2026-02-07 16:03Z) Executed post-milestone dogfood checks exactly as specified in this
+      plan (including `diff-impact --changed-line` and scoped `refs`) and re-ran final
+      `cargo fmt` + `cargo test` gates.
 
 ## Surprises & Discoveries
 
@@ -61,6 +80,30 @@ editing loops, especially in repositories where repeated symbol names exist acro
   traversal, which amplifies low-value matches when files contain many declarations.
   Evidence: in repository self-dogfood, changing only `src/query/mod.rs` emitted dozens of
   `distance = 0` rows before any neighbor ranking was applied.
+
+- Observation: Rust qualified calls like `a::run()` and `b::run()` currently collapse onto one
+  duplicate target because resolver fallback remains symbol-text-only.
+  Evidence: `milestone18_disambiguates_duplicate_rust_call_targets` red run reported
+  `left: [\"src/a.rs\"]` vs `right: [\"src/a.rs\", \"src/b.rs\"]`.
+
+- Observation: integration tests were selecting an external `codex-5-3` binary before
+  `repo-scout`, masking local implementation behavior.
+  Evidence: contract test remained red while manual local `cargo run -- index` query showed both
+  expected disambiguated edges; updating `tests/common/mod.rs` candidate order aligned outcomes.
+
+- Observation: strict unique-global resolver fallback broke prior TypeScript `implements` edge
+  behavior when both interface and import rows shared the same symbol.
+  Evidence: `milestone15_typescript_edges_and_queries` failed until adapter import-path hints
+  mapped `Runner implements Contract` to `src/contracts.ts::Contract`.
+
+- Observation: before Milestone 20 implementation, new `diff-impact` controls were rejected at CLI
+  parse time (`--include-imports`, `--changed-line`) and default seeds still included imports.
+  Evidence: milestone20 red tests showed both unknown-argument errors and failing import-seed
+  assertions.
+
+- Observation: repository self-dogfood `find helper`/`refs helper` defaults are currently dominated
+  by plan/docs text fallback rows when AST matches do not exist for that query.
+  Evidence: post-milestone run returned 59 fallback rows across planning artifacts and tests.
 
 ## Decision Log
 
@@ -87,6 +130,31 @@ editing loops, especially in repositories where repeated symbol names exist acro
   outputs.
   Date/Author: 2026-02-07 / Codex
 
+- Decision: lock Milestone 18 contracts with two fixture variants (`disambiguated` and
+  `ambiguous`) under `tests/fixtures/phase4/ambiguity/` to isolate precision and fail-safe behavior.
+  Rationale: separate fixtures avoid conflating qualified and ambiguous call behavior in one test
+  corpus and keep red failures actionable.
+  Date/Author: 2026-02-07 / Codex
+
+- Decision: prioritize `repo-scout` binary discovery in `tests/common/mod.rs`.
+  Rationale: integration tests must exercise local repository code, not external tool binaries.
+  Date/Author: 2026-02-07 / Codex
+
+- Decision: emit deterministic import-path hints from the TypeScript adapter for imported symbols.
+  Rationale: resolver ambiguity safeguards should not regress valid cross-file `implements` and
+  `imports` edges when import source paths are syntactically known.
+  Date/Author: 2026-02-07 / Codex
+
+- Decision: keep schema v3 payload shape backward-compatible while adding Milestone 20 controls.
+  Rationale: `--include-imports` and `--changed-line` alter selection semantics but do not require
+  mandatory new JSON envelope fields for automation consumers.
+  Date/Author: 2026-02-07 / Codex
+
+- Decision: apply `--code-only`/`--exclude-tests` only to fallback text rows for `find`/`refs`.
+  Rationale: preserves existing AST-priority contracts for automation while enabling explicit
+  noise-control when fallback is needed.
+  Date/Author: 2026-02-07 / Codex
+
 ## Outcomes & Retrospective
 
 Planning outcome at this stage: Phase 4 scope is constrained to precision and signal quality on the
@@ -100,6 +168,27 @@ code-focused `find`/`refs` output when fallback noise is undesirable.
 Expected residual work after this plan: deeper type-aware semantic resolution (for example,
 module-aware import mapping and full language type inference), and longitudinal quality metrics
 across larger real-world repositories.
+
+Milestone 18 retrospective (2026-02-07): precision defect expectations are now locked as failing
+integration contracts before any production refactor. This preserved strict TDD ordering and
+provides deterministic pass/fail gates for resolver hardening in Milestone 19.
+
+Milestone 19 retrospective (2026-02-07): symbol-key-aware resolution now fails safe on ambiguity
+while preserving existing graph behavior through adapter hints. Duplicate-call disambiguation and
+ambiguous-call suppression are now enforced by passing integration tests and full-suite validation.
+
+Milestone 20 retrospective (2026-02-07): `diff-impact` now defaults to higher-signal changed
+symbols by excluding import seeds, offers explicit opt-in restoration via `--include-imports`, and
+supports deterministic line-range seed scoping with clear parse errors for malformed input.
+
+Milestone 21 retrospective (2026-02-07): scoped fallback filtering now lets users suppress docs and
+test-noise rows (`--code-only`, `--exclude-tests`) without changing AST match ordering or schema 1
+envelopes.
+
+Phase 4 completion retrospective (2026-02-07): all planned milestones shipped with strict per-slice
+red/green/refactor evidence, resolver ambiguity now fails safe, `diff-impact` seed signal is
+explicitly controllable, and `find`/`refs` now support deterministic fallback noise control on the
+existing command surface.
 
 ## Context and Orientation
 
@@ -380,6 +469,81 @@ Temporary duplicate-symbol fixture evidence:
 The missing `src/lib.rs|entry|...|src/b.rs|run|...|calls` row defines the precision defect locked
 by Milestone 18 red tests.
 
+Milestone 18 strict-TDD red evidence:
+
+    cargo test milestone18_disambiguates_duplicate_rust_call_targets -- --nocapture
+    # FAILED: left ["src/a.rs"] right ["src/a.rs", "src/b.rs"]
+
+    cargo test milestone18_diff_impact_includes_true_callers_for_changed_duplicate_target -- --nocapture
+    # FAILED: missing impacted_symbol entry caller for src/lib.rs::entry when changing src/b.rs
+
+    cargo test milestone18_ambiguous_unqualified_call_does_not_cross_link -- --nocapture
+    # FAILED: ambiguous_run_targets left 1 right 0
+
+Milestone 19 strict-TDD green/refactor evidence:
+
+    cargo test milestone18_disambiguates_duplicate_rust_call_targets -- --nocapture
+    # PASS
+
+    cargo test milestone18_diff_impact_includes_true_callers_for_changed_duplicate_target -- --nocapture
+    # PASS
+
+    cargo test milestone18_ambiguous_unqualified_call_does_not_cross_link -- --nocapture
+    # PASS
+
+    cargo test
+    # PASS (full integration suite green after resolver + adapter refactor)
+
+Milestone 20 strict-TDD red evidence:
+
+    cargo test milestone20_diff_impact_excludes_import_seeds_by_default -- --nocapture
+    # FAILED: distance=0 import seeds still present by default
+
+    cargo test milestone20_diff_impact_include_imports_restores_import_rows -- --nocapture
+    # FAILED: CLI rejected --include-imports before implementation
+
+    cargo test milestone20_diff_impact_changed_line_limits_seed_symbols -- --nocapture
+    # FAILED: CLI rejected --changed-line before implementation
+
+Milestone 20 strict-TDD green/refactor evidence:
+
+    cargo test milestone20_diff_impact_excludes_import_seeds_by_default -- --nocapture
+    # PASS
+
+    cargo test milestone20_diff_impact_include_imports_restores_import_rows -- --nocapture
+    # PASS
+
+    cargo test milestone20_diff_impact_changed_line_limits_seed_symbols -- --nocapture
+    # PASS
+
+    cargo test
+    # PASS (full integration suite green after diff-impact option refactor)
+
+Milestone 21 strict-TDD red evidence:
+
+    cargo test milestone21_refs_code_only_omits_docs_text_fallback -- --nocapture
+    # FAILED: CLI rejected --code-only before implementation
+
+    cargo test milestone21_refs_exclude_tests_omits_test_paths -- --nocapture
+    # FAILED: CLI rejected --exclude-tests before implementation
+
+    cargo test milestone21_find_scope_flags_keep_ast_priority_and_determinism -- --nocapture
+    # FAILED: CLI rejected new scope flags before implementation
+
+Milestone 21 strict-TDD green/refactor evidence:
+
+    cargo test milestone21_refs_code_only_omits_docs_text_fallback -- --nocapture
+    # PASS
+
+    cargo test milestone21_refs_exclude_tests_omits_test_paths -- --nocapture
+    # PASS
+
+    cargo test milestone21_find_scope_flags_keep_ast_priority_and_determinism -- --nocapture
+    # PASS
+
+    cargo test
+    # PASS (full integration suite green after find/refs scope-control refactor)
+
 ## Interfaces and Dependencies
 
 Phase 4 does not require new external crates by default. Continue using current dependencies
@@ -496,3 +660,18 @@ In `src/query/mod.rs`, add:
 the existing command surface. Chosen approach emphasizes strict per-slice TDD, deterministic edge
 resolution, explicit `diff-impact` seed controls, and scoped fallback filtering for `find`/`refs`
 without JSON schema-family churn.
+
+2026-02-07: Updated living sections during Milestone 18 execution with branch/workflow status,
+contract-fixture additions, and strict red transcript evidence for slices 18A/18B/18C.
+
+2026-02-07: Updated living sections during Milestone 19 implementation with resolver/adapter
+decisions, discovered regressions, and green/refactor transcript evidence.
+
+2026-02-07: Updated living sections during Milestone 20 implementation with option-surface
+decisions and strict red/green/refactor transcripts for import and changed-line controls.
+
+2026-02-07: Updated living sections during Milestone 21 implementation with fallback-scope control
+decisions, final milestone completion state, and strict red/green/refactor evidence.
+
+2026-02-07: Recorded completion-phase post-milestone dogfood transcripts and final formatting/test
+validation status.
