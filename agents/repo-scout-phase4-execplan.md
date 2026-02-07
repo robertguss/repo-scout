@@ -54,8 +54,15 @@ editing loops, especially in repositories where repeated symbol names exist acro
       `tests/milestone20_diff_impact_precision.rs`, implemented `--include-imports` and
       `--changed-line` parsing/normalization, and updated `diff-impact` seed selection logic with
       deterministic range filtering and actionable malformed-spec errors.
-- [ ] Milestone 21 complete: `find`/`refs` scope controls (`--code-only`, `--exclude-tests`) plus
-      docs, dogfood transcript, and full validation pass.
+- [x] (2026-02-07 16:02Z) Milestone 21 complete: added
+      `tests/milestone21_query_scope.rs`, shipped `find`/`refs` fallback scope controls
+      (`--code-only`, `--exclude-tests`), and validated AST-priority determinism.
+- [x] (2026-02-07 16:02Z) Updated Phase 4 docs and evidence artifacts:
+      `README.md`, `docs/cli-reference.md`, `docs/json-output.md`,
+      `docs/architecture.md`, `docs/dogfood-log.md`, `docs/performance-baseline.md`.
+- [x] (2026-02-07 16:03Z) Executed post-milestone dogfood checks exactly as specified in this
+      plan (including `diff-impact --changed-line` and scoped `refs`) and re-ran final
+      `cargo fmt` + `cargo test` gates.
 
 ## Surprises & Discoveries
 
@@ -93,6 +100,10 @@ editing loops, especially in repositories where repeated symbol names exist acro
   parse time (`--include-imports`, `--changed-line`) and default seeds still included imports.
   Evidence: milestone20 red tests showed both unknown-argument errors and failing import-seed
   assertions.
+
+- Observation: repository self-dogfood `find helper`/`refs helper` defaults are currently dominated
+  by plan/docs text fallback rows when AST matches do not exist for that query.
+  Evidence: post-milestone run returned 59 fallback rows across planning artifacts and tests.
 
 ## Decision Log
 
@@ -139,6 +150,11 @@ editing loops, especially in repositories where repeated symbol names exist acro
   mandatory new JSON envelope fields for automation consumers.
   Date/Author: 2026-02-07 / Codex
 
+- Decision: apply `--code-only`/`--exclude-tests` only to fallback text rows for `find`/`refs`.
+  Rationale: preserves existing AST-priority contracts for automation while enabling explicit
+  noise-control when fallback is needed.
+  Date/Author: 2026-02-07 / Codex
+
 ## Outcomes & Retrospective
 
 Planning outcome at this stage: Phase 4 scope is constrained to precision and signal quality on the
@@ -164,6 +180,15 @@ ambiguous-call suppression are now enforced by passing integration tests and ful
 Milestone 20 retrospective (2026-02-07): `diff-impact` now defaults to higher-signal changed
 symbols by excluding import seeds, offers explicit opt-in restoration via `--include-imports`, and
 supports deterministic line-range seed scoping with clear parse errors for malformed input.
+
+Milestone 21 retrospective (2026-02-07): scoped fallback filtering now lets users suppress docs and
+test-noise rows (`--code-only`, `--exclude-tests`) without changing AST match ordering or schema 1
+envelopes.
+
+Phase 4 completion retrospective (2026-02-07): all planned milestones shipped with strict per-slice
+red/green/refactor evidence, resolver ambiguity now fails safe, `diff-impact` seed signal is
+explicitly controllable, and `find`/`refs` now support deterministic fallback noise control on the
+existing command surface.
 
 ## Context and Orientation
 
@@ -494,6 +519,31 @@ Milestone 20 strict-TDD green/refactor evidence:
     cargo test
     # PASS (full integration suite green after diff-impact option refactor)
 
+Milestone 21 strict-TDD red evidence:
+
+    cargo test milestone21_refs_code_only_omits_docs_text_fallback -- --nocapture
+    # FAILED: CLI rejected --code-only before implementation
+
+    cargo test milestone21_refs_exclude_tests_omits_test_paths -- --nocapture
+    # FAILED: CLI rejected --exclude-tests before implementation
+
+    cargo test milestone21_find_scope_flags_keep_ast_priority_and_determinism -- --nocapture
+    # FAILED: CLI rejected new scope flags before implementation
+
+Milestone 21 strict-TDD green/refactor evidence:
+
+    cargo test milestone21_refs_code_only_omits_docs_text_fallback -- --nocapture
+    # PASS
+
+    cargo test milestone21_refs_exclude_tests_omits_test_paths -- --nocapture
+    # PASS
+
+    cargo test milestone21_find_scope_flags_keep_ast_priority_and_determinism -- --nocapture
+    # PASS
+
+    cargo test
+    # PASS (full integration suite green after find/refs scope-control refactor)
+
 ## Interfaces and Dependencies
 
 Phase 4 does not require new external crates by default. Continue using current dependencies
@@ -619,3 +669,9 @@ decisions, discovered regressions, and green/refactor transcript evidence.
 
 2026-02-07: Updated living sections during Milestone 20 implementation with option-surface
 decisions and strict red/green/refactor transcripts for import and changed-line controls.
+
+2026-02-07: Updated living sections during Milestone 21 implementation with fallback-scope control
+decisions, final milestone completion state, and strict red/green/refactor evidence.
+
+2026-02-07: Recorded completion-phase post-milestone dogfood transcripts and final formatting/test
+validation status.

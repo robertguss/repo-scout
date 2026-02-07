@@ -16,6 +16,12 @@ pub struct QueryMatch {
     pub score: f64,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct QueryScope {
+    pub code_only: bool,
+    pub exclude_tests: bool,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ImpactMatch {
     pub symbol: String,
@@ -190,9 +196,9 @@ pub fn diff_impact_for_changed_files(
                 qualified_symbol,
             ) = row?;
             if let Some(ranges) = changed_lines_by_file.get(changed_file)
-                && !ranges
-                    .iter()
-                    .any(|range| line_range_overlaps(line, end_line, range.start_line, range.end_line))
+                && !ranges.iter().any(|range| {
+                    line_range_overlaps(line, end_line, range.start_line, range.end_line)
+                })
             {
                 continue;
             }
@@ -665,14 +671,23 @@ fn extract_symbol_snippet(
 /// let matches = find_matches(Path::new("index.sqlite"), "my_symbol").unwrap();
 /// // `matches` contains locations (file_path, line, column, ...) where `my_symbol` was found.
 /// ```
+#[allow(dead_code)]
 pub fn find_matches(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<QueryMatch>> {
+    find_matches_scoped(db_path, symbol, &QueryScope::default())
+}
+
+pub fn find_matches_scoped(
+    db_path: &Path,
+    symbol: &str,
+    scope: &QueryScope,
+) -> anyhow::Result<Vec<QueryMatch>> {
     let connection = Connection::open(db_path)?;
     let ast_definitions = ast_definition_matches(&connection, symbol)?;
     if !ast_definitions.is_empty() {
         return Ok(ast_definitions);
     }
 
-    ranked_text_matches(&connection, symbol)
+    ranked_text_matches(&connection, symbol, scope)
 }
 
 /// Finds references to `symbol` in the database, preferring AST-derived reference matches.
@@ -693,14 +708,23 @@ pub fn find_matches(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<QueryMat
 /// let matches = refs_matches(Path::new("code_index.sqlite"), "my_function").unwrap();
 /// // matches contains locations where `my_function` is referenced.
 /// ```
+#[allow(dead_code)]
 pub fn refs_matches(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<QueryMatch>> {
+    refs_matches_scoped(db_path, symbol, &QueryScope::default())
+}
+
+pub fn refs_matches_scoped(
+    db_path: &Path,
+    symbol: &str,
+    scope: &QueryScope,
+) -> anyhow::Result<Vec<QueryMatch>> {
     let connection = Connection::open(db_path)?;
     let ast_references = ast_reference_matches(&connection, symbol)?;
     if !ast_references.is_empty() {
         return Ok(ast_references);
     }
 
-    ranked_text_matches(&connection, symbol)
+    ranked_text_matches(&connection, symbol, scope)
 }
 
 /// Finds symbols that directly impact the given symbol by querying the stored symbol graph.
@@ -1113,13 +1137,21 @@ fn ast_reference_matches(connection: &Connection, symbol: &str) -> anyhow::Resul
     collect_rows(rows)
 }
 
-fn ranked_text_matches(connection: &Connection, symbol: &str) -> anyhow::Result<Vec<QueryMatch>> {
-    let mut matches = text_exact_matches(connection, symbol)?;
-    matches.extend(text_substring_matches(connection, symbol)?);
+fn ranked_text_matches(
+    connection: &Connection,
+    symbol: &str,
+    scope: &QueryScope,
+) -> anyhow::Result<Vec<QueryMatch>> {
+    let mut matches = text_exact_matches(connection, symbol, scope)?;
+    matches.extend(text_substring_matches(connection, symbol, scope)?);
     Ok(matches)
 }
 
-fn text_exact_matches(connection: &Connection, symbol: &str) -> anyhow::Result<Vec<QueryMatch>> {
+fn text_exact_matches(
+    connection: &Connection,
+    symbol: &str,
+    scope: &QueryScope,
+) -> anyhow::Result<Vec<QueryMatch>> {
     let mut statement = connection.prepare(
         "SELECT file_path, line, column, symbol
          FROM text_occurrences
@@ -1138,12 +1170,13 @@ fn text_exact_matches(connection: &Connection, symbol: &str) -> anyhow::Result<V
         })
     })?;
 
-    collect_rows(rows)
+    collect_rows(rows).map(|matches| apply_scope_filters(matches, scope))
 }
 
 fn text_substring_matches(
     connection: &Connection,
     symbol: &str,
+    scope: &QueryScope,
 ) -> anyhow::Result<Vec<QueryMatch>> {
     let pattern = format!("%{symbol}%");
     let mut statement = connection.prepare(
@@ -1164,7 +1197,28 @@ fn text_substring_matches(
         })
     })?;
 
-    collect_rows(rows)
+    collect_rows(rows).map(|matches| apply_scope_filters(matches, scope))
+}
+
+fn apply_scope_filters(matches: Vec<QueryMatch>, scope: &QueryScope) -> Vec<QueryMatch> {
+    matches
+        .into_iter()
+        .filter(|item| !scope.code_only || is_code_file_path(&item.file_path))
+        .filter(|item| !scope.exclude_tests || !is_test_like_path(&item.file_path))
+        .collect()
+}
+
+fn is_code_file_path(file_path: &str) -> bool {
+    file_path.ends_with(".rs")
+        || file_path.ends_with(".ts")
+        || file_path.ends_with(".tsx")
+        || file_path.ends_with(".py")
+}
+
+fn is_test_like_path(file_path: &str) -> bool {
+    file_path.starts_with("tests/")
+        || file_path.contains("/tests/")
+        || file_path.ends_with("_test.rs")
 }
 
 /// Collects all mapped rows into a vector of `QueryMatch`.

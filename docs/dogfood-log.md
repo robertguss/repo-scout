@@ -20,6 +20,63 @@ This log captures real `repo-scout` usage while building `repo-scout`.
 
 ## Entries
 
+- Date: `2026-02-07`
+- Task: Milestone 21 scoped fallback controls for `find`/`refs`.
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find verify_plan_for_changed_files --repo . --json`
+  - `cargo run -- refs verify_plan_for_changed_files --repo . --json`
+  - `cargo test milestone21_refs_code_only_omits_docs_text_fallback -- --nocapture`
+  - `cargo test milestone21_refs_exclude_tests_omits_test_paths -- --nocapture`
+  - `cargo test milestone21_find_scope_flags_keep_ast_priority_and_determinism -- --nocapture`
+  - `cargo run -- refs verify_plan_for_changed_files --repo . --code-only --exclude-tests`
+- What helped:
+  - Applying scope flags only to text fallback kept AST-priority behavior stable and deterministic.
+- What failed or felt weak:
+  - Initial CLI surface rejected `--code-only`/`--exclude-tests`.
+- Action taken:
+  - failing test added: `tests/milestone21_query_scope.rs`
+  - fix commit: add command-specific args and fallback scope filtering in query module.
+  - docs update: `README.md`, `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`.
+- Status: `fixed`
+
+- Date: `2026-02-07`
+- Task: Milestone 20 `diff-impact` import/line-range precision controls.
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo test milestone20_diff_impact_excludes_import_seeds_by_default -- --nocapture`
+  - `cargo test milestone20_diff_impact_include_imports_restores_import_rows -- --nocapture`
+  - `cargo test milestone20_diff_impact_changed_line_limits_seed_symbols -- --nocapture`
+  - `cargo run -- diff-impact --changed-file src/query/mod.rs --changed-line src/query/mod.rs:132:220 --repo .`
+- What helped:
+  - Existing symbol span metadata in `symbols_v2` made overlap filtering straightforward.
+- What failed or felt weak:
+  - CLI lacked `--include-imports` and `--changed-line` support prior to implementation.
+- Action taken:
+  - failing test added: `tests/milestone20_diff_impact_precision.rs`
+  - fix commit: add diff-impact option parsing plus changed-symbol seed filtering by kind/range.
+  - docs update: `README.md`, `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`.
+- Status: `fixed`
+
+- Date: `2026-02-07`
+- Task: Milestones 18-19 precision contract lock and resolver hardening.
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find run --repo . --json`
+  - `cargo run -- refs run --repo . --json`
+  - `cargo test milestone18_disambiguates_duplicate_rust_call_targets -- --nocapture`
+  - `cargo test milestone18_diff_impact_includes_true_callers_for_changed_duplicate_target -- --nocapture`
+  - `cargo test milestone18_ambiguous_unqualified_call_does_not_cross_link -- --nocapture`
+- What helped:
+  - Scoped/qualified symbol keys made duplicate-name call resolution deterministic.
+- What failed or felt weak:
+  - Test harness initially preferred external `codex-5-3` binary over local `repo-scout`.
+- Action taken:
+  - failing test added: `tests/milestone18_precision_graph.rs`
+  - fix commit: SymbolKey-aware resolver plus adapter disambiguation hints; prioritize repo-scout in test harness.
+  - docs update: architecture precision notes and Phase 4 plan artifacts.
+- Status: `fixed`
+
 - Date: `2026-02-06`
 - Task: Milestone 6 lifecycle + schema migration correctness.
 - Commands run:

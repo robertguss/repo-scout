@@ -305,7 +305,9 @@ fn collect_call_symbols(
         _ => {
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
-                collect_call_symbols(child, source, caller, file_path, language, references, edges);
+                collect_call_symbols(
+                    child, source, caller, file_path, language, references, edges,
+                );
             }
         }
     }

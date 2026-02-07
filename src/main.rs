@@ -10,7 +10,7 @@ use crate::cli::{Cli, Command};
 use crate::indexer::index_repository;
 use crate::query::{
     ChangedLineRange, DiffImpactOptions, context_matches, diff_impact_for_changed_files,
-    explain_symbol, find_matches, impact_matches, refs_matches, tests_for_symbol,
+    explain_symbol, find_matches_scoped, impact_matches, refs_matches_scoped, tests_for_symbol,
     verify_plan_for_changed_files,
 };
 use crate::store::ensure_store;
@@ -82,9 +82,16 @@ fn run_status(args: crate::cli::RepoArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn run_find(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
+fn run_find(args: crate::cli::FindArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
-    let matches = find_matches(&store.db_path, &args.symbol)?;
+    let matches = find_matches_scoped(
+        &store.db_path,
+        &args.symbol,
+        &crate::query::QueryScope {
+            code_only: args.code_only,
+            exclude_tests: args.exclude_tests,
+        },
+    )?;
     if args.json {
         output::print_query_json("find", &args.symbol, &matches)?;
     } else {
@@ -112,9 +119,16 @@ fn run_find(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
 /// };
 /// let _ = run_refs(args);
 /// ```
-fn run_refs(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
+fn run_refs(args: crate::cli::RefsArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
-    let matches = refs_matches(&store.db_path, &args.symbol)?;
+    let matches = refs_matches_scoped(
+        &store.db_path,
+        &args.symbol,
+        &crate::query::QueryScope {
+            code_only: args.code_only,
+            exclude_tests: args.exclude_tests,
+        },
+    )?;
     if args.json {
         output::print_query_json("refs", &args.symbol, &matches)?;
     } else {

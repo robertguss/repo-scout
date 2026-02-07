@@ -11,6 +11,8 @@ Track wall-clock timings for:
 - indexing (`index`)
 - core lookup (`find`, `refs`)
 - Phase 2 queries (`impact`, `context`, `tests-for`, `verify-plan`)
+- Phase 4 precision controls (`diff-impact --include-imports/--changed-line`,
+  `refs --code-only --exclude-tests`)
 
 ## Commands
 
@@ -31,6 +33,9 @@ Equivalent manual commands:
 /usr/bin/time -p cargo run --release -- context --task "update run and verify refs behavior" --repo . --budget 1200 --json
 /usr/bin/time -p cargo run --release -- tests-for run --repo . --json
 /usr/bin/time -p cargo run --release -- verify-plan --changed-file src/query/mod.rs --repo . --json
+/usr/bin/time -p cargo run --release -- diff-impact --changed-file src/query/mod.rs --repo . --json
+/usr/bin/time -p cargo run --release -- diff-impact --changed-file src/query/mod.rs --changed-line src/query/mod.rs:132:220 --repo .
+/usr/bin/time -p cargo run --release -- refs verify_plan_for_changed_files --repo . --code-only --exclude-tests --json
 ```
 
 ## Recording

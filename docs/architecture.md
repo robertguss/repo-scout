@@ -56,6 +56,13 @@ Primary tables:
 - `symbol_edges_v2`
   - Symbol graph edges (`calls`, `contains`, `imports`, `implements`) with provenance metadata.
 
+Edge endpoint resolution is now `SymbolKey`-aware and deterministic:
+
+1. exact `qualified_symbol`,
+2. exact `(file_path, symbol)` with non-import preference,
+3. unique global `symbol` match (optionally language-scoped),
+4. unresolved edges are skipped (fail-safe) rather than arbitrarily linked.
+
 ## Incremental Indexing Lifecycle
 
 For each indexing run:
@@ -77,11 +84,15 @@ Lifecycle guarantees covered by integration tests include stale-file pruning, re
 
 - Prefer exact AST definitions.
 - Fall back to text exact token, then text substring.
+- Optional fallback-only scope controls:
+  - `--code-only` keeps `.rs`, `.ts`, `.tsx`, `.py` paths.
+  - `--exclude-tests` drops test-like paths (`tests/`, `/tests/`, `*_test.rs`).
 
 ### `refs`
 
 - Prefer exact AST references.
 - Fall back to text exact token, then text substring.
+- Uses the same fallback-only scope controls as `find` (`--code-only`, `--exclude-tests`).
 
 ### `impact`
 
@@ -114,6 +125,9 @@ Lifecycle guarantees covered by integration tests include stale-file pruning, re
 
 - Normalize + dedupe changed-file inputs.
 - Emit changed symbols from `symbols_v2`.
+- Exclude `kind=import` changed-symbol seeds by default.
+- Re-include import seeds only when `--include-imports` is set.
+- Optionally constrain changed-symbol seeds by `--changed-line path:start[:end]` overlap.
 - Expand one-hop incoming neighbors from `symbol_edges_v2`.
 - Optionally attach ranked test targets.
 - Sort mixed result kinds deterministically.

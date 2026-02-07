@@ -59,23 +59,22 @@ impl LanguageAdapter for RustLanguageAdapter {
             });
 
             if let Some(caller_symbol) = reference.caller {
-                let to_symbol_key = qualified_module_for_reference(source, reference.line, reference.column)
-                    .map(|module_symbol| {
-                        qualified_target_symbol_key(
-                            file_path,
-                            &language,
-                            &module_symbol,
-                            &reference.symbol,
-                        )
-                    })
-                    .unwrap_or_else(|| {
-                        SymbolKey {
+                let to_symbol_key =
+                    qualified_module_for_reference(source, reference.line, reference.column)
+                        .map(|module_symbol| {
+                            qualified_target_symbol_key(
+                                file_path,
+                                &language,
+                                &module_symbol,
+                                &reference.symbol,
+                            )
+                        })
+                        .unwrap_or_else(|| SymbolKey {
                             symbol: reference.symbol.clone(),
                             qualified_symbol: None,
                             file_path: Some(file_path.to_string()),
                             language: Some(language.clone()),
-                        }
-                    });
+                        });
                 edges.push(ExtractedEdge {
                     from_symbol_key: scoped_symbol_key(file_path, &language, &caller_symbol),
                     to_symbol_key,

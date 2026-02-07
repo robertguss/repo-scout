@@ -14,8 +14,8 @@ pub struct Cli {
 pub enum Command {
     Index(RepoArgs),
     Status(RepoArgs),
-    Find(QueryArgs),
-    Refs(QueryArgs),
+    Find(FindArgs),
+    Refs(RefsArgs),
     Impact(QueryArgs),
     Context(ContextArgs),
     TestsFor(QueryArgs),
@@ -37,6 +37,32 @@ pub struct QueryArgs {
     pub repo: PathBuf,
     #[arg(long)]
     pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct FindArgs {
+    pub symbol: String,
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long, default_value_t = false)]
+    pub code_only: bool,
+    #[arg(long, default_value_t = false)]
+    pub exclude_tests: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct RefsArgs {
+    pub symbol: String,
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long, default_value_t = false)]
+    pub code_only: bool,
+    #[arg(long, default_value_t = false)]
+    pub exclude_tests: bool,
 }
 
 #[derive(Debug, Args)]

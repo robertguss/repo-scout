@@ -60,6 +60,9 @@ Top-level fields:
 - `confidence` (`string`)
 - `score` (`number`)
 
+Schema 1 remains unchanged when using Phase 4 scope flags (`--code-only`, `--exclude-tests`).
+Those flags only filter text fallback rows; AST-priority rows and JSON envelope shape stay stable.
+
 Observed `why_matched` vocabulary:
 
 - `ast_definition`
@@ -264,6 +267,14 @@ Top-level fields:
 | `max_distance` | `number` | yes | Echoes resolved traversal distance. |
 | `include_tests` | `boolean` | yes | Echoes resolved test-target behavior. |
 | `results` | `array<DiffImpactResult>` | yes | Deterministically ordered (see rules below). |
+
+Phase 4 option effects (schema unchanged):
+
+- `--include-imports` changes changed-symbol seed selection by allowing `kind=import` at
+  `distance=0`.
+- `--changed-line` limits changed-symbol seeds to symbol spans overlapping the specified line
+  ranges.
+- Neither option requires new mandatory top-level fields in schema 3.
 
 `DiffImpactResult` union discriminator:
 
