@@ -129,25 +129,41 @@ pub enum DiffImpactMatch {
     },
 }
 
+#[derive(Debug, Clone)]
+pub struct ChangedLineRange {
+    pub file_path: String,
+    pub start_line: u32,
+    pub end_line: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct DiffImpactOptions {
+    pub max_distance: u32,
+    pub include_tests: bool,
+    pub include_imports: bool,
+    pub changed_lines: Vec<ChangedLineRange>,
+}
+
 pub fn diff_impact_for_changed_files(
     db_path: &Path,
     changed_files: &[String],
-    max_distance: u32,
-    include_tests: bool,
+    options: &DiffImpactOptions,
 ) -> anyhow::Result<Vec<DiffImpactMatch>> {
     let connection = Connection::open(db_path)?;
     let mut results = Vec::new();
     let mut seen = HashSet::new();
     let mut changed_symbol_ids = Vec::new();
+    let changed_lines_by_file = changed_lines_by_file(&options.changed_lines);
 
     for changed_file in changed_files {
         let mut statement = connection.prepare(
-            "SELECT symbol_id, symbol, kind, file_path, start_line, start_column, language, qualified_symbol
+            "SELECT symbol_id, symbol, kind, file_path, start_line, start_column, end_line, language, qualified_symbol
              FROM symbols_v2
              WHERE file_path = ?1
+               AND (?2 OR kind <> 'import')
              ORDER BY start_line ASC, start_column ASC, symbol ASC",
         )?;
-        let rows = statement.query_map(params![changed_file], |row| {
+        let rows = statement.query_map(params![changed_file, options.include_imports], |row| {
             Ok((
                 row.get::<_, i64>(0)?,
                 row.get::<_, String>(1)?,
@@ -155,14 +171,31 @@ pub fn diff_impact_for_changed_files(
                 row.get::<_, String>(3)?,
                 row.get::<_, i64>(4)? as u32,
                 row.get::<_, i64>(5)? as u32,
-                row.get::<_, String>(6)?,
-                row.get::<_, Option<String>>(7)?,
+                row.get::<_, i64>(6)? as u32,
+                row.get::<_, String>(7)?,
+                row.get::<_, Option<String>>(8)?,
             ))
         })?;
 
         for row in rows {
-            let (symbol_id, symbol, kind, file_path, line, column, language, qualified_symbol) =
-                row?;
+            let (
+                symbol_id,
+                symbol,
+                kind,
+                file_path,
+                line,
+                column,
+                end_line,
+                language,
+                qualified_symbol,
+            ) = row?;
+            if let Some(ranges) = changed_lines_by_file.get(changed_file)
+                && !ranges
+                    .iter()
+                    .any(|range| line_range_overlaps(line, end_line, range.start_line, range.end_line))
+            {
+                continue;
+            }
             let language = normalized_language(&language, &file_path).to_string();
             let qualified_symbol =
                 qualified_symbol.unwrap_or_else(|| format!("{language}:{file_path}::{symbol}"));
@@ -190,7 +223,7 @@ pub fn diff_impact_for_changed_files(
         }
     }
 
-    if max_distance >= 1 {
+    if options.max_distance >= 1 {
         for (changed_symbol_id, changed_symbol) in changed_symbol_ids {
             let mut incoming_statement = connection.prepare(
                 "SELECT fs.symbol, fs.kind, fs.file_path, fs.start_line, fs.start_column, fs.language, fs.qualified_symbol, e.edge_kind, e.confidence, e.provenance
@@ -261,7 +294,7 @@ pub fn diff_impact_for_changed_files(
         }
     }
 
-    if include_tests {
+    if options.include_tests {
         let mut impacted_symbols = results
             .iter()
             .filter_map(|item| match item {
@@ -313,6 +346,28 @@ pub fn diff_impact_for_changed_files(
 
     results.sort_by(diff_impact_sort_key);
     Ok(results)
+}
+
+fn changed_lines_by_file(
+    changed_lines: &[ChangedLineRange],
+) -> HashMap<String, Vec<ChangedLineRange>> {
+    let mut ranges_by_file = HashMap::new();
+    for range in changed_lines {
+        ranges_by_file
+            .entry(range.file_path.clone())
+            .or_insert_with(Vec::new)
+            .push(range.clone());
+    }
+    ranges_by_file
+}
+
+fn line_range_overlaps(
+    symbol_start_line: u32,
+    symbol_end_line: u32,
+    changed_start_line: u32,
+    changed_end_line: u32,
+) -> bool {
+    symbol_start_line <= changed_end_line && symbol_end_line >= changed_start_line
 }
 
 pub fn explain_symbol(

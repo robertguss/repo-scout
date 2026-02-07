@@ -65,10 +65,14 @@ pub struct VerifyPlanArgs {
 pub struct DiffImpactArgs {
     #[arg(long = "changed-file", required = true)]
     pub changed_files: Vec<String>,
+    #[arg(long = "changed-line")]
+    pub changed_lines: Vec<String>,
     #[arg(long, default_value_t = 2)]
     pub max_distance: u32,
     #[arg(long, default_value_t = true)]
     pub include_tests: bool,
+    #[arg(long, default_value_t = false)]
+    pub include_imports: bool,
     #[arg(long)]
     pub repo: PathBuf,
     #[arg(long)]

@@ -50,8 +50,10 @@ editing loops, especially in repositories where repeated symbol names exist acro
       resolver hardening in `src/indexer/mod.rs`, adapter-emitted scoped keys across
       Rust/TypeScript/Python, and green/refactor validation for all Milestone 18 contracts plus
       full suite.
-- [ ] Milestone 20 complete: `diff-impact` high-signal seed controls (`--include-imports`,
-      `--changed-line`) with deterministic output behavior.
+- [x] (2026-02-07 15:58Z) Milestone 20 complete: added
+      `tests/milestone20_diff_impact_precision.rs`, implemented `--include-imports` and
+      `--changed-line` parsing/normalization, and updated `diff-impact` seed selection logic with
+      deterministic range filtering and actionable malformed-spec errors.
 - [ ] Milestone 21 complete: `find`/`refs` scope controls (`--code-only`, `--exclude-tests`) plus
       docs, dogfood transcript, and full validation pass.
 
@@ -86,6 +88,11 @@ editing loops, especially in repositories where repeated symbol names exist acro
   behavior when both interface and import rows shared the same symbol.
   Evidence: `milestone15_typescript_edges_and_queries` failed until adapter import-path hints
   mapped `Runner implements Contract` to `src/contracts.ts::Contract`.
+
+- Observation: before Milestone 20 implementation, new `diff-impact` controls were rejected at CLI
+  parse time (`--include-imports`, `--changed-line`) and default seeds still included imports.
+  Evidence: milestone20 red tests showed both unknown-argument errors and failing import-seed
+  assertions.
 
 ## Decision Log
 
@@ -127,6 +134,11 @@ editing loops, especially in repositories where repeated symbol names exist acro
   `imports` edges when import source paths are syntactically known.
   Date/Author: 2026-02-07 / Codex
 
+- Decision: keep schema v3 payload shape backward-compatible while adding Milestone 20 controls.
+  Rationale: `--include-imports` and `--changed-line` alter selection semantics but do not require
+  mandatory new JSON envelope fields for automation consumers.
+  Date/Author: 2026-02-07 / Codex
+
 ## Outcomes & Retrospective
 
 Planning outcome at this stage: Phase 4 scope is constrained to precision and signal quality on the
@@ -148,6 +160,10 @@ provides deterministic pass/fail gates for resolver hardening in Milestone 19.
 Milestone 19 retrospective (2026-02-07): symbol-key-aware resolution now fails safe on ambiguity
 while preserving existing graph behavior through adapter hints. Duplicate-call disambiguation and
 ambiguous-call suppression are now enforced by passing integration tests and full-suite validation.
+
+Milestone 20 retrospective (2026-02-07): `diff-impact` now defaults to higher-signal changed
+symbols by excluding import seeds, offers explicit opt-in restoration via `--include-imports`, and
+supports deterministic line-range seed scoping with clear parse errors for malformed input.
 
 ## Context and Orientation
 
@@ -453,6 +469,31 @@ Milestone 19 strict-TDD green/refactor evidence:
     cargo test
     # PASS (full integration suite green after resolver + adapter refactor)
 
+Milestone 20 strict-TDD red evidence:
+
+    cargo test milestone20_diff_impact_excludes_import_seeds_by_default -- --nocapture
+    # FAILED: distance=0 import seeds still present by default
+
+    cargo test milestone20_diff_impact_include_imports_restores_import_rows -- --nocapture
+    # FAILED: CLI rejected --include-imports before implementation
+
+    cargo test milestone20_diff_impact_changed_line_limits_seed_symbols -- --nocapture
+    # FAILED: CLI rejected --changed-line before implementation
+
+Milestone 20 strict-TDD green/refactor evidence:
+
+    cargo test milestone20_diff_impact_excludes_import_seeds_by_default -- --nocapture
+    # PASS
+
+    cargo test milestone20_diff_impact_include_imports_restores_import_rows -- --nocapture
+    # PASS
+
+    cargo test milestone20_diff_impact_changed_line_limits_seed_symbols -- --nocapture
+    # PASS
+
+    cargo test
+    # PASS (full integration suite green after diff-impact option refactor)
+
 ## Interfaces and Dependencies
 
 Phase 4 does not require new external crates by default. Continue using current dependencies
@@ -575,3 +616,6 @@ contract-fixture additions, and strict red transcript evidence for slices 18A/18
 
 2026-02-07: Updated living sections during Milestone 19 implementation with resolver/adapter
 decisions, discovered regressions, and green/refactor transcript evidence.
+
+2026-02-07: Updated living sections during Milestone 20 implementation with option-surface
+decisions and strict red/green/refactor transcripts for import and changed-line controls.

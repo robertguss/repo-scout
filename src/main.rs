@@ -9,8 +9,9 @@ use clap::Parser;
 use crate::cli::{Cli, Command};
 use crate::indexer::index_repository;
 use crate::query::{
-    context_matches, diff_impact_for_changed_files, explain_symbol, find_matches, impact_matches,
-    refs_matches, tests_for_symbol, verify_plan_for_changed_files,
+    ChangedLineRange, DiffImpactOptions, context_matches, diff_impact_for_changed_files,
+    explain_symbol, find_matches, impact_matches, refs_matches, tests_for_symbol,
+    verify_plan_for_changed_files,
 };
 use crate::store::ensure_store;
 
@@ -272,28 +273,95 @@ fn run_diff_impact(args: crate::cli::DiffImpactArgs) -> anyhow::Result<()> {
     changed_files.sort();
     changed_files.dedup();
 
-    let matches = diff_impact_for_changed_files(
-        &store.db_path,
-        &changed_files,
-        args.max_distance,
-        args.include_tests,
-    )?;
+    let mut changed_lines = args
+        .changed_lines
+        .iter()
+        .map(|spec| parse_changed_line_spec(&args.repo, spec))
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    changed_lines.sort_by(|left, right| {
+        left.file_path
+            .cmp(&right.file_path)
+            .then(left.start_line.cmp(&right.start_line))
+            .then(left.end_line.cmp(&right.end_line))
+    });
+    changed_lines.dedup_by(|left, right| {
+        left.file_path == right.file_path
+            && left.start_line == right.start_line
+            && left.end_line == right.end_line
+    });
+
+    let options = DiffImpactOptions {
+        max_distance: args.max_distance,
+        include_tests: args.include_tests,
+        include_imports: args.include_imports,
+        changed_lines,
+    };
+    let matches = diff_impact_for_changed_files(&store.db_path, &changed_files, &options)?;
     if args.json {
         output::print_diff_impact_json(
             &changed_files,
-            args.max_distance,
-            args.include_tests,
+            options.max_distance,
+            options.include_tests,
             &matches,
         )?;
     } else {
         output::print_diff_impact(
             &changed_files,
-            args.max_distance,
-            args.include_tests,
+            options.max_distance,
+            options.include_tests,
             &matches,
         );
     }
     Ok(())
+}
+
+fn parse_changed_line_spec(
+    repo_root: &std::path::Path,
+    raw_spec: &str,
+) -> anyhow::Result<ChangedLineRange> {
+    let mut segments = raw_spec.rsplitn(3, ':');
+    let tail = segments
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("invalid --changed-line '{raw_spec}'"))?;
+    let middle = segments
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("invalid --changed-line '{raw_spec}'"))?;
+    let head = segments.next();
+
+    let (path_part, start_part, end_part) = if let Some(path_part) = head {
+        (path_part, middle, tail)
+    } else {
+        (middle, tail, tail)
+    };
+
+    let start_line = start_part.parse::<u32>().ok();
+    let end_line = end_part.parse::<u32>().ok();
+    let Some(start_line) = start_line else {
+        anyhow::bail!(
+            "invalid --changed-line '{raw_spec}': expected format path:start[:end] with positive line numbers"
+        );
+    };
+    let Some(end_line) = end_line else {
+        anyhow::bail!(
+            "invalid --changed-line '{raw_spec}': expected format path:start[:end] with positive line numbers"
+        );
+    };
+    if start_line == 0 || end_line == 0 || end_line < start_line {
+        anyhow::bail!(
+            "invalid --changed-line '{raw_spec}': expected format path:start[:end] with start <= end and both >= 1"
+        );
+    }
+    if path_part.trim().is_empty() {
+        anyhow::bail!(
+            "invalid --changed-line '{raw_spec}': expected format path:start[:end] with a non-empty path"
+        );
+    }
+
+    Ok(ChangedLineRange {
+        file_path: normalize_changed_file(repo_root, path_part),
+        start_line,
+        end_line,
+    })
 }
 
 fn run_explain(args: crate::cli::ExplainArgs) -> anyhow::Result<()> {
