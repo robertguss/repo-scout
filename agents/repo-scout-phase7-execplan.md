@@ -49,10 +49,18 @@ quantifies recommendation quality under known noisy scenarios.
       `cargo run -- index --repo .`,
       `cargo run -- find resolve_symbol_id_in_tx --repo . --json`,
       `cargo run -- refs resolve_symbol_id_in_tx --repo . --json`.
-- [ ] Milestone 33 strict TDD slices for TypeScript namespace/module-aware call resolution
-      (completed: 33A/33B red-green + fixture behavior-check pack; remaining: full-suite refactor
-      closure deferred until Milestone 34 resolves Python contract tests introduced in Milestone 32).
-- [ ] Run Milestone 34 strict TDD slices for Python module-aware call resolution.
+- [x] (2026-02-08 01:46Z) Milestone 33 strict TDD slices for TypeScript namespace/module-aware
+      call resolution completed, including delayed full-suite refactor closure once Milestone 34
+      resolved remaining Milestone 32 Python contract failures.
+- [x] (2026-02-08 01:43Z) Ran required pre-milestone baseline dogfood for Milestone 34:
+      `cargo run -- index --repo .`,
+      `cargo run -- find resolve_symbol_id_in_tx --repo . --json`,
+      `cargo run -- refs resolve_symbol_id_in_tx --repo . --json`.
+- [x] (2026-02-08 01:46Z) Completed Milestone 34 strict TDD slices for Python module-aware call
+      resolution; reran full suite (`cargo test`) green and restored Milestone 32 contract tests
+      to passing.
+- [x] (2026-02-08 01:46Z) Closed Milestone 32 contract-lock suite with green behavior after
+      Milestones 33-34 semantic implementations.
 - [ ] Run Milestone 35 strict TDD slices for semantic-confidence ranking and benchmark guardrails.
 - [ ] Run Milestone 36 documentation/evidence refresh and post-refresh full dogfood checks.
 
@@ -107,6 +115,13 @@ quantifies recommendation quality under known noisy scenarios.
   Evidence: `cargo test milestone33_typescript_semantics_preserve_existing_m15_behavior --
   --nocapture` passed in both pre-change and post-change runs.
 
+- Observation: Fixture behavior-check output can remain stale after extractor-code changes when
+  file contents are unchanged because incremental indexing keys off content hash, not binary
+  extractor version.
+  Evidence: first Milestone 34 fixture pack run reported `indexed_files: 0` and omitted Python
+  caller rows; after a no-behavior fixture content touch and rerun (`indexed_files: 1`), the same
+  command emitted `src/py_app.py::run_py` as `called_by`.
+
 ## Decision Log
 
 - Decision: Keep schema envelopes stable (`schema_version` 1/2/3) through Phase 7 and implement
@@ -154,6 +169,12 @@ quantifies recommendation quality under known noisy scenarios.
   once early keeps evidence deterministic and repeatable.
   Date/Author: 2026-02-08 / Codex
 
+- Decision: Keep fixture semantics unchanged but allow benign content refreshes when required to
+  force reindexing after extractor implementation changes during dogfood verification.
+  Rationale: Incremental index skips unchanged files by design; forcing at least one changed file
+  avoids stale edge evidence without altering command contracts or schema behavior.
+  Date/Author: 2026-02-08 / Codex
+
 ## Outcomes & Retrospective
 
 Planning outcome: Phase 7 is constrained to high-value semantic precision and benchmark guardrails
@@ -166,6 +187,14 @@ ranking and confidence semantics remain stable and benchmarked.
 Expected residual work after this plan: broader multi-repository telemetry ingestion, optional
 runtime language-server confidence augmentation, and explicit planning for language-specific test
 runner recommendation commands.
+
+Milestone 33 outcome (2026-02-08): TypeScript namespace/member-call extraction now consumes
+module-aware import hints, producing deterministic `called_by` rows for `utilA.helper()` style
+calls under duplicate-name ambiguity while preserving Milestone 15 import/implements behavior.
+
+Milestone 34 outcome (2026-02-08): Python attribute-call extraction now uses module-alias import
+context, producing deterministic `called_by` rows for `import pkg.mod as alias; alias.func()`
+patterns under duplicate-name ambiguity while preserving Milestone 16 dotted-import behavior.
 
 ## Context and Orientation
 
@@ -512,6 +541,55 @@ Milestone 33 behavior-check pack evidence:
     # - Python fixture still returns changed-symbol-only for `src/pkg_a/util.py::helper`
     # - `impact helper` on fixture now includes TypeScript caller row
 
+Milestone 34 strict TDD evidence:
+
+    # 34A red
+    cargo test milestone34_python_module_alias_resolves_changed_callee -- --nocapture
+    ...
+    expected Python module alias call to resolve changed callee
+
+    # 34A green
+    cargo test milestone34_python_module_alias_resolves_changed_callee -- --nocapture
+    ...
+    test milestone34_python_module_alias_resolves_changed_callee ... ok
+
+    # 34B red
+    cargo test milestone34_python_attribute_call_prefers_import_context -- --nocapture
+    ...
+    expected util_a.helper() to resolve to src/pkg_a/util.py::helper
+
+    # 34B green
+    cargo test milestone34_python_attribute_call_prefers_import_context -- --nocapture
+    ...
+    test milestone34_python_attribute_call_prefers_import_context ... ok
+
+    # 34C red check (regression guard already satisfied)
+    cargo test milestone34_python_semantics_preserve_existing_m16_behavior -- --nocapture
+    ...
+    test milestone34_python_semantics_preserve_existing_m16_behavior ... ok
+
+    # 34C green re-run
+    cargo test milestone34_python_semantics_preserve_existing_m16_behavior -- --nocapture
+    ...
+    test milestone34_python_semantics_preserve_existing_m16_behavior ... ok
+
+    # 34 refactor gate
+    cargo test
+    ...
+    test result: ok. (full suite)
+
+Milestone 34 behavior-check pack evidence:
+
+    cargo run -- index --repo tests/fixtures/phase7/semantic_precision
+    cargo run -- diff-impact --changed-file src/util_a.ts --repo tests/fixtures/phase7/semantic_precision --json
+    cargo run -- diff-impact --changed-file src/pkg_a/util.py --repo tests/fixtures/phase7/semantic_precision --json
+    cargo run -- impact helper --repo tests/fixtures/phase7/semantic_precision --json
+
+    # observed after Milestone 34:
+    # - TypeScript fixture retains `src/app.ts::run` called_by row for `src/util_a.ts::helper`
+    # - Python fixture now includes `src/py_app.py::run_py` called_by row for `src/pkg_a/util.py::helper`
+    # - impact helper returns both `run` and `run_py` caller rows
+
 ## Interfaces and Dependencies
 
 Phase 7 should continue using current dependencies (`tree-sitter`, language grammars, `rusqlite`,
@@ -565,3 +643,7 @@ contract-test evidence, and decision-log handling for cross-milestone green/refa
 2026-02-08: Updated live plan with Milestone 33 TypeScript red/green transcripts, fixture
 behavior-check evidence, and decision log entries for shared fixture setup and deferred
 cross-milestone refactor closure.
+
+2026-02-08: Updated live plan with Milestone 34 Python red/green/refactor transcripts, resolved
+Milestone 32 contract closure, and refreshed fixture behavior-check evidence reflecting both
+TypeScript and Python caller rows.
