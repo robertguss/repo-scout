@@ -353,10 +353,11 @@ fn run_diff_impact(args: crate::cli::DiffImpactArgs) -> anyhow::Result<()> {
     let mut changed_symbols = args.changed_symbols.clone();
     changed_symbols.sort();
     changed_symbols.dedup();
+    let include_tests = !args.exclude_tests;
 
     let options = DiffImpactOptions {
         max_distance: args.max_distance,
-        include_tests: args.include_tests,
+        include_tests,
         include_imports: args.include_imports,
         changed_lines,
         changed_symbols,

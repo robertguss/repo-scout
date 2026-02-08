@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the current `repo-scout` architecture after Phase 7.
+This document describes the current `repo-scout` architecture after Phase 8.
 
 ## High-Level Flow
 
@@ -37,7 +37,8 @@ This document describes the current `repo-scout` architecture after Phase 7.
   - `find`, `refs`, `impact`, `context`, `tests-for`, `verify-plan`, `diff-impact`, and `explain`
     implementations.
 - `src/output.rs`
-  - Human-readable and JSON serialization paths.
+  - Human-readable and JSON serialization paths (`diff-impact` terminal output is row-oriented in
+    Phase 8).
 
 ## Storage Model
 
@@ -152,11 +153,13 @@ Lifecycle guarantees covered by integration tests include stale-file pruning, re
   hints so duplicate-name callees do not cross-link ambiguously.
 - Optionally remove changed-symbol output rows with `--exclude-changed`.
 - Optionally cap results deterministically with `--max-results`.
-- Attach ranked test targets (`include_tests = true`; `--include-tests` retained for CLI
-  compatibility).
+- Attach ranked test targets by default (`include_tests = true`), disable with
+  `--exclude-tests`, or keep explicit default behavior with `--include-tests` (conflicting flags
+  are rejected by clap).
 - Apply deterministic semantic score calibration so resolved semantic caller rows rank above
   fallback test-target rows.
 - Sort mixed result kinds deterministically.
+- Render terminal output as deterministic row-level `impacted_symbol`/`test_target` lines.
 
 ### `explain`
 
@@ -173,6 +176,13 @@ Determinism is enforced by:
 - repository-relative path normalization,
 - fixed JSON field shapes,
 - deterministic handler-stage truncation for capped commands (`find`, `refs`, `diff-impact`).
+
+## Quality Gates
+
+Phase 8 requires both quality gates to stay green for release-readiness:
+
+- `cargo clippy --all-targets --all-features -- -D warnings`
+- `cargo test`
 
 ## Corruption Recovery
 

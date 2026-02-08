@@ -116,7 +116,7 @@ Per-result fields:
 - `confidence` (`graph_likely`)
 - `score` (`number`)
 
-Phase 7 keeps schema 2 unchanged and applies deterministic semantic score calibration by
+Phase 7/8 keep schema 2 unchanged and apply deterministic semantic score calibration by
 relationship/provenance so stronger semantic rows (for example resolved `called_by`) stay in a
 high-confidence ranking band.
 
@@ -244,6 +244,9 @@ These contracts are intentionally additive and do not change schema 1 or schema 
 
 ## `diff-impact --json` (Schema 3)
 
+Terminal mode (`diff-impact` without `--json`) is row-oriented in Phase 8, but the JSON contract
+below remains schema-stable and unchanged.
+
 ```json
 {
   "schema_version": 3,
@@ -290,10 +293,10 @@ Top-level fields:
 | `command` | `string` | yes | Always `"diff-impact"`. |
 | `changed_files` | `array<string>` | yes | Repo-relative, normalized, sorted, deduplicated. |
 | `max_distance` | `number` | yes | Echoes resolved traversal distance. |
-| `include_tests` | `boolean` | yes | Echoes resolved test-target behavior (currently `true` by default). |
+| `include_tests` | `boolean` | yes | Echoes resolved test-target behavior (`true` default, `false` with `--exclude-tests`). |
 | `results` | `array<DiffImpactResult>` | yes | Deterministically ordered (see rules below). |
 
-Phase 4/5/6 option effects (schema unchanged):
+Phase 4/5/6/8 option effects (schema unchanged):
 
 - `--include-imports` changes changed-symbol seed selection by allowing `kind=import` at
   `distance=0`.
@@ -306,11 +309,11 @@ Phase 4/5/6 option effects (schema unchanged):
 - `--exclude-changed` removes `relationship = changed_symbol` rows from final output while keeping
   traversal rooted at those seeds.
 - `--max-results` applies deterministic post-sort truncation.
-- `--include-tests` is currently a compatibility flag; schema 3 continues to report
-  `include_tests = true` by default.
-- Phase 7 calibrates semantic impacted-symbol row scores deterministically by
+- `--exclude-tests` disables `test_target` rows and sets top-level `include_tests = false`.
+- `--include-tests` preserves explicit default behavior and conflicts with `--exclude-tests`.
+- Phase 7/8 calibrate semantic impacted-symbol row scores deterministically by
   relationship/provenance/distance (for example resolved `called_by` rows score `0.97` at
-  `distance = 1` in the Phase 7 benchmark fixture).
+  `distance = 1` in the Phase 8 benchmark fixture).
 - Neither option requires new mandatory top-level fields in schema 3.
 
 `DiffImpactResult` union discriminator:

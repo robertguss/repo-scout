@@ -391,6 +391,41 @@ pub fn print_diff_impact(
     println!("max_distance: {max_distance}");
     println!("include_tests: {include_tests}");
     println!("results: {}", results.len());
+    for result in results {
+        match result {
+            DiffImpactMatch::ImpactedSymbol {
+                symbol,
+                kind,
+                language,
+                file_path,
+                line,
+                column,
+                distance,
+                relationship,
+                confidence,
+                provenance,
+                score,
+                ..
+            } => {
+                println!(
+                    "impacted_symbol {file_path}:{line}:{column} {symbol} ({kind}, {language}) relationship={relationship} distance={distance} confidence={confidence} provenance={provenance} score={score:.2}"
+                );
+            }
+            DiffImpactMatch::TestTarget {
+                target,
+                target_kind,
+                language,
+                confidence,
+                provenance,
+                score,
+                ..
+            } => {
+                println!(
+                    "test_target {target} ({target_kind}, {language}) confidence={confidence} provenance={provenance} score={score:.2}"
+                );
+            }
+        }
+    }
 }
 
 pub fn print_diff_impact_json(

@@ -13,10 +13,10 @@ pub fn repo_scout_cmd() -> Command {
     ];
 
     for name in env_candidates {
-        if let Some(path) = std::env::var_os(name).map(PathBuf::from) {
-            if path.is_file() {
-                return Command::new(path);
-            }
+        if let Some(path) = std::env::var_os(name).map(PathBuf::from)
+            && path.is_file()
+        {
+            return Command::new(path);
         }
     }
 
