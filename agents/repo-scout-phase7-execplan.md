@@ -38,7 +38,13 @@ quantifies recommendation quality under known noisy scenarios.
       and Python module-alias calls where `diff-impact` currently returns only changed symbols when
       duplicate callee names exist.
 - [x] (2026-02-08 01:31Z) Authored this Phase 7 ExecPlan as planning-only work.
-- [ ] Run Milestone 32 strict TDD contract-lock slices and record red/green/refactor transcripts.
+- [x] (2026-02-08 01:39Z) Ran required pre-milestone baseline dogfood for Milestone 32:
+      `cargo run -- index --repo .`,
+      `cargo run -- find resolve_symbol_id_in_tx --repo . --json`,
+      `cargo run -- refs resolve_symbol_id_in_tx --repo . --json`.
+- [ ] Milestone 32 strict TDD contract-lock slices
+      (completed: red failures for `tests/milestone32_semantic_contracts.rs`;
+      remaining: green/refactor completion tracked in Milestones 33-34 as semantic behavior lands).
 - [ ] Run Milestone 33 strict TDD slices for TypeScript namespace/module-aware call resolution.
 - [ ] Run Milestone 34 strict TDD slices for Python module-aware call resolution.
 - [ ] Run Milestone 35 strict TDD slices for semantic-confidence ranking and benchmark guardrails.
@@ -76,6 +82,14 @@ quantifies recommendation quality under known noisy scenarios.
   validate MVP extraction/edges but do not currently lock the duplicate-name namespace/module-alias
   caller-impact scenario.
 
+- Observation: New Milestone 32 contract tests fail exactly at missing caller rows while schema
+  envelopes remain stable.
+  Evidence: `cargo test milestone32_typescript_namespace_alias_call_contract -- --nocapture`
+  failed with missing `src/app.ts::run` `called_by`; `cargo test
+  milestone32_python_module_alias_call_contract -- --nocapture` failed with missing
+  `src/py_app.py::run_py` `called_by`; `cargo test milestone32_schema_contracts_stay_stable --
+  --nocapture` failed on missing schema-3 semantic caller rows.
+
 ## Decision Log
 
 - Decision: Keep schema envelopes stable (`schema_version` 1/2/3) through Phase 7 and implement
@@ -107,6 +121,13 @@ quantifies recommendation quality under known noisy scenarios.
   Rationale: Phase 7 scope is cross-language semantic impact precision and quality measurement;
   multi-runner command inference (`pytest`, `jest`, etc.) is a separate problem and should be
   planned explicitly in a later phase.
+  Date/Author: 2026-02-08 / Codex
+
+- Decision: Keep Milestone 32 contract tests asserting final semantic behavior (not current gaps),
+  and carry their green/refactor closure into Milestones 33-34 while the owning TypeScript/Python
+  behavior slices are implemented.
+  Rationale: This is the smallest plan-aligned path that preserves strict red-before-production
+  evidence while avoiding duplicate temporary contract rewrites.
   Date/Author: 2026-02-08 / Codex
 
 ## Outcomes & Retrospective
@@ -399,6 +420,23 @@ Semantic-gap planning transcript (Python module alias scenario):
 
 All Milestone 32-36 red/green/refactor transcripts must be appended here during implementation.
 
+Milestone 32 strict TDD evidence (red stage):
+
+    # 32A red
+    cargo test milestone32_typescript_namespace_alias_call_contract -- --nocapture
+    ...
+    expected TypeScript namespace call to produce called_by row for src/app.ts::run
+
+    # 32B red
+    cargo test milestone32_python_module_alias_call_contract -- --nocapture
+    ...
+    expected Python module-alias call to produce called_by row for src/py_app.py::run_py
+
+    # 32C red
+    cargo test milestone32_schema_contracts_stay_stable -- --nocapture
+    ...
+    schema 3 should include semantic caller row for TypeScript fixture
+
 ## Interfaces and Dependencies
 
 Phase 7 should continue using current dependencies (`tree-sitter`, language grammars, `rusqlite`,
@@ -445,3 +483,6 @@ Expected interface-level touch points:
 2026-02-08: Created initial Phase 7 execution plan to implement cross-language semantic
 resolution precision and benchmark guardrails, based on residual-work threads from Phase 2 through
 Phase 6 and aligned to `agents/PLANS.md` strict TDD/living-plan requirements.
+
+2026-02-08: Updated live plan with Milestone 32 pre-dogfood transcripts, strict red-stage
+contract-test evidence, and decision-log handling for cross-milestone green/refactor closure.
