@@ -3,8 +3,8 @@
 This ExecPlan is a living document. The sections `Progress`, `Surprises & Discoveries`,
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-This repository includes `agents/PLANS.md`, and this document must be maintained in accordance
-with that file.
+This repository includes `agents/PLANS.md`, and this document must be maintained in accordance with
+that file.
 
 This plan builds on `agents/repo-scout-phase7-execplan.md` and the validation evidence captured in
 `agents/phase7-validation-report.md`.
@@ -24,13 +24,12 @@ checks become CI-safe, and day-to-day CLI usage is less noisy and easier to scan
 
 - [x] (2026-02-08 02:21Z) Re-read `agents/PLANS.md`, `agents/repo-scout-phase7-execplan.md`, and
       `agents/phase7-validation-report.md` to derive Phase 8 scope from measured gaps.
-- [x] (2026-02-08 02:21Z) Re-ran planning baseline dogfood commands:
-      `cargo run -- index --repo .`,
+- [x] (2026-02-08 02:21Z) Re-ran planning baseline dogfood commands: `cargo run -- index --repo .`,
       `cargo run -- find diff_impact_for_changed_files --repo . --json`,
       `cargo run -- refs diff_impact_for_changed_files --repo . --json`.
 - [x] (2026-02-08 02:21Z) Authored this Phase 8 ExecPlan as planning-only work.
-- [x] (2026-02-08 02:37Z) Completed Milestone 37 strict TDD slices for semantic-precision closure
-      in TypeScript/Python alias-import call paths and added fixture
+- [x] (2026-02-08 02:37Z) Completed Milestone 37 strict TDD slices for semantic-precision closure in
+      TypeScript/Python alias-import call paths and added fixture
       `tests/fixtures/phase8/semantic_precision`.
 - [x] (2026-02-08 02:39Z) Completed Milestone 38 strict TDD slices; strict lint gate is green on
       `cargo clippy --all-targets --all-features -- -D warnings` with full `cargo test` passing.
@@ -43,92 +42,78 @@ checks become CI-safe, and day-to-day CLI usage is less noisy and easier to scan
 
 ## Surprises & Discoveries
 
-- Observation: after fast-forwarding to the latest
-  `codex/phase7-plan-and-semantic-precision`, the remaining semantic gap was narrower than the
-  validation artifact described: namespace/module alias calls already resolved, but direct
-  alias-import calls (`helperA()`, `helper_a()`) did not resolve to changed duplicate-name callees.
-  Evidence: red tests in `tests/milestone37_semantic_precision.rs` failed on
-  `run_alias_a`/`helper_a()` caller assertions while `run_namespace_a`/`run_module_a` were already
-  present.
+- Observation: after fast-forwarding to the latest `codex/phase7-plan-and-semantic-precision`, the
+  remaining semantic gap was narrower than the validation artifact described: namespace/module alias
+  calls already resolved, but direct alias-import calls (`helperA()`, `helper_a()`) did not resolve
+  to changed duplicate-name callees. Evidence: red tests in
+  `tests/milestone37_semantic_precision.rs` failed on `run_alias_a`/`helper_a()` caller assertions
+  while `run_namespace_a`/`run_module_a` were already present.
 
 - Observation: preserving historical `impact call_helper` behavior required keeping local-import
-  call edges while adding direct qualified callee edges for alias-import precision.
-  Evidence: `cargo test` initially failed at
-  `milestone16_python_references_calls_imports` when direct-edge logic replaced local-import edges;
-  the test passed again after emitting both edges.
+  call edges while adding direct qualified callee edges for alias-import precision. Evidence:
+  `cargo test` initially failed at `milestone16_python_references_calls_imports` when direct-edge
+  logic replaced local-import edges; the test passed again after emitting both edges.
 
-- Observation: strict clippy gates are currently red even though `cargo test` is green.
-  Evidence: `cargo clippy --all-targets --all-features -- -D warnings` reports actionable lints in
+- Observation: strict clippy gates are currently red even though `cargo test` is green. Evidence:
+  `cargo clippy --all-targets --all-features -- -D warnings` reports actionable lints in
   `src/indexer/languages/python.rs`, `src/indexer/languages/typescript.rs`,
   `src/indexer/languages/rust.rs`, `src/indexer/rust_ast.rs`, and `tests/common/mod.rs`.
 
-- Observation: direct semantic fixes in language adapters triggered `clippy::too_many_arguments`
-  for shared recursive helper signatures in both TypeScript and Python call collectors.
-  Evidence: `cargo clippy --bin repo-scout -- -D warnings` failed on
-  `collect_call_symbols` function arity in both adapter files.
+- Observation: direct semantic fixes in language adapters triggered `clippy::too_many_arguments` for
+  shared recursive helper signatures in both TypeScript and Python call collectors. Evidence:
+  `cargo clippy --bin repo-scout -- -D warnings` failed on `collect_call_symbols` function arity in
+  both adapter files.
 
 - Observation: `diff-impact --include-tests` is currently a compatibility no-op and cannot disable
-  test rows.
-  Evidence: validation comparison produced identical counts with and without `--include-tests`
-  (`include_tests=true`, same result length).
+  test rows. Evidence: validation comparison produced identical counts with and without
+  `--include-tests` (`include_tests=true`, same result length).
 
 - Observation: terminal-mode `diff-impact` is summary-only and does not print per-result rows.
   Evidence: `src/output.rs::print_diff_impact` currently prints command metadata and count only.
 
-- Observation: `--exclude-tests` can reduce large terminal `diff-impact` scans substantially in
-  this repository when changed files have broad downstream coverage.
-  Evidence: `src/query/mod.rs` sample changed from 93 rows (`include_tests=true`) to 70 rows
-  (`include_tests=false`) in Milestone 39 dogfood checks.
+- Observation: `--exclude-tests` can reduce large terminal `diff-impact` scans substantially in this
+  repository when changed files have broad downstream coverage. Evidence: `src/query/mod.rs` sample
+  changed from 93 rows (`include_tests=true`) to 70 rows (`include_tests=false`) in Milestone 39
+  dogfood checks.
 
 - Observation: row-oriented terminal output can stay deterministic without extra sorting logic by
-  reusing already-sorted `DiffImpactMatch` query results.
-  Evidence: repeated Milestone 40 terminal runs for the same command produced byte-identical output
-  via `cmp -s`.
+  reusing already-sorted `DiffImpactMatch` query results. Evidence: repeated Milestone 40 terminal
+  runs for the same command produced byte-identical output via `cmp -s`.
 
 ## Decision Log
 
 - Decision: treat unresolved Phase 7 semantic precision as the first milestone in Phase 8 rather
-  than postponing again.
-  Rationale: layering UX and quality improvements on top of known semantic misses would hide core
-  correctness debt in the primary impact workflow.
-  Date/Author: 2026-02-08 / Codex
+  than postponing again. Rationale: layering UX and quality improvements on top of known semantic
+  misses would hide core correctness debt in the primary impact workflow. Date/Author: 2026-02-08 /
+  Codex
 
 - Decision: keep all existing JSON schema versions stable (1/2/3) and implement improvements via
-  additive behavior and flags.
-  Rationale: downstream automation already depends on current envelopes; this phase targets quality
-  and ergonomics without contract churn.
-  Date/Author: 2026-02-08 / Codex
+  additive behavior and flags. Rationale: downstream automation already depends on current
+  envelopes; this phase targets quality and ergonomics without contract churn. Date/Author:
+  2026-02-08 / Codex
 
 - Decision: preserve current default `diff-impact` behavior (`include_tests=true`) while adding an
-  explicit opt-out flag.
-  Rationale: default-on test targets are existing behavior; additive opt-out provides operator
-  control without breaking existing scripts.
-  Date/Author: 2026-02-08 / Codex
+  explicit opt-out flag. Rationale: default-on test targets are existing behavior; additive opt-out
+  provides operator control without breaking existing scripts. Date/Author: 2026-02-08 / Codex
 
 - Decision: make `diff-impact` terminal output row-oriented and deterministic, mirroring JSON
-  ordering.
-  Rationale: users frequently run quick terminal checks; requiring JSON parsing for basic triage
-  slows interactive debugging.
-  Date/Author: 2026-02-08 / Codex
+  ordering. Rationale: users frequently run quick terminal checks; requiring JSON parsing for basic
+  triage slows interactive debugging. Date/Author: 2026-02-08 / Codex
 
-- Decision: include strict clippy gate recovery as a first-class milestone rather than a
-  best-effort cleanup task.
-  Rationale: a red static-analysis gate is production risk for CI and obscures future regressions.
-  Date/Author: 2026-02-08 / Codex
+- Decision: include strict clippy gate recovery as a first-class milestone rather than a best-effort
+  cleanup task. Rationale: a red static-analysis gate is production risk for CI and obscures future
+  regressions. Date/Author: 2026-02-08 / Codex
 
 - Decision: emit both direct qualified alias-call edges and legacy local-import call edges for
-  direct alias imports.
-  Rationale: direct edges are required for `diff-impact` caller recall at `distance=1`, while
-  legacy local-import edges preserve existing `impact <import_alias>` behavior and avoid regressions
-  in earlier milestones.
-  Date/Author: 2026-02-08 / Codex
+  direct alias imports. Rationale: direct edges are required for `diff-impact` caller recall at
+  `distance=1`, while legacy local-import edges preserve existing `impact <import_alias>` behavior
+  and avoid regressions in earlier milestones. Date/Author: 2026-02-08 / Codex
 
 - Decision: keep recursive `collect_call_symbols` helper signatures and explicitly annotate them
   with `#[allow(clippy::too_many_arguments)]` rather than introducing high-risk refactors in the
-  same milestone as strict lint-gate recovery.
-  Rationale: this keeps semantic behavior stable while satisfying strict clippy gates and limiting
-  scope creep in a hardening milestone.
-  Date/Author: 2026-02-08 / Codex
+  same milestone as strict lint-gate recovery. Rationale: this keeps semantic behavior stable while
+  satisfying strict clippy gates and limiting scope creep in a hardening milestone. Date/Author:
+  2026-02-08 / Codex
 
 ## Outcomes & Retrospective
 
@@ -173,10 +158,10 @@ Terms used in this plan:
 
 - A “semantic precision closure” means converting known false-negative impact scenarios into
   deterministic passing tests and production behavior.
-- An “alias-import call path” means calls such as `utilA.helper()` (TypeScript namespace import)
-  or `util_a.helper()` (Python module alias import) where multiple modules define `helper`.
-- A “strict clippy gate” means `cargo clippy --all-targets --all-features -- -D warnings` must
-  pass with zero warnings.
+- An “alias-import call path” means calls such as `utilA.helper()` (TypeScript namespace import) or
+  `util_a.helper()` (Python module alias import) where multiple modules define `helper`.
+- A “strict clippy gate” means `cargo clippy --all-targets --all-features -- -D warnings` must pass
+  with zero warnings.
 - A “terminal row” for `diff-impact` means one printed output line per impacted symbol or test
   target, not just summary counters.
 - A “schema-stable additive flag” means introducing new CLI behavior without changing existing JSON
@@ -203,14 +188,13 @@ Record these transcripts in this plan and append concise evidence to `docs/dogfo
 
 ### Milestone 37: Semantic Precision Closure (carry-over completion)
 
-Milestone goal: ship the missing semantic behavior that was planned in Phase 7 and confirmed
-missing in validation.
+Milestone goal: ship the missing semantic behavior that was planned in Phase 7 and confirmed missing
+in validation.
 
 Feature slice 37A adds a deterministic fixture for duplicate-name TypeScript namespace imports and
-locks the failure first in `tests/milestone37_semantic_precision.rs`.
-The red behavior is that changing `src/util_a.ts` returns only a `changed_symbol` row. The green
-behavior requires at least one `called_by` row for the correct caller path and no cross-link to the
-`util_b` caller.
+locks the failure first in `tests/milestone37_semantic_precision.rs`. The red behavior is that
+changing `src/util_a.ts` returns only a `changed_symbol` row. The green behavior requires at least
+one `called_by` row for the correct caller path and no cross-link to the `util_b` caller.
 
 Feature slice 37B adds the corresponding Python module-alias fixture and failing test in the same
 suite. The red behavior is that changing `src/pkg_a/util.py` misses caller impact. The green
@@ -226,15 +210,15 @@ ensure deterministic ordering remains stable across repeated runs.
 Milestone goal: make strict lint gates pass without semantic regressions.
 
 Feature slice 38A starts red with a targeted lint run for test harness code
-(`cargo clippy --test harness_smoke -- -D warnings`), fixes `tests/common/mod.rs`, and confirms
-that helper behavior remains unchanged by running the harness and core CLI smoke tests.
+(`cargo clippy --test harness_smoke -- -D warnings`), fixes `tests/common/mod.rs`, and confirms that
+helper behavior remains unchanged by running the harness and core CLI smoke tests.
 
-Feature slice 38B starts red with binary lint checks (`cargo clippy --bin repo-scout --
--D warnings`), then applies minimal refactors in
+Feature slice 38B starts red with binary lint checks
+(`cargo clippy --bin repo-scout -- -D warnings`), then applies minimal refactors in
 `src/indexer/languages/python.rs`, `src/indexer/languages/typescript.rs`,
-`src/indexer/languages/rust.rs`, and `src/indexer/rust_ast.rs`.
-Before each refactor cluster, add/extend integration tests to lock current behavior for the touched
-code path so refactors are behavior-preserving.
+`src/indexer/languages/rust.rs`, and `src/indexer/rust_ast.rs`. Before each refactor cluster,
+add/extend integration tests to lock current behavior for the touched code path so refactors are
+behavior-preserving.
 
 Feature slice 38C runs the full strict lint gate
 (`cargo clippy --all-targets --all-features -- -D warnings`) and then full `cargo test` as the
@@ -245,17 +229,17 @@ refactor gate.
 Milestone goal: allow users to suppress test-target rows when they want symbol-only impact.
 
 Feature slice 39A adds failing integration coverage in
-`tests/milestone39_diff_impact_test_toggle.rs` for `--exclude-tests` behavior. Red: test-target
-rows still appear. Green: `result_kind = test_target` rows are absent and top-level
-`include_tests` is `false`.
+`tests/milestone39_diff_impact_test_toggle.rs` for `--exclude-tests` behavior. Red: test-target rows
+still appear. Green: `result_kind = test_target` rows are absent and top-level `include_tests` is
+`false`.
 
 Feature slice 39B preserves default behavior and compatibility flag behavior. Add failing tests that
 `diff-impact` with no toggle still includes test targets and reports `include_tests = true`, and
 that explicit `--include-tests` keeps the same outcome.
 
 Feature slice 39C wires CLI and option plumbing in `src/cli.rs`, `src/main.rs`, and
-`src/query/mod.rs` with deterministic semantics. Use a conflict rule for incompatible flags (if
-both toggles are present) and assert clap error messaging in tests.
+`src/query/mod.rs` with deterministic semantics. Use a conflict rule for incompatible flags (if both
+toggles are present) and assert clap error messaging in tests.
 
 ### Milestone 40: Actionable `diff-impact` Terminal Rows
 

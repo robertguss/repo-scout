@@ -14,14 +14,15 @@ Track wall-clock timings for:
 - Phase 4 precision controls (`diff-impact --include-imports/--changed-line`,
   `refs --code-only --exclude-tests`)
 - Phase 5 recommendation/fidelity controls (`tests-for --include-support`,
-  `verify-plan --max-targeted`, context token-overlap matching, multi-hop `diff-impact --max-distance`)
+  `verify-plan --max-targeted`, context token-overlap matching, multi-hop
+  `diff-impact --max-distance`)
 - Phase 6 change-scope/output-focus controls (`context --exclude-tests --code-only`,
-  `verify-plan --changed-line/--changed-symbol`, `diff-impact --changed-symbol --exclude-changed --max-results`,
-  `find/refs --max-results`)
-- Phase 7/8 semantic precision and hardening controls (TypeScript/Python module-aware
-  `diff-impact`, calibrated `impact`/`diff-impact` semantic ranking, explicit
-  `diff-impact --exclude-tests`, deterministic row-level terminal output checks, fixture benchmark
-  pack under `tests/fixtures/phase8/semantic_precision`)
+  `verify-plan --changed-line/--changed-symbol`,
+  `diff-impact --changed-symbol --exclude-changed --max-results`, `find/refs --max-results`)
+- Phase 7/8 semantic precision and hardening controls (TypeScript/Python module-aware `diff-impact`,
+  calibrated `impact`/`diff-impact` semantic ranking, explicit `diff-impact --exclude-tests`,
+  deterministic row-level terminal output checks, fixture benchmark pack under
+  `tests/fixtures/phase8/semantic_precision`)
 
 ## Commands
 

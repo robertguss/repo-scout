@@ -52,8 +52,7 @@ This log captures real `repo-scout` usage while building `repo-scout`.
     - `Implement Milestone 41 Phase 8 docs and verification refresh`
   - docs update:
     - `README.md`, `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`,
-      `docs/performance-baseline.md`, `docs/dogfood-log.md`,
-      `agents/repo-scout-phase8-execplan.md`.
+      `docs/performance-baseline.md`, `docs/dogfood-log.md`, `agents/repo-scout-phase8-execplan.md`.
 - Status: `fixed`
 
 - Date: `2026-02-08`
@@ -135,7 +134,8 @@ This log captures real `repo-scout` usage while building `repo-scout`.
     so fixes needed a second pass (`rfind`) to settle.
 - Action taken:
   - failing test added:
-    - no new behavior tests; milestone enforced static-analysis gates and full-suite regression pass.
+    - no new behavior tests; milestone enforced static-analysis gates and full-suite regression
+      pass.
   - fix commit:
     - `Implement Milestone 38 strict clippy quality-gate cleanup via TDD`
   - docs update:
@@ -200,7 +200,9 @@ This log captures real `repo-scout` usage while building `repo-scout`.
   - `cargo run -- refs helper --repo . --code-only --exclude-tests --max-results 10 --json`
   - `cargo test`
   - `cargo fmt`
-- Transcript artifact (from `cargo run -- diff-impact --changed-file src/util_a.ts --repo tests/fixtures/phase7/semantic_precision --json`):
+- Transcript artifact (from
+  `cargo run -- diff-impact --changed-file src/util_a.ts --repo tests/fixtures/phase7/semantic_precision --json`):
+
 ```json
 {
   "changed_files": ["src/util_a.ts"],
@@ -222,6 +224,7 @@ This log captures real `repo-scout` usage while building `repo-scout`.
   ]
 }
 ```
+
 - What helped:
   - Module-aware alias hints in TypeScript/Python adapters eliminated duplicate-name callee
     ambiguity for namespace/member and module-alias attribute calls.
@@ -244,8 +247,7 @@ This log captures real `repo-scout` usage while building `repo-scout`.
     - `Implement Milestone 35 semantic ranking calibration via TDD`
   - docs update:
     - `README.md`, `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`,
-      `docs/dogfood-log.md`, `docs/performance-baseline.md`,
-      `agents/repo-scout-phase7-execplan.md`.
+      `docs/dogfood-log.md`, `docs/performance-baseline.md`, `agents/repo-scout-phase7-execplan.md`.
 - Status: `fixed`
 
 - Date: `2026-02-08`
@@ -259,7 +261,8 @@ This log captures real `repo-scout` usage while building `repo-scout`.
   - `cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --include-tests --json`
 - What helped:
   - Coverage output gave concrete line/function/region percentages to validate ">=85%" expectations.
-  - Direct command checks exposed docs drift for `diff-impact` test-target wording and schema enum notes.
+  - Direct command checks exposed docs drift for `diff-impact` test-target wording and schema enum
+    notes.
 - What failed or felt weak:
   - `--include-tests` is currently a compatibility flag; behavior remains default-on in practice.
 - Action taken:
@@ -306,8 +309,8 @@ This log captures real `repo-scout` usage while building `repo-scout`.
   - `diff-impact --exclude-changed --max-results` produced focused impacted/test outputs while
     preserving traversal semantics.
 - What failed or felt weak:
-  - `refs helper --max-results 10` remains test-heavy in this repository because exact fallback
-    hits for that token are concentrated under `tests/`.
+  - `refs helper --max-results 10` remains test-heavy in this repository because exact fallback hits
+    for that token are concentrated under `tests/`.
   - Slice 30C regression guard was already satisfied on first run; no new production change was
     needed for cap/scope composition once max-result plumbing landed.
 - Action taken:
@@ -362,8 +365,8 @@ This log captures real `repo-scout` usage while building `repo-scout`.
     - `Implement Milestone 22 tests-for recommendation quality via TDD`
     - `Implement Milestone 23 verify-plan precision controls via TDD`
     - `Implement Milestone 24 context relevance scoring via TDD`
-  - docs update: `README.md`, `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`,
-    `agents/repo-scout-phase5-execplan.md`.
+  - docs update: `README.md`, `docs/cli-reference.md`, `docs/json-output.md`,
+    `docs/architecture.md`, `agents/repo-scout-phase5-execplan.md`.
 - Status: `fixed`
 
 - Date: `2026-02-07`
@@ -385,8 +388,8 @@ This log captures real `repo-scout` usage while building `repo-scout`.
 - Action taken:
   - failing test added: `tests/milestone25_diff_impact_multihop.rs`
   - fix commit: `Implement Milestone 25 multi-hop diff-impact traversal via TDD`
-  - docs update: `README.md`, `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`,
-    `agents/repo-scout-phase5-execplan.md`.
+  - docs update: `README.md`, `docs/cli-reference.md`, `docs/json-output.md`,
+    `docs/architecture.md`, `agents/repo-scout-phase5-execplan.md`.
 - Status: `fixed`
 
 - Date: `2026-02-07`
@@ -430,7 +433,8 @@ This log captures real `repo-scout` usage while building `repo-scout`.
 - Action taken:
   - failing test added: `tests/milestone21_query_scope.rs`
   - fix commit: add command-specific args and fallback scope filtering in query module.
-  - docs update: `README.md`, `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`.
+  - docs update: `README.md`, `docs/cli-reference.md`, `docs/json-output.md`,
+    `docs/architecture.md`.
 - Status: `fixed`
 
 - Date: `2026-02-07`
@@ -448,7 +452,8 @@ This log captures real `repo-scout` usage while building `repo-scout`.
 - Action taken:
   - failing test added: `tests/milestone20_diff_impact_precision.rs`
   - fix commit: add diff-impact option parsing plus changed-symbol seed filtering by kind/range.
-  - docs update: `README.md`, `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`.
+  - docs update: `README.md`, `docs/cli-reference.md`, `docs/json-output.md`,
+    `docs/architecture.md`.
 - Status: `fixed`
 
 - Date: `2026-02-07`
@@ -466,7 +471,8 @@ This log captures real `repo-scout` usage while building `repo-scout`.
   - Test harness initially preferred external `codex-5-3` binary over local `repo-scout`.
 - Action taken:
   - failing test added: `tests/milestone18_precision_graph.rs`
-  - fix commit: SymbolKey-aware resolver plus adapter disambiguation hints; prioritize repo-scout in test harness.
+  - fix commit: SymbolKey-aware resolver plus adapter disambiguation hints; prioritize repo-scout in
+    test harness.
   - docs update: architecture precision notes and Phase 4 plan artifacts.
 - Status: `fixed`
 
@@ -500,7 +506,8 @@ This log captures real `repo-scout` usage while building `repo-scout`.
 - What failed or felt weak:
   - Absolute path aliases (`/var` vs `/private/var`) briefly duplicated changed files.
 - Action taken:
-  - failing test added: `tests/milestone12_diff_impact.rs::milestone12_diff_impact_changed_files_normalization`
+  - failing test added:
+    `tests/milestone12_diff_impact.rs::milestone12_diff_impact_changed_files_normalization`
   - fix commit: canonicalize changed-file paths before dedupe and ranking.
   - docs update: `docs/cli-reference.md` + `docs/json-output.md` schema 3 command section.
 - Status: `fixed`
@@ -551,8 +558,8 @@ This log captures real `repo-scout` usage while building `repo-scout`.
   - `cargo run -- find PythonLanguageAdapter --repo .`
   - `cargo run -- refs PythonLanguageAdapter --repo .`
 - What helped:
-  - Python adapter achieved `find`/`refs`/`impact`/`diff-impact`/`explain` coverage without query-layer
-    branching.
+  - Python adapter achieved `find`/`refs`/`impact`/`diff-impact`/`explain` coverage without
+    query-layer branching.
 - What failed or felt weak:
   - Import-driven references were initially text-only for `refs`.
 - Action taken:
@@ -594,7 +601,8 @@ This log captures real `repo-scout` usage while building `repo-scout`.
 - What failed or felt weak:
   - Recommendation list briefly suggested non-runnable nested test modules.
 - Action taken:
-  - failing test added: `tests/milestone10_validation.rs::milestone10_verify_plan_skips_non_runnable_test_modules`
+  - failing test added:
+    `tests/milestone10_validation.rs::milestone10_verify_plan_skips_non_runnable_test_modules`
   - fix commit: restrict runnable target extraction to direct `tests/<file>.rs` files.
   - docs update: `docs/cli-reference.md` and `docs/json-output.md`.
 - Status: `fixed`

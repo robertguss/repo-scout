@@ -3,8 +3,8 @@
 This ExecPlan is a living document. The sections `Progress`, `Surprises & Discoveries`,
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-This repository includes `agents/PLANS.md`, and this document must be maintained in accordance
-with that file.
+This repository includes `agents/PLANS.md`, and this document must be maintained in accordance with
+that file.
 
 This plan builds on `agents/repo-scout-phase3-execplan.md`, which delivered schema v3 contracts,
 `diff-impact`, `explain`, and Rust/TypeScript/Python adapter extraction.
@@ -25,20 +25,19 @@ editing loops, especially in repositories where repeated symbol names exist acro
       `docs/architecture.md`, `docs/cli-reference.md`, and `docs/json-output.md` to align Phase 4
       scope with current contracts.
 - [x] (2026-02-07 01:15Z) Captured baseline dogfood output for current behavior:
-      `cargo run -- index --repo .`,
-      `cargo run -- refs impact_matches --repo . --json`,
+      `cargo run -- index --repo .`, `cargo run -- refs impact_matches --repo . --json`,
       `cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --json`.
 - [x] (2026-02-07 01:16Z) Quantified `diff-impact` baseline noise using
-      `cargo run --quiet -- diff-impact ... | jq`: `68` total results, `62` impacted symbols,
-      `5` distance-0 imports, `6` test targets.
+      `cargo run --quiet -- diff-impact ... | jq`: `68` total results, `62` impacted symbols, `5`
+      distance-0 imports, `6` test targets.
 - [x] (2026-02-07 01:18Z) Built a temporary duplicate-symbol fixture repo and confirmed ambiguous
       call resolution drops one true edge (`entry` only linked to `src/a.rs::run`, missing
       `src/b.rs::run`).
 - [x] (2026-02-07 01:24Z) Authored this Phase 4 ExecPlan as planning-only work (no production code
       changes outside plan docs).
 - [x] (2026-02-07 15:47Z) Created branch stack per workflow:
-      `codex/phase4-plan-and-precision-contracts` from `main`, then
-      `codex/phase4-implementation` for execution work.
+      `codex/phase4-plan-and-precision-contracts` from `main`, then `codex/phase4-implementation`
+      for execution work.
 - [x] (2026-02-07 15:47Z) Ran required pre-milestone dogfood baseline:
       `cargo run -- index --repo .`,
       `cargo run -- find verify_plan_for_changed_files --repo . --json`,
@@ -46,55 +45,54 @@ editing loops, especially in repositories where repeated symbol names exist acro
 - [x] (2026-02-07 15:47Z) Milestone 18 complete: added
       `tests/fixtures/phase4/ambiguity/{disambiguated,ambiguous}/` and
       `tests/milestone18_precision_graph.rs` with strict red evidence for slices 18A/18B/18C.
-- [x] (2026-02-07 15:55Z) Milestone 19 complete: shipped `SymbolKey` disambiguator fields,
-      resolver hardening in `src/indexer/mod.rs`, adapter-emitted scoped keys across
-      Rust/TypeScript/Python, and green/refactor validation for all Milestone 18 contracts plus
-      full suite.
-- [x] (2026-02-07 15:58Z) Milestone 20 complete: added
-      `tests/milestone20_diff_impact_precision.rs`, implemented `--include-imports` and
-      `--changed-line` parsing/normalization, and updated `diff-impact` seed selection logic with
-      deterministic range filtering and actionable malformed-spec errors.
-- [x] (2026-02-07 16:02Z) Milestone 21 complete: added
-      `tests/milestone21_query_scope.rs`, shipped `find`/`refs` fallback scope controls
-      (`--code-only`, `--exclude-tests`), and validated AST-priority determinism.
-- [x] (2026-02-07 16:02Z) Updated Phase 4 docs and evidence artifacts:
-      `README.md`, `docs/cli-reference.md`, `docs/json-output.md`,
-      `docs/architecture.md`, `docs/dogfood-log.md`, `docs/performance-baseline.md`.
-- [x] (2026-02-07 16:03Z) Executed post-milestone dogfood checks exactly as specified in this
-      plan (including `diff-impact --changed-line` and scoped `refs`) and re-ran final
-      `cargo fmt` + `cargo test` gates.
+- [x] (2026-02-07 15:55Z) Milestone 19 complete: shipped `SymbolKey` disambiguator fields, resolver
+      hardening in `src/indexer/mod.rs`, adapter-emitted scoped keys across Rust/TypeScript/Python,
+      and green/refactor validation for all Milestone 18 contracts plus full suite.
+- [x] (2026-02-07 15:58Z) Milestone 20 complete: added `tests/milestone20_diff_impact_precision.rs`,
+      implemented `--include-imports` and `--changed-line` parsing/normalization, and updated
+      `diff-impact` seed selection logic with deterministic range filtering and actionable
+      malformed-spec errors.
+- [x] (2026-02-07 16:02Z) Milestone 21 complete: added `tests/milestone21_query_scope.rs`, shipped
+      `find`/`refs` fallback scope controls (`--code-only`, `--exclude-tests`), and validated
+      AST-priority determinism.
+- [x] (2026-02-07 16:02Z) Updated Phase 4 docs and evidence artifacts: `README.md`,
+      `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`, `docs/dogfood-log.md`,
+      `docs/performance-baseline.md`.
+- [x] (2026-02-07 16:03Z) Executed post-milestone dogfood checks exactly as specified in this plan
+      (including `diff-impact --changed-line` and scoped `refs`) and re-ran final `cargo fmt` +
+      `cargo test` gates.
 
 ## Surprises & Discoveries
 
 - Observation: `diff-impact --changed-file src/query/mod.rs --repo . --json` currently emits a very
-  broad seed set that includes imports and many helper functions by default.
-  Evidence: baseline JSON summary reported `68` total rows with `5` distance-0 `kind=import`
-  symbols and `6` test-target rows.
+  broad seed set that includes imports and many helper functions by default. Evidence: baseline JSON
+  summary reported `68` total rows with `5` distance-0 `kind=import` symbols and `6` test-target
+  rows.
 
 - Observation: current edge resolution resolves by plain symbol text, so repeated names across files
-  can be over-linked or under-linked.
-  Evidence: temporary fixture with `src/a.rs::run` and `src/b.rs::run` produced `entry -> a::run`
-  but missed `entry -> b::run`; SQLite query showed only one `calls` target for `entry`.
+  can be over-linked or under-linked. Evidence: temporary fixture with `src/a.rs::run` and
+  `src/b.rs::run` produced `entry -> a::run` but missed `entry -> b::run`; SQLite query showed only
+  one `calls` target for `entry`.
 
 - Observation: `diff-impact` currently seeds every symbol defined in each changed file before
-  traversal, which amplifies low-value matches when files contain many declarations.
-  Evidence: in repository self-dogfood, changing only `src/query/mod.rs` emitted dozens of
-  `distance = 0` rows before any neighbor ranking was applied.
+  traversal, which amplifies low-value matches when files contain many declarations. Evidence: in
+  repository self-dogfood, changing only `src/query/mod.rs` emitted dozens of `distance = 0` rows
+  before any neighbor ranking was applied.
 
 - Observation: Rust qualified calls like `a::run()` and `b::run()` currently collapse onto one
-  duplicate target because resolver fallback remains symbol-text-only.
-  Evidence: `milestone18_disambiguates_duplicate_rust_call_targets` red run reported
-  `left: [\"src/a.rs\"]` vs `right: [\"src/a.rs\", \"src/b.rs\"]`.
+  duplicate target because resolver fallback remains symbol-text-only. Evidence:
+  `milestone18_disambiguates_duplicate_rust_call_targets` red run reported `left: [\"src/a.rs\"]` vs
+  `right: [\"src/a.rs\", \"src/b.rs\"]`.
 
-- Observation: integration tests were selecting an external `codex-5-3` binary before
-  `repo-scout`, masking local implementation behavior.
-  Evidence: contract test remained red while manual local `cargo run -- index` query showed both
-  expected disambiguated edges; updating `tests/common/mod.rs` candidate order aligned outcomes.
+- Observation: integration tests were selecting an external `codex-5-3` binary before `repo-scout`,
+  masking local implementation behavior. Evidence: contract test remained red while manual local
+  `cargo run -- index` query showed both expected disambiguated edges; updating
+  `tests/common/mod.rs` candidate order aligned outcomes.
 
 - Observation: strict unique-global resolver fallback broke prior TypeScript `implements` edge
-  behavior when both interface and import rows shared the same symbol.
-  Evidence: `milestone15_typescript_edges_and_queries` failed until adapter import-path hints
-  mapped `Runner implements Contract` to `src/contracts.ts::Contract`.
+  behavior when both interface and import rows shared the same symbol. Evidence:
+  `milestone15_typescript_edges_and_queries` failed until adapter import-path hints mapped
+  `Runner implements Contract` to `src/contracts.ts::Contract`.
 
 - Observation: before Milestone 20 implementation, new `diff-impact` controls were rejected at CLI
   parse time (`--include-imports`, `--changed-line`) and default seeds still included imports.
@@ -102,58 +100,47 @@ editing loops, especially in repositories where repeated symbol names exist acro
   assertions.
 
 - Observation: repository self-dogfood `find helper`/`refs helper` defaults are currently dominated
-  by plan/docs text fallback rows when AST matches do not exist for that query.
-  Evidence: post-milestone run returned 59 fallback rows across planning artifacts and tests.
+  by plan/docs text fallback rows when AST matches do not exist for that query. Evidence:
+  post-milestone run returned 59 fallback rows across planning artifacts and tests.
 
 ## Decision Log
 
 - Decision: prioritize precision over recall when symbol resolution is ambiguous and no
-  deterministic disambiguator is available.
-  Rationale: automation loops are harmed more by incorrect edges than by missing low-confidence
-  edges.
-  Date/Author: 2026-02-07 / Codex
+  deterministic disambiguator is available. Rationale: automation loops are harmed more by incorrect
+  edges than by missing low-confidence edges. Date/Author: 2026-02-07 / Codex
 
-- Decision: sequence Phase 4 as contracts-first for precision failures, then resolver plumbing,
-  then query-surface controls.
-  Rationale: explicit red tests prevent accidental fallback to name-only edge linkage during
-  implementation.
-  Date/Author: 2026-02-07 / Codex
+- Decision: sequence Phase 4 as contracts-first for precision failures, then resolver plumbing, then
+  query-surface controls. Rationale: explicit red tests prevent accidental fallback to name-only
+  edge linkage during implementation. Date/Author: 2026-02-07 / Codex
 
 - Decision: keep schema 1/2/3 JSON envelopes intact and focus Phase 4 on deterministic ranking and
-  option-driven filtering behavior.
-  Rationale: avoid schema churn for existing automation consumers while improving practical signal.
-  Date/Author: 2026-02-07 / Codex
+  option-driven filtering behavior. Rationale: avoid schema churn for existing automation consumers
+  while improving practical signal. Date/Author: 2026-02-07 / Codex
 
 - Decision: make import-seed behavior explicit in `diff-impact` with an opt-in include flag, while
-  defaulting to higher-signal changed symbols.
-  Rationale: import rows are useful for some workflows but currently dominate many changed-file
-  outputs.
-  Date/Author: 2026-02-07 / Codex
+  defaulting to higher-signal changed symbols. Rationale: import rows are useful for some workflows
+  but currently dominate many changed-file outputs. Date/Author: 2026-02-07 / Codex
 
-- Decision: lock Milestone 18 contracts with two fixture variants (`disambiguated` and
-  `ambiguous`) under `tests/fixtures/phase4/ambiguity/` to isolate precision and fail-safe behavior.
-  Rationale: separate fixtures avoid conflating qualified and ambiguous call behavior in one test
-  corpus and keep red failures actionable.
-  Date/Author: 2026-02-07 / Codex
+- Decision: lock Milestone 18 contracts with two fixture variants (`disambiguated` and `ambiguous`)
+  under `tests/fixtures/phase4/ambiguity/` to isolate precision and fail-safe behavior. Rationale:
+  separate fixtures avoid conflating qualified and ambiguous call behavior in one test corpus and
+  keep red failures actionable. Date/Author: 2026-02-07 / Codex
 
-- Decision: prioritize `repo-scout` binary discovery in `tests/common/mod.rs`.
-  Rationale: integration tests must exercise local repository code, not external tool binaries.
-  Date/Author: 2026-02-07 / Codex
+- Decision: prioritize `repo-scout` binary discovery in `tests/common/mod.rs`. Rationale:
+  integration tests must exercise local repository code, not external tool binaries. Date/Author:
+  2026-02-07 / Codex
 
 - Decision: emit deterministic import-path hints from the TypeScript adapter for imported symbols.
   Rationale: resolver ambiguity safeguards should not regress valid cross-file `implements` and
-  `imports` edges when import source paths are syntactically known.
-  Date/Author: 2026-02-07 / Codex
+  `imports` edges when import source paths are syntactically known. Date/Author: 2026-02-07 / Codex
 
 - Decision: keep schema v3 payload shape backward-compatible while adding Milestone 20 controls.
   Rationale: `--include-imports` and `--changed-line` alter selection semantics but do not require
-  mandatory new JSON envelope fields for automation consumers.
-  Date/Author: 2026-02-07 / Codex
+  mandatory new JSON envelope fields for automation consumers. Date/Author: 2026-02-07 / Codex
 
 - Decision: apply `--code-only`/`--exclude-tests` only to fallback text rows for `find`/`refs`.
   Rationale: preserves existing AST-priority contracts for automation while enabling explicit
-  noise-control when fallback is needed.
-  Date/Author: 2026-02-07 / Codex
+  noise-control when fallback is needed. Date/Author: 2026-02-07 / Codex
 
 ## Outcomes & Retrospective
 
@@ -177,9 +164,9 @@ Milestone 19 retrospective (2026-02-07): symbol-key-aware resolution now fails s
 while preserving existing graph behavior through adapter hints. Duplicate-call disambiguation and
 ambiguous-call suppression are now enforced by passing integration tests and full-suite validation.
 
-Milestone 20 retrospective (2026-02-07): `diff-impact` now defaults to higher-signal changed
-symbols by excluding import seeds, offers explicit opt-in restoration via `--include-imports`, and
-supports deterministic line-range seed scoping with clear parse errors for malformed input.
+Milestone 20 retrospective (2026-02-07): `diff-impact` now defaults to higher-signal changed symbols
+by excluding import seeds, offers explicit opt-in restoration via `--include-imports`, and supports
+deterministic line-range seed scoping with clear parse errors for malformed input.
 
 Milestone 21 retrospective (2026-02-07): scoped fallback filtering now lets users suppress docs and
 test-noise rows (`--code-only`, `--exclude-tests`) without changing AST match ordering or schema 1
@@ -218,8 +205,8 @@ Current known hot spots:
 
 ## Strict TDD Contract
 
-Phase 4 enforces strict per-slice red-green-refactor. No production code is allowed before a
-failing test exists for that exact feature slice.
+Phase 4 enforces strict per-slice red-green-refactor. No production code is allowed before a failing
+test exists for that exact feature slice.
 
 A "feature slice" in this plan is one user-visible behavior change, such as "duplicate call targets
 are disambiguated" or "`diff-impact` excludes imports by default."
@@ -242,9 +229,8 @@ At milestone end, tests exist that fail on current behavior and define expected 
 
 Feature slice 18A defines duplicate-call disambiguation behavior. Add a new fixture repository under
 `tests/fixtures/phase4/ambiguity/` with duplicate function names in separate modules. Add test
-`milestone18_disambiguates_duplicate_rust_call_targets` in
-`tests/milestone18_precision_graph.rs` asserting `entry` connects to both module-qualified `run`
-definitions.
+`milestone18_disambiguates_duplicate_rust_call_targets` in `tests/milestone18_precision_graph.rs`
+asserting `entry` connects to both module-qualified `run` definitions.
 
 Feature slice 18B defines changed-file impact expectations on duplicate symbols. Add test
 `milestone18_diff_impact_includes_true_callers_for_changed_duplicate_target` asserting
@@ -257,8 +243,8 @@ linked arbitrarily.
 
 ### Milestone 19: Implement symbol-key disambiguation and resolver hardening
 
-Milestone goal: replace name-only edge endpoint resolution with deterministic symbol identity
-hints across adapters and indexer resolver paths.
+Milestone goal: replace name-only edge endpoint resolution with deterministic symbol identity hints
+across adapters and indexer resolver paths.
 
 Feature slice 19A updates adapter contracts. In `src/indexer/languages/mod.rs`, expand `SymbolKey`
 to include optional disambiguators (`qualified_symbol`, `file_path`, `language`) while preserving
@@ -466,8 +452,8 @@ Temporary duplicate-symbol fixture evidence:
     src/lib.rs|entry|function|src/lib.rs|a|module|calls
     src/lib.rs|entry|function|src/lib.rs|b|module|calls
 
-The missing `src/lib.rs|entry|...|src/b.rs|run|...|calls` row defines the precision defect locked
-by Milestone 18 red tests.
+The missing `src/lib.rs|entry|...|src/b.rs|run|...|calls` row defines the precision defect locked by
+Milestone 18 red tests.
 
 Milestone 18 strict-TDD red evidence:
 
@@ -569,7 +555,8 @@ In `src/indexer/mod.rs`, update resolver signature:
 Resolver ordering contract:
 
 1. match `qualified_symbol` exactly when present.
-2. else match `(file_path, symbol)`; if multiple rows match, prefer non-`import` kinds over `import` kinds and then apply stable ordering.
+2. else match `(file_path, symbol)`; if multiple rows match, prefer non-`import` kinds over `import`
+   kinds and then apply stable ordering.
 3. else match unique global `symbol`.
 4. else unresolved (`None`).
 
@@ -656,8 +643,8 @@ In `src/query/mod.rs`, add:
 
 ## Revision Note
 
-2026-02-07: Created this Phase 4 planning-only ExecPlan to target precision and noise quality on
-the existing command surface. Chosen approach emphasizes strict per-slice TDD, deterministic edge
+2026-02-07: Created this Phase 4 planning-only ExecPlan to target precision and noise quality on the
+existing command surface. Chosen approach emphasizes strict per-slice TDD, deterministic edge
 resolution, explicit `diff-impact` seed controls, and scoped fallback filtering for `find`/`refs`
 without JSON schema-family churn.
 
@@ -667,8 +654,8 @@ contract-fixture additions, and strict red transcript evidence for slices 18A/18
 2026-02-07: Updated living sections during Milestone 19 implementation with resolver/adapter
 decisions, discovered regressions, and green/refactor transcript evidence.
 
-2026-02-07: Updated living sections during Milestone 20 implementation with option-surface
-decisions and strict red/green/refactor transcripts for import and changed-line controls.
+2026-02-07: Updated living sections during Milestone 20 implementation with option-surface decisions
+and strict red/green/refactor transcripts for import and changed-line controls.
 
 2026-02-07: Updated living sections during Milestone 21 implementation with fallback-scope control
 decisions, final milestone completion state, and strict red/green/refactor evidence.

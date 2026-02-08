@@ -1,10 +1,12 @@
-You are implementing Phase 8 for `repo-scout` in `/Users/robertguss/Projects/experiments/repo-scout`.
+You are implementing Phase 8 for `repo-scout` in
+`/Users/robertguss/Projects/experiments/repo-scout`.
 
 Execution mode:
 
 - Do not ask the user any questions.
 - Do not pause for approval or “next steps.”
-- Resolve ambiguities autonomously, record decisions in the plan, and continue until the full Phase 8 plan is complete.
+- Resolve ambiguities autonomously, record decisions in the plan, and continue until the full Phase
+  8 plan is complete.
 
 Required sources of truth (read first, then follow exactly):
 
@@ -22,16 +24,20 @@ Required sources of truth (read first, then follow exactly):
 Git workflow requirements:
 
 1. Start from branch `codex/phase7-plan-and-semantic-precision`.
-2. If `codex/phase7-plan-and-semantic-precision` does not exist, create it from `main` first and ensure it includes:
+2. If `codex/phase7-plan-and-semantic-precision` does not exist, create it from `main` first and
+   ensure it includes:
    - `/Users/robertguss/Projects/experiments/repo-scout/agents/repo-scout-phase8-execplan.md`
    - `/Users/robertguss/Projects/experiments/repo-scout/agents/phase7-validation-report.md`
 3. Create a new branch for implementation: `codex/phase8-implementation`.
-4. Implement milestone-by-milestone from `/Users/robertguss/Projects/experiments/repo-scout/agents/repo-scout-phase8-execplan.md` (Milestones 37–41).
+4. Implement milestone-by-milestone from
+   `/Users/robertguss/Projects/experiments/repo-scout/agents/repo-scout-phase8-execplan.md`
+   (Milestones 37–41).
 5. Commit after each milestone completion (imperative, sentence-case, unprefixed commit subject).
 6. Keep commits focused and atomic to each milestone.
 7. Do not amend commits unless explicitly required by the plan.
 8. No destructive git commands (`reset --hard`, `checkout --`, etc.).
-9. Push `codex/phase8-implementation` and create a PR targeting `codex/phase7-plan-and-semantic-precision`.
+9. Push `codex/phase8-implementation` and create a PR targeting
+   `codex/phase7-plan-and-semantic-precision`.
 
 Strict TDD requirements (mandatory for every feature slice):
 
@@ -80,8 +86,11 @@ Dogfooding requirements (mandatory, exactly):
 
 Milestone command sets and strict TDD loops:
 
-- Execute all strict TDD loops exactly as specified in `/Users/robertguss/Projects/experiments/repo-scout/agents/repo-scout-phase8-execplan.md` for Milestones 37, 38, 39, and 40.
-- Execute documentation/evidence refresh and post-refresh checks exactly as specified for Milestone 41.
+- Execute all strict TDD loops exactly as specified in
+  `/Users/robertguss/Projects/experiments/repo-scout/agents/repo-scout-phase8-execplan.md` for
+  Milestones 37, 38, 39, and 40.
+- Execute documentation/evidence refresh and post-refresh checks exactly as specified for
+  Milestone 41.
 
 Minimum per-slice command order (mandatory):
 
@@ -116,22 +125,27 @@ Milestone 40 expected slice commands:
 
 Implementation scope (exactly):
 
-- Complete all milestones in `/Users/robertguss/Projects/experiments/repo-scout/agents/repo-scout-phase8-execplan.md` (Milestones 37–41).
+- Complete all milestones in
+  `/Users/robertguss/Projects/experiments/repo-scout/agents/repo-scout-phase8-execplan.md`
+  (Milestones 37–41).
 - Preserve schema compatibility: keep schema v1/v2/v3 JSON envelopes backward-compatible.
 - Keep changes additive and deterministic; do not add new command families.
 - Implement exactly:
   - semantic precision closure for TypeScript/Python duplicate-name alias-import call paths
-  - strict clippy quality gate cleanup (`cargo clippy --all-targets --all-features -- -D warnings` green)
+  - strict clippy quality gate cleanup (`cargo clippy --all-targets --all-features -- -D warnings`
+    green)
   - explicit `diff-impact` test-target opt-out (`--exclude-tests`) while preserving default behavior
   - deterministic row-level terminal output for `diff-impact`
 
 Living plan maintenance (mandatory throughout):
 
-- Update `Progress`, `Surprises & Discoveries`, `Decision Log`, and `Outcomes & Retrospective` continuously.
+- Update `Progress`, `Surprises & Discoveries`, `Decision Log`, and `Outcomes & Retrospective`
+  continuously.
 - Add timestamps for completed items.
 - Record rationale when changing scope or approach.
 - Keep the plan self-contained and restartable.
-- Record strict TDD evidence for each slice in the plan and update dogfood transcript evidence in docs.
+- Record strict TDD evidence for each slice in the plan and update dogfood transcript evidence in
+  docs.
 
 Completion criteria (must all be true before stopping):
 

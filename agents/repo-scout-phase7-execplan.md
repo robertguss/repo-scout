@@ -3,35 +3,34 @@
 This ExecPlan is a living document. The sections `Progress`, `Surprises & Discoveries`,
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-This repository includes `agents/PLANS.md`, and this document must be maintained in accordance
-with that file.
+This repository includes `agents/PLANS.md`, and this document must be maintained in accordance with
+that file.
 
 This plan builds on `agents/repo-scout-phase6-execplan.md`, which delivered change-scope controls
 for `context`, `verify-plan`, `diff-impact`, and deterministic caps for `find`/`refs`.
 
 ## Purpose / Big Picture
 
-Phase 7 focuses on semantic correctness and measurable quality for existing language adapters
-(Rust, TypeScript, Python), not on adding new command families. After this change, users should be
-able to trust that `diff-impact` and `impact` follow imported module aliases in TypeScript and
-Python even when duplicate symbol names exist across files, and maintain deterministic high-signal
-ranking in mixed fallback-heavy results. The phase also introduces benchmark-style quality fixtures
-and repeatable command packs so recommendation/ranking regressions can be caught early.
+Phase 7 focuses on semantic correctness and measurable quality for existing language adapters (Rust,
+TypeScript, Python), not on adding new command families. After this change, users should be able to
+trust that `diff-impact` and `impact` follow imported module aliases in TypeScript and Python even
+when duplicate symbol names exist across files, and maintain deterministic high-signal ranking in
+mixed fallback-heavy results. The phase also introduces benchmark-style quality fixtures and
+repeatable command packs so recommendation/ranking regressions can be caught early.
 
-User-visible outcome: fewer missed impacted callers in cross-file TypeScript/Python changes,
-fewer ambiguous symbol collisions in impact analysis, and a repeatable benchmark corpus that
-quantifies recommendation quality under known noisy scenarios.
+User-visible outcome: fewer missed impacted callers in cross-file TypeScript/Python changes, fewer
+ambiguous symbol collisions in impact analysis, and a repeatable benchmark corpus that quantifies
+recommendation quality under known noisy scenarios.
 
 ## Progress
 
-- [x] (2026-02-08 01:31Z) Re-read `agents/PLANS.md` and `agents/implementation_prompt.md` to
-      align this plan with strict TDD, living-plan, and evidence requirements.
+- [x] (2026-02-08 01:31Z) Re-read `agents/PLANS.md` and `agents/implementation_prompt.md` to align
+      this plan with strict TDD, living-plan, and evidence requirements.
 - [x] (2026-02-08 01:31Z) Re-read `agents/repo-scout-hybrid-rust-execplan.md`,
       `agents/repo-scout-agent-first-phase2-execplan.md`, `agents/repo-scout-phase3-execplan.md`,
       `agents/repo-scout-phase4-execplan.md`, `agents/repo-scout-phase5-execplan.md`, and
       `agents/repo-scout-phase6-execplan.md` to consolidate residual-work threads.
-- [x] (2026-02-08 01:31Z) Ran planning baseline dogfood commands:
-      `cargo run -- index --repo .`,
+- [x] (2026-02-08 01:31Z) Ran planning baseline dogfood commands: `cargo run -- index --repo .`,
       `cargo run -- find verify_plan_for_changed_files --repo . --json`,
       `cargo run -- refs verify_plan_for_changed_files --repo . --json`.
 - [x] (2026-02-08 01:31Z) Captured baseline semantic-gap evidence for TypeScript namespace imports
@@ -39,134 +38,122 @@ quantifies recommendation quality under known noisy scenarios.
       duplicate callee names exist.
 - [x] (2026-02-08 01:31Z) Authored this Phase 7 ExecPlan as planning-only work.
 - [x] (2026-02-08 01:39Z) Ran required pre-milestone baseline dogfood for Milestone 32:
-      `cargo run -- index --repo .`,
-      `cargo run -- find resolve_symbol_id_in_tx --repo . --json`,
+      `cargo run -- index --repo .`, `cargo run -- find resolve_symbol_id_in_tx --repo . --json`,
       `cargo run -- refs resolve_symbol_id_in_tx --repo . --json`.
-- [x] Milestone 32 strict TDD contract-lock slices
-      (red failures established in `tests/milestone32_semantic_contracts.rs`; green/refactor
-      completion landed in Milestones 33-34 and is now closed).
+- [x] Milestone 32 strict TDD contract-lock slices (red failures established in
+      `tests/milestone32_semantic_contracts.rs`; green/refactor completion landed in Milestones
+      33-34 and is now closed).
 - [x] (2026-02-08 01:43Z) Ran required pre-milestone baseline dogfood for Milestone 33:
-      `cargo run -- index --repo .`,
-      `cargo run -- find resolve_symbol_id_in_tx --repo . --json`,
+      `cargo run -- index --repo .`, `cargo run -- find resolve_symbol_id_in_tx --repo . --json`,
       `cargo run -- refs resolve_symbol_id_in_tx --repo . --json`.
-- [x] (2026-02-08 01:46Z) Milestone 33 strict TDD slices for TypeScript namespace/module-aware
-      call resolution completed, including delayed full-suite refactor closure once Milestone 34
-      resolved remaining Milestone 32 Python contract failures.
+- [x] (2026-02-08 01:46Z) Milestone 33 strict TDD slices for TypeScript namespace/module-aware call
+      resolution completed, including delayed full-suite refactor closure once Milestone 34 resolved
+      remaining Milestone 32 Python contract failures.
 - [x] (2026-02-08 01:43Z) Ran required pre-milestone baseline dogfood for Milestone 34:
-      `cargo run -- index --repo .`,
-      `cargo run -- find resolve_symbol_id_in_tx --repo . --json`,
+      `cargo run -- index --repo .`, `cargo run -- find resolve_symbol_id_in_tx --repo . --json`,
       `cargo run -- refs resolve_symbol_id_in_tx --repo . --json`.
 - [x] (2026-02-08 01:46Z) Completed Milestone 34 strict TDD slices for Python module-aware call
-      resolution; reran full suite (`cargo test`) green and restored Milestone 32 contract tests
-      to passing.
+      resolution; reran full suite (`cargo test`) green and restored Milestone 32 contract tests to
+      passing.
 - [x] (2026-02-08 01:46Z) Closed Milestone 32 contract-lock suite with green behavior after
       Milestones 33-34 semantic implementations.
 - [x] (2026-02-08 01:46Z) Ran required pre-milestone baseline dogfood for Milestone 35:
-      `cargo run -- index --repo .`,
-      `cargo run -- find resolve_symbol_id_in_tx --repo . --json`,
+      `cargo run -- index --repo .`, `cargo run -- find resolve_symbol_id_in_tx --repo . --json`,
       `cargo run -- refs resolve_symbol_id_in_tx --repo . --json`.
 - [x] (2026-02-08 01:50Z) Completed Milestone 35 strict TDD slices for semantic-confidence
       ranking/benchmark guardrails, including calibrated scoring in `impact`/`diff-impact`,
       benchmark fixture assertions, and full-suite refactor gate (`cargo test`) green.
-- [x] (2026-02-08 02:12Z) Completed Milestone 36 documentation/evidence refresh across
-      `README.md`, `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`,
-      `docs/dogfood-log.md`, and `docs/performance-baseline.md`.
+- [x] (2026-02-08 02:12Z) Completed Milestone 36 documentation/evidence refresh across `README.md`,
+      `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`, `docs/dogfood-log.md`,
+      and `docs/performance-baseline.md`.
 - [x] (2026-02-08 02:13Z) Ran Milestone 36 post-refresh verification pack:
       `cargo run -- index --repo .`,
       `cargo run -- diff-impact --changed-file src/indexer/languages/typescript.rs --repo . --json`,
       `cargo run -- diff-impact --changed-file src/indexer/languages/python.rs --repo . --json`,
       `cargo run -- refs helper --repo . --code-only --exclude-tests --max-results 10 --json`,
-      `cargo test`,
-      `cargo fmt`.
+      `cargo test`, `cargo fmt`.
 
 ## Surprises & Discoveries
 
 - Observation: TypeScript namespace alias calls currently lose `called_by` edges when duplicate
-  callee names exist across modules.
-  Evidence: In a temporary repo with `util_a.helper`, `util_b.helper`, and
-  `import * as utilA from "./util_a"; utilA.helper();`, running
-  `cargo run -- diff-impact --changed-file src/util_a.ts --repo <tmp> --json`
-  returned only one impacted row (`changed_symbol` for `src/util_a.ts::helper`) and no caller row.
+  callee names exist across modules. Evidence: In a temporary repo with `util_a.helper`,
+  `util_b.helper`, and `import * as utilA from "./util_a"; utilA.helper();`, running
+  `cargo run -- diff-impact --changed-file src/util_a.ts --repo <tmp> --json` returned only one
+  impacted row (`changed_symbol` for `src/util_a.ts::helper`) and no caller row.
 
 - Observation: Python module-alias attribute calls currently lose `called_by` edges when duplicate
-  callee names exist across modules.
-  Evidence: In a temporary repo with `pkg_a.util.helper`, `pkg_b.util.helper`, and
-  `import pkg_a.util as util; util.helper()`, running
-  `cargo run -- diff-impact --changed-file src/pkg_a/util.py --repo <tmp> --json`
-  returned only one impacted row (`changed_symbol` for `src/pkg_a/util.py::helper`) and no caller.
+  callee names exist across modules. Evidence: In a temporary repo with `pkg_a.util.helper`,
+  `pkg_b.util.helper`, and `import pkg_a.util as util; util.helper()`, running
+  `cargo run -- diff-impact --changed-file src/pkg_a/util.py --repo <tmp> --json` returned only one
+  impacted row (`changed_symbol` for `src/pkg_a/util.py::helper`) and no caller.
 
-- Observation: Resolver fallback is intentionally conservative when symbol-only lookup is
-  ambiguous, which avoids wrong edges but can suppress real edges when import/module context is
-  missing.
+- Observation: Resolver fallback is intentionally conservative when symbol-only lookup is ambiguous,
+  which avoids wrong edges but can suppress real edges when import/module context is missing.
   Evidence: `src/indexer/mod.rs::resolve_symbol_id_in_tx` returns `Ok(None)` when language-scoped
   symbol lookup returns more than one row (`LIMIT 2` ambiguity check).
 
 - Observation: Repository self-dogfood still shows fallback-heavy noise for broad text tokens.
-  Evidence: `cargo run --quiet -- refs helper --repo . --json | jq ...` reported
-  `total: 99`, `tests: 71`, `docs: 3`.
+  Evidence: `cargo run --quiet -- refs helper --repo . --json | jq ...` reported `total: 99`,
+  `tests: 71`, `docs: 3`.
 
-- Observation: Phase 3 TypeScript/Python adapter coverage exists for named/default imports and
-  alias forms, but namespace/module-alias call disambiguation is not yet contract-locked.
-  Evidence: existing suites (`tests/milestone15_typescript.rs` and `tests/milestone16_python.rs`)
-  validate MVP extraction/edges but do not currently lock the duplicate-name namespace/module-alias
-  caller-impact scenario.
+- Observation: Phase 3 TypeScript/Python adapter coverage exists for named/default imports and alias
+  forms, but namespace/module-alias call disambiguation is not yet contract-locked. Evidence:
+  existing suites (`tests/milestone15_typescript.rs` and `tests/milestone16_python.rs`) validate MVP
+  extraction/edges but do not currently lock the duplicate-name namespace/module-alias caller-impact
+  scenario.
 
 - Observation: New Milestone 32 contract tests fail exactly at missing caller rows while schema
-  envelopes remain stable.
-  Evidence: `cargo test milestone32_typescript_namespace_alias_call_contract -- --nocapture`
-  failed with missing `src/app.ts::run` `called_by`; `cargo test
-  milestone32_python_module_alias_call_contract -- --nocapture` failed with missing
-  `src/py_app.py::run_py` `called_by`; `cargo test milestone32_schema_contracts_stay_stable --
-  --nocapture` failed on missing schema-3 semantic caller rows.
+  envelopes remain stable. Evidence:
+  `cargo test milestone32_typescript_namespace_alias_call_contract -- --nocapture` failed with
+  missing `src/app.ts::run` `called_by`;
+  `cargo test milestone32_python_module_alias_call_contract -- --nocapture` failed with missing
+  `src/py_app.py::run_py` `called_by`;
+  `cargo test milestone32_schema_contracts_stay_stable -- --nocapture` failed on missing schema-3
+  semantic caller rows.
 
 - Observation: Milestone 33 TypeScript changes produce caller rows for namespace alias calls in
   fixture dogfood, while Python fixture still shows only changed-symbol rows before Milestone 34.
-  Evidence: `cargo run -- diff-impact --changed-file src/util_a.ts --repo
-  tests/fixtures/phase7/semantic_precision --json` returned `src/app.ts::run` `called_by`, while
-  the matching Python command for `src/pkg_a/util.py` returned only `changed_symbol`.
+  Evidence:
+  `cargo run -- diff-impact --changed-file src/util_a.ts --repo tests/fixtures/phase7/semantic_precision --json`
+  returned `src/app.ts::run` `called_by`, while the matching Python command for `src/pkg_a/util.py`
+  returned only `changed_symbol`.
 
 - Observation: Milestone 33 regression guard slice (preserve Milestone 15 behavior) was already
-  green before TypeScript production edits and stayed green after import-context updates.
-  Evidence: `cargo test milestone33_typescript_semantics_preserve_existing_m15_behavior --
-  --nocapture` passed in both pre-change and post-change runs.
+  green before TypeScript production edits and stayed green after import-context updates. Evidence:
+  `cargo test milestone33_typescript_semantics_preserve_existing_m15_behavior -- --nocapture` passed
+  in both pre-change and post-change runs.
 
-- Observation: Fixture behavior-check output can remain stale after extractor-code changes when
-  file contents are unchanged because incremental indexing keys off content hash, not binary
-  extractor version.
-  Evidence: first Milestone 34 fixture pack run reported `indexed_files: 0` and omitted Python
-  caller rows; after a no-behavior fixture content touch and rerun (`indexed_files: 1`), the same
-  command emitted `src/py_app.py::run_py` as `called_by`.
+- Observation: Fixture behavior-check output can remain stale after extractor-code changes when file
+  contents are unchanged because incremental indexing keys off content hash, not binary extractor
+  version. Evidence: first Milestone 34 fixture pack run reported `indexed_files: 0` and omitted
+  Python caller rows; after a no-behavior fixture content touch and rerun (`indexed_files: 1`), the
+  same command emitted `src/py_app.py::run_py` as `called_by`.
 
 - Observation: Query-layer calibration can ship independently of index rebuild because it only
-  transforms persisted edge/test evidence during read-time ranking.
-  Evidence: Milestone 35 fixture behavior-check pack reported calibrated `score: 0.97` for both
-  TypeScript and Python `called_by` rows even with `indexed_files: 0` on fixture reindex.
+  transforms persisted edge/test evidence during read-time ranking. Evidence: Milestone 35 fixture
+  behavior-check pack reported calibrated `score: 0.97` for both TypeScript and Python `called_by`
+  rows even with `indexed_files: 0` on fixture reindex.
 
 - Observation: Final closeout `cargo fmt` touched only formatting in already-green Phase 7
-  production/test files; behavior stayed unchanged.
-  Evidence: `git diff` after Milestone 36 verification showed line-wrap-only edits in
-  `src/indexer/languages/typescript.rs`, `src/indexer/languages/python.rs`, and milestone test
-  files with no semantic logic deltas.
+  production/test files; behavior stayed unchanged. Evidence: `git diff` after Milestone 36
+  verification showed line-wrap-only edits in `src/indexer/languages/typescript.rs`,
+  `src/indexer/languages/python.rs`, and milestone test files with no semantic logic deltas.
 
 ## Decision Log
 
 - Decision: Keep schema envelopes stable (`schema_version` 1/2/3) through Phase 7 and implement
-  behavior improvements through adapter resolution and deterministic ranking updates.
-  Rationale: Existing automation depends on current output contracts; Phase 7 targets precision,
-  not contract churn.
-  Date/Author: 2026-02-08 / Codex
+  behavior improvements through adapter resolution and deterministic ranking updates. Rationale:
+  Existing automation depends on current output contracts; Phase 7 targets precision, not contract
+  churn. Date/Author: 2026-02-08 / Codex
 
 - Decision: Sequence Phase 7 as contract-lock first, then TypeScript semantics, then Python
-  semantics, then query-ranking/benchmark guardrails.
-  Rationale: This preserves strict TDD and avoids writing production behavior before failures are
-  observable for each user-visible slice.
+  semantics, then query-ranking/benchmark guardrails. Rationale: This preserves strict TDD and
+  avoids writing production behavior before failures are observable for each user-visible slice.
   Date/Author: 2026-02-08 / Codex
 
 - Decision: Prioritize deepening existing TypeScript/Python semantics over adding a new language in
-  this phase.
-  Rationale: TypeScript and Python adapters are already shipped; current high-impact gap is
-  resolution precision in realistic alias/module workflows.
-  Date/Author: 2026-02-08 / Codex
+  this phase. Rationale: TypeScript and Python adapters are already shipped; current high-impact gap
+  is resolution precision in realistic alias/module workflows. Date/Author: 2026-02-08 / Codex
 
 - Decision: Defer full runtime language-server integration in Phase 7, while introducing
   deterministic confidence calibration and extension seams for future LSP-backed upgrades.
@@ -175,44 +162,37 @@ quantifies recommendation quality under known noisy scenarios.
   Date/Author: 2026-02-08 / Codex
 
 - Decision: Preserve Rust-specific runnable test command generation semantics in `verify-plan` for
-  this phase.
-  Rationale: Phase 7 scope is cross-language semantic impact precision and quality measurement;
-  multi-runner command inference (`pytest`, `jest`, etc.) is a separate problem and should be
-  planned explicitly in a later phase.
-  Date/Author: 2026-02-08 / Codex
+  this phase. Rationale: Phase 7 scope is cross-language semantic impact precision and quality
+  measurement; multi-runner command inference (`pytest`, `jest`, etc.) is a separate problem and
+  should be planned explicitly in a later phase. Date/Author: 2026-02-08 / Codex
 
 - Decision: Keep Milestone 32 contract tests asserting final semantic behavior (not current gaps),
   and carry their green/refactor closure into Milestones 33-34 while the owning TypeScript/Python
-  behavior slices are implemented.
-  Rationale: This is the smallest plan-aligned path that preserves strict red-before-production
-  evidence while avoiding duplicate temporary contract rewrites.
+  behavior slices are implemented. Rationale: This is the smallest plan-aligned path that preserves
+  strict red-before-production evidence while avoiding duplicate temporary contract rewrites.
   Date/Author: 2026-02-08 / Codex
 
-- Decision: Add the shared benchmark fixture tree at
-  `tests/fixtures/phase7/semantic_precision/` during Milestone 33 so required behavior-check
-  command packs can run after Milestones 33/34/35 without ad-hoc setup.
-  Rationale: Required command packs execute immediately after each milestone; creating the fixture
-  once early keeps evidence deterministic and repeatable.
-  Date/Author: 2026-02-08 / Codex
+- Decision: Add the shared benchmark fixture tree at `tests/fixtures/phase7/semantic_precision/`
+  during Milestone 33 so required behavior-check command packs can run after Milestones 33/34/35
+  without ad-hoc setup. Rationale: Required command packs execute immediately after each milestone;
+  creating the fixture once early keeps evidence deterministic and repeatable. Date/Author:
+  2026-02-08 / Codex
 
 - Decision: Keep fixture semantics unchanged but allow benign content refreshes when required to
-  force reindexing after extractor implementation changes during dogfood verification.
-  Rationale: Incremental index skips unchanged files by design; forcing at least one changed file
-  avoids stale edge evidence without altering command contracts or schema behavior.
-  Date/Author: 2026-02-08 / Codex
+  force reindexing after extractor implementation changes during dogfood verification. Rationale:
+  Incremental index skips unchanged files by design; forcing at least one changed file avoids stale
+  edge evidence without altering command contracts or schema behavior. Date/Author: 2026-02-08 /
+  Codex
 
 - Decision: Introduce deterministic query-time semantic score baselines keyed by
   relationship/provenance/distance, and keep confidence labels stable (`graph_likely`) for semantic
-  edge rows.
-  Rationale: This improves ranking precision and benchmark signal without schema churn or broad
-  downstream label contract changes.
-  Date/Author: 2026-02-08 / Codex
+  edge rows. Rationale: This improves ranking precision and benchmark signal without schema churn or
+  broad downstream label contract changes. Date/Author: 2026-02-08 / Codex
 
 - Decision: Keep rustfmt-only edits produced during Milestone 36 closeout in the milestone commit
-  instead of attempting selective rollback.
-  Rationale: Final acceptance requires `cargo fmt` clean state; retaining deterministic formatter
-  output is the smallest plan-aligned path and avoids risky manual reformat divergence.
-  Date/Author: 2026-02-08 / Codex
+  instead of attempting selective rollback. Rationale: Final acceptance requires `cargo fmt` clean
+  state; retaining deterministic formatter output is the smallest plan-aligned path and avoids risky
+  manual reformat divergence. Date/Author: 2026-02-08 / Codex
 
 ## Outcomes & Retrospective
 
@@ -228,8 +208,8 @@ runtime language-server confidence augmentation, and explicit planning for langu
 runner recommendation commands.
 
 Milestone 33 outcome (2026-02-08): TypeScript namespace/member-call extraction now consumes
-module-aware import hints, producing deterministic `called_by` rows for `utilA.helper()` style
-calls under duplicate-name ambiguity while preserving Milestone 15 import/implements behavior.
+module-aware import hints, producing deterministic `called_by` rows for `utilA.helper()` style calls
+under duplicate-name ambiguity while preserving Milestone 15 import/implements behavior.
 
 Milestone 34 outcome (2026-02-08): Python attribute-call extraction now uses module-alias import
 context, producing deterministic `called_by` rows for `import pkg.mod as alias; alias.func()`
@@ -258,8 +238,8 @@ Terms used in this plan:
 - A "type-aware or semantic resolution" in this phase means call/import/implements edges use
   import/module context, not only raw symbol name matching.
 - A "semantic edge" means a `symbol_edges_v2` row derived from AST plus module/import hints and
-  persisted with deterministic provenance (`call_resolution`, `import_resolution`,
-  `ast_definition`, `ast_reference`).
+  persisted with deterministic provenance (`call_resolution`, `import_resolution`, `ast_definition`,
+  `ast_reference`).
 - A "benchmark corpus" means deterministic fixture repositories that encode noisy/ambiguous
   scenarios and are exercised via automated tests and dogfood command packs.
 - A "confidence calibration" means deterministic mapping of evidence quality (provenance,
@@ -274,8 +254,8 @@ Current hot spots for this phase:
   symbols without module-path import context.
 - `src/indexer/languages/python.rs::import_bindings` currently captures limited import symbol data,
   and `collect_call_symbols` currently resolves attribute-call targets by symbol text only.
-- `src/query/mod.rs::diff_impact_for_changed_files` and `src/query/mod.rs::impact_matches`
-  currently depend on persisted edge quality; ranking can be improved via confidence calibration.
+- `src/query/mod.rs::diff_impact_for_changed_files` and `src/query/mod.rs::impact_matches` currently
+  depend on persisted edge quality; ranking can be improved via confidence calibration.
 - `docs/performance-baseline.md` currently tracks runtime timings but does not include a dedicated
   phase-level semantic quality benchmark corpus.
 
@@ -285,8 +265,8 @@ Phase 7 enforces strict red-green-refactor for every feature slice. No productio
 allowed before a failing automated test exists for the exact behavior slice being implemented.
 
 A feature slice in this plan is one user-visible behavior unit, such as "TypeScript namespace alias
-call resolves to imported module function under duplicate-name ambiguity" or
-"semantic call-resolution rows outrank fallback-only rows deterministically."
+call resolves to imported module function under duplicate-name ambiguity" or "semantic
+call-resolution rows outrank fallback-only rows deterministically."
 
 For each slice, record:
 
@@ -310,8 +290,8 @@ Feature slice 32A locks the TypeScript namespace-import caller-impact gap. Add
 
 Feature slice 32B locks the Python module-alias caller-impact gap. In the same test file, add a
 fixture with `pkg_a.util.helper`, `pkg_b.util.helper`, and `util.helper()` usage via
-`import pkg_a.util as util`. The red state proves that changing `src/pkg_a/util.py` currently
-misses caller impact rows.
+`import pkg_a.util as util`. The red state proves that changing `src/pkg_a/util.py` currently misses
+caller impact rows.
 
 Feature slice 32C locks contract stability constraints: schema versions remain 1/2/3 and output
 shape remains backward compatible while new impacted rows are added.
@@ -321,8 +301,8 @@ shape remains backward compatible while new impacted rows are added.
 Milestone goal: make namespace/member-call edges deterministic and precise in TypeScript when
 duplicate symbol names exist.
 
-Feature slice 33A extends TypeScript import parsing to capture namespace/default/named bindings
-with resolved module paths in a normalized form (repository-relative `.ts`/`.tsx` path candidates).
+Feature slice 33A extends TypeScript import parsing to capture namespace/default/named bindings with
+resolved module paths in a normalized form (repository-relative `.ts`/`.tsx` path candidates).
 Update helper structures in `src/indexer/languages/typescript.rs` so call resolution can consume
 binding context.
 
@@ -330,10 +310,9 @@ Feature slice 33B upgrades member-call extraction to use alias/module hints. For
 `utilA.helper()`, emit `SymbolKey` targets with explicit module-qualified intent
 (`typescript:<module_path>::helper`) so resolver ambiguity is removed.
 
-Feature slice 33C preserves existing Milestone 15 behavior and deterministic ordering:
-named/default imports, implements edges, and existing call/reference extraction remain green.
-Refactors should remain local to adapter helper functions and avoid query-layer behavior changes in
-this milestone.
+Feature slice 33C preserves existing Milestone 15 behavior and deterministic ordering: named/default
+imports, implements edges, and existing call/reference extraction remain green. Refactors should
+remain local to adapter helper functions and avoid query-layer behavior changes in this milestone.
 
 ### Milestone 34: Implement Python module-aware import and call resolution
 
@@ -380,8 +359,8 @@ Feature slice 36A updates user-facing docs (`README.md`, `docs/cli-reference.md`
 resolution behavior and confidence/ranking semantics.
 
 Feature slice 36B updates `docs/dogfood-log.md` with Phase 7 red/green/refactor and dogfood
-transcripts, and extends `docs/performance-baseline.md` with a Phase 7 quality command pack
-covering semantic fixtures.
+transcripts, and extends `docs/performance-baseline.md` with a Phase 7 quality command pack covering
+semantic fixtures.
 
 Feature slice 36C re-runs the full required dogfood pack and full-suite tests after docs refresh to
 verify behavior/docs alignment remains stable.
@@ -745,9 +724,9 @@ Expected interface-level touch points:
 
 ## Revision Note
 
-2026-02-08: Created initial Phase 7 execution plan to implement cross-language semantic
-resolution precision and benchmark guardrails, based on residual-work threads from Phase 2 through
-Phase 6 and aligned to `agents/PLANS.md` strict TDD/living-plan requirements.
+2026-02-08: Created initial Phase 7 execution plan to implement cross-language semantic resolution
+precision and benchmark guardrails, based on residual-work threads from Phase 2 through Phase 6 and
+aligned to `agents/PLANS.md` strict TDD/living-plan requirements.
 
 2026-02-08: Updated live plan with Milestone 32 pre-dogfood transcripts, strict red-stage
 contract-test evidence, and decision-log handling for cross-milestone green/refactor closure.

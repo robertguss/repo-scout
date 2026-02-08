@@ -41,8 +41,8 @@ before agent-facing commands and data contracts are stable.
       `milestone11_explain_cli_contract` and new `explain` command wiring.
 - [x] (2026-02-06 16:46Z) Milestone 11 slice 11D complete: red/green/refactor for
       `milestone11_explain_json_contract` including optional snippet extraction behavior.
-- [x] (2026-02-06 16:46Z) Milestone 11 contract-freeze implementation complete
-      (`diff-impact` and `explain` CLI surfaces, schema v3 JSON contracts, and integration tests).
+- [x] (2026-02-06 16:46Z) Milestone 11 contract-freeze implementation complete (`diff-impact` and
+      `explain` CLI surfaces, schema v3 JSON contracts, and integration tests).
 - [x] (2026-02-06 16:57Z) Milestone 12 slice 12A complete: red/green/refactor for
       `milestone12_diff_impact_changed_files_normalization` plus normalization fix for canonical
       absolute paths and terminal changed-file listing.
@@ -61,8 +61,7 @@ before agent-facing commands and data contracts are stable.
 - [x] (2026-02-06 17:03Z) Milestone 13 slice 13B complete: red/green/refactor for
       `milestone13_explain_relationship_summary` with inbound/outbound edge-count summaries.
 - [x] (2026-02-06 17:03Z) Milestone 13 slice 13C complete: red/green/refactor for
-      `milestone13_explain_json_determinism` and full-span snippets under
-      `--include-snippets`.
+      `milestone13_explain_json_determinism` and full-span snippets under `--include-snippets`.
 - [x] (2026-02-06 17:03Z) Milestone 13 feature implementation complete (`explain` behavior in
       terminal + JSON with symbol dossier output).
 - [x] (2026-02-06 17:18Z) Milestone 14 slice 14A complete: red/green/refactor for
@@ -80,8 +79,8 @@ before agent-facing commands and data contracts are stable.
       `milestone15_typescript_definitions` with TypeScript adapter definition extraction
       (function/class/interface/enum/type_alias/method + language metadata).
 - [x] (2026-02-07 00:11Z) Milestone 15 slice 15B complete: red/green/refactor for
-      `milestone15_typescript_references_and_calls` with arrow/function-expression caller
-      resolution and call edge persistence.
+      `milestone15_typescript_references_and_calls` with arrow/function-expression caller resolution
+      and call edge persistence.
 - [x] (2026-02-07 00:11Z) Milestone 15 slice 15C complete: red/green/refactor for
       `milestone15_typescript_edges_and_queries` with import/implements/contains edges flowing
       through `impact`, `diff-impact`, and `explain`.
@@ -99,9 +98,9 @@ before agent-facing commands and data contracts are stable.
 - [x] (2026-02-07 00:19Z) Milestone 16 feature implementation complete (Python adapter MVP wired
       behind language adapters with deterministic query behavior and milestone-level manual
       `diff-impact`/`explain` checks).
-- [x] (2026-02-07 00:22Z) Milestone 17 complete: documentation and dogfood transcript updates
-      landed in `README.md`, `docs/cli-reference.md`, `docs/json-output.md`,
-      `docs/architecture.md`, and `docs/dogfood-log.md` with Phase 3 command/adaptation behavior.
+- [x] (2026-02-07 00:22Z) Milestone 17 complete: documentation and dogfood transcript updates landed
+      in `README.md`, `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`, and
+      `docs/dogfood-log.md` with Phase 3 command/adaptation behavior.
 
 ## Surprises & Discoveries
 
@@ -123,7 +122,8 @@ before agent-facing commands and data contracts are stable.
 
 - Observation: Starting `diff-impact` contract tests with an empty result set made it impossible to
   validate required union fields (`result_kind`, `provenance`) in JSON tests. Evidence:
-  `milestone11_diff_impact_json_contract` red run failed with `assertion failed: !results.is_empty()`.
+  `milestone11_diff_impact_json_contract` red run failed with
+  `assertion failed: !results.is_empty()`.
 
 - Observation: Absolute changed-file paths under macOS `/var/...` did not deduplicate against repo
   canonical paths under `/private/var/...`. Evidence:
@@ -131,13 +131,14 @@ before agent-facing commands and data contracts are stable.
   same file before canonicalizing candidate paths.
 
 - Observation: `clap` boolean flags in this CLI shape do not accept explicit `true` literals (for
-  example `--include-tests true`). Evidence: red run produced `error: unexpected argument 'true'
-  found`, so tests use the default-enabled behavior for this flag.
+  example `--include-tests true`). Evidence: red run produced
+  `error: unexpected argument 'true' found`, so tests use the default-enabled behavior for this
+  flag.
 
 - Observation: Snippet quality for `explain --include-snippets` depended on stored definition spans;
   identifier-only spans produced one-token snippets with no body context. Evidence:
-  `milestone13_explain_json_determinism` red run failed on `assertion failed:
-  snippet.contains("leaf();")` until Rust AST spans used full node end positions.
+  `milestone13_explain_json_determinism` red run failed on
+  `assertion failed: snippet.contains("leaf();")` until Rust AST spans used full node end positions.
 
 - Observation: Removing direct Rust parser calls from `indexer/mod.rs` without an adapter reference
   channel immediately regressed `refs` behavior to non-AST fallbacks. Evidence:
@@ -157,9 +158,9 @@ before agent-facing commands and data contracts are stable.
   added after indexing all files.
 
 - Observation: Tree-sitter TypeScript import field mapping is not stable enough across specifier
-  forms (`{ x }` vs `{ x as y }`) for direct field-name extraction in this codebase. Evidence:
-  alias import rows were defined but import edges did not resolve for `callHelper` until import
-  bindings were parsed from import statement text.
+  forms (`{ x }` vs `{ x as y }`) for direct field-name extraction in this codebase. Evidence: alias
+  import rows were defined but import edges did not resolve for `callHelper` until import bindings
+  were parsed from import statement text.
 
 - Observation: Python `refs` for imported symbols fell back to text-only matches until import
   statements contributed `ast_references` for imported names. Evidence:
@@ -195,8 +196,8 @@ before agent-facing commands and data contracts are stable.
 
 - Decision: Seed Milestone 11 `diff-impact` contract support with changed-symbol records directly
   from `symbols_v2` instead of leaving `results` empty. Rationale: frozen JSON contract tests must
-  verify required per-result fields before Milestone 12 neighbor/test-target expansion.
-  Date/Author: 2026-02-06 / Codex
+  verify required per-result fields before Milestone 12 neighbor/test-target expansion. Date/Author:
+  2026-02-06 / Codex
 
 - Decision: Implement `--include-snippets` for `explain` by reading indexed files from the repo path
   inferred via the index database location. Rationale: this preserves the existing query function
@@ -213,8 +214,8 @@ before agent-facing commands and data contracts are stable.
 
 - Decision: Compute explain relationship summaries directly from `symbol_edges_v2` grouped by
   `edge_kind` and project into fixed inbound/outbound counters. Rationale: deterministic counts are
-  required for agent-readable dossiers and avoid additional graph traversal complexity.
-  Date/Author: 2026-02-06 / Codex
+  required for agent-readable dossiers and avoid additional graph traversal complexity. Date/Author:
+  2026-02-06 / Codex
 
 - Decision: Persist Rust definition `end_line`/`end_column` from full AST node spans, not name-node
   spans. Rationale: snippet extraction should include meaningful code context (for example function
@@ -277,21 +278,21 @@ indexing rollout.
 
 Milestone 14 outcome: indexing now consumes Rust extraction through the language-adapter boundary,
 including adapter-provided references so legacy `find`/`refs` behavior remains intact. Store schema
-is upgraded additively to version 3 with persisted `language`, `qualified_symbol`, and
-`provenance` metadata plus migration-safe index creation/backfill. Remaining work is TypeScript and
-Python adapter rollout plus documentation updates.
+is upgraded additively to version 3 with persisted `language`, `qualified_symbol`, and `provenance`
+metadata plus migration-safe index creation/backfill. Remaining work is TypeScript and Python
+adapter rollout plus documentation updates.
 
 Milestone 15 outcome: TypeScript indexing now extracts definitions, references, calls, import edges,
 implements edges, and contains edges through the adapter boundary. `impact`, `diff-impact`, and
 `explain` produce deterministic TypeScript-labeled outputs for fixture repositories, and milestone15
-manual dogfood checks for `diff-impact`/`explain` completed. Remaining work is Python adapter rollout
-and documentation finalization.
+manual dogfood checks for `diff-impact`/`explain` completed. Remaining work is Python adapter
+rollout and documentation finalization.
 
-Milestone 16 outcome: Python indexing now extracts definitions (functions/classes/methods/constants),
-`ast_references`, `calls`, `imports`, and `contains` edges through the adapter boundary.
-`find`, `refs`, `impact`, `diff-impact`, and `explain` produce deterministic Python-labeled output
-on fixture repositories, and milestone16 manual dogfood checks for `diff-impact`/`explain`
-completed. Remaining work is documentation finalization.
+Milestone 16 outcome: Python indexing now extracts definitions
+(functions/classes/methods/constants), `ast_references`, `calls`, `imports`, and `contains` edges
+through the adapter boundary. `find`, `refs`, `impact`, `diff-impact`, and `explain` produce
+deterministic Python-labeled output on fixture repositories, and milestone16 manual dogfood checks
+for `diff-impact`/`explain` completed. Remaining work is documentation finalization.
 
 Milestone 17 outcome: user-facing docs now describe the implemented Phase 3 surface (schema version
 3 commands, language-adapter architecture, and updated dogfood transcripts for new commands and
@@ -870,6 +871,6 @@ outcomes (definitions/references/calls/imports/contains), deterministic command 
 `find`/`refs`/`diff-impact`/`explain`, and strict red/green/refactor plus dogfooding evidence for
 all milestone16 slices.
 
-2026-02-07: Updated the living plan after Milestone 17 documentation finalization to record schema
-3 command doc alignment, architecture/dogfood transcript refreshes, and completed Phase 3 closure
+2026-02-07: Updated the living plan after Milestone 17 documentation finalization to record schema 3
+command doc alignment, architecture/dogfood transcript refreshes, and completed Phase 3 closure
 state.

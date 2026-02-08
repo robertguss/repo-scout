@@ -9,6 +9,5 @@ It includes four caller paths per language:
 - direct alias-import call to `pkg_a`/`util_a`
 - direct alias-import call to `pkg_b`/`util_b`
 
-`diff-impact --changed-file src/util_a.ts` and
-`diff-impact --changed-file src/pkg_a/util.py` should include only the `*_a`
-callers (not `*_b`).
+`diff-impact --changed-file src/util_a.ts` and `diff-impact --changed-file src/pkg_a/util.py` should
+include only the `*_a` callers (not `*_b`).

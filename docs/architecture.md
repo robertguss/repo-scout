@@ -5,7 +5,8 @@ This document describes the current `repo-scout` architecture after Phase 8.
 ## High-Level Flow
 
 1. CLI parses a command in `src/cli.rs`.
-2. Store bootstrap (`src/store/mod.rs`) opens `<repo>/.repo-scout/index.db`, ensures schema, and reads schema version.
+2. Store bootstrap (`src/store/mod.rs`) opens `<repo>/.repo-scout/index.db`, ensures schema, and
+   reads schema version.
 3. `index` performs incremental indexing (`src/indexer/mod.rs`).
 4. Query commands read SQLite tables and apply deterministic ranking/ordering (`src/query/mod.rs`).
 5. Output is rendered as terminal text or JSON (`src/output.rs`).
@@ -75,11 +76,13 @@ For each indexing run:
 3. For each live file:
    - compute hash,
    - skip unchanged files,
-   - otherwise delete existing rows for that file and reinsert fresh text/AST/symbol/edge rows in one transaction.
+   - otherwise delete existing rows for that file and reinsert fresh text/AST/symbol/edge rows in
+     one transaction.
 4. Resolve deferred cross-file edges after all files are indexed.
 5. Upsert file hash into `indexed_files`.
 
-Lifecycle guarantees covered by integration tests include stale-file pruning, rename handling, and schema migration safety.
+Lifecycle guarantees covered by integration tests include stale-file pruning, rename handling, and
+schema migration safety.
 
 ## Query Strategies
 
@@ -132,8 +135,8 @@ Lifecycle guarantees covered by integration tests include stale-file pruning, re
 - Suggest targeted test commands from:
   - changed file itself when it is a runnable test target,
   - tests referencing symbols defined in changed files.
-- Apply deterministic targeted capping (`DEFAULT_VERIFY_PLAN_MAX_TARGETED = 8` or
-  `--max-targeted` override).
+- Apply deterministic targeted capping (`DEFAULT_VERIFY_PLAN_MAX_TARGETED = 8` or `--max-targeted`
+  override).
 - Preserve changed runnable test targets regardless cap value.
 - Keep best evidence for duplicate commands.
 - Always append `cargo test` full-suite gate.
@@ -153,9 +156,8 @@ Lifecycle guarantees covered by integration tests include stale-file pruning, re
   hints so duplicate-name callees do not cross-link ambiguously.
 - Optionally remove changed-symbol output rows with `--exclude-changed`.
 - Optionally cap results deterministically with `--max-results`.
-- Attach ranked test targets by default (`include_tests = true`), disable with
-  `--exclude-tests`, or keep explicit default behavior with `--include-tests` (conflicting flags
-  are rejected by clap).
+- Attach ranked test targets by default (`include_tests = true`), disable with `--exclude-tests`, or
+  keep explicit default behavior with `--include-tests` (conflicting flags are rejected by clap).
 - Apply deterministic semantic score calibration so resolved semantic caller rows rank above
   fallback test-target rows.
 - Sort mixed result kinds deterministically.
@@ -186,4 +188,5 @@ Phase 8 requires both quality gates to stay green for release-readiness:
 
 ## Corruption Recovery
 
-Store bootstrap maps SQLite corruption signatures (`DatabaseCorrupt`, `NotADatabase`) into an actionable error telling users to delete the index DB file and rerun `index`.
+Store bootstrap maps SQLite corruption signatures (`DatabaseCorrupt`, `NotADatabase`) into an
+actionable error telling users to delete the index DB file and rerun `index`.

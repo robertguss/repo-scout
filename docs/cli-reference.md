@@ -200,7 +200,8 @@ Behavior:
 - Parses and normalizes repeatable `--changed-line` ranges (`path:start[:end]`).
 - Applies repeatable `--changed-symbol` filters additively to changed-file symbol selection.
 - Dampens high-frequency generic changed symbols (for example `Path`, `output`) for better signal.
-- Suggests runnable targeted commands only (`cargo test --test <name>` for direct `tests/<file>.rs` targets).
+- Suggests runnable targeted commands only (`cargo test --test <name>` for direct `tests/<file>.rs`
+  targets).
 - Caps symbol-derived targeted rows to `8` by default.
 - `--max-targeted 0` suppresses symbol-derived targeted rows, while still preserving changed
   runnable test targets and the required full-suite gate.
@@ -228,8 +229,8 @@ Behavior:
 - Applies repeatable `--changed-symbol` filters to changed-symbol seeds.
 - Emits bounded multi-hop incoming neighbors (`called_by`, `contained_by`, `imported_by`,
   `implemented_by`) up to `--max-distance`.
-- Uses module-aware TypeScript/Python call resolution so namespace/member and module-alias
-  attribute calls resolve to the intended module under duplicate symbol names.
+- Uses module-aware TypeScript/Python call resolution so namespace/member and module-alias attribute
+  calls resolve to the intended module under duplicate symbol names.
 - Uses cycle-safe, deterministic dedupe to prevent duplicate growth and changed-symbol echo rows at
   non-zero distances.
 - `--exclude-changed` removes changed-symbol (`distance=0`) rows from final output while traversal
@@ -239,11 +240,10 @@ Behavior:
   `include_tests = true`.
 - `--exclude-tests` suppresses test-target rows and flips schema-3 `include_tests` to `false`.
 - `--include-tests` keeps explicit default behavior and conflicts with `--exclude-tests`.
-- Semantic impacted-symbol rows use deterministic calibrated scoring (for example
-  `call_resolution` `called_by` rows in Phase 8 fixtures score `0.97`) and rank ahead of
-  fallback test-target rows.
-- Terminal output is row-oriented: one deterministic `impacted_symbol ...` or `test_target ...`
-  line per result with confidence/provenance/score fields.
+- Semantic impacted-symbol rows use deterministic calibrated scoring (for example `call_resolution`
+  `called_by` rows in Phase 8 fixtures score `0.97`) and rank ahead of fallback test-target rows.
+- Terminal output is row-oriented: one deterministic `impacted_symbol ...` or `test_target ...` line
+  per result with confidence/provenance/score fields.
 
 `--changed-line` parsing rules:
 
@@ -285,4 +285,5 @@ cargo run -- explain impact_matches --repo . --include-snippets --json
 - Success: `0`
 - Failure: non-zero
 
-Corrupt or invalid index DB errors include a hint with the index path and recovery action (`delete file, rerun index`).
+Corrupt or invalid index DB errors include a hint with the index path and recovery action
+(`delete file, rerun index`).

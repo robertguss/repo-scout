@@ -3,6 +3,7 @@
 `repo-scout` supports deterministic JSON output for all query commands.
 
 Available today:
+
 - `find --json`
 - `refs --json`
 - `impact --json`
@@ -61,12 +62,12 @@ Top-level fields:
 - `score` (`number`)
 
 Schema 1 remains unchanged when using Phase 4/6 controls (`--code-only`, `--exclude-tests`,
-`--max-results`).
-These options only affect result selection/ranking order:
+`--max-results`). These options only affect result selection/ranking order:
+
 - scope flags filter text fallback rows only,
 - fallback ties prefer code paths over test/docs at equal fallback score tiers,
-- `--max-results` applies deterministic truncation after ranking,
-while AST-priority rows and JSON envelope shape stay stable.
+- `--max-results` applies deterministic truncation after ranking, while AST-priority rows and JSON
+  envelope shape stay stable.
 
 Observed `why_matched` vocabulary:
 
@@ -186,8 +187,8 @@ Per-result fields:
 - `confidence` (`graph_likely | context_medium`)
 - `score` (`number`)
 
-Default output excludes support paths and emits runnable integration targets first.
-When `tests-for --include-support` is used, support rows are restored additively as
+Default output excludes support paths and emits runnable integration targets first. When
+`tests-for --include-support` is used, support rows are restored additively as
 `target_kind = "support_test_file"`.
 
 ## `verify-plan --json` (Schema 2)
@@ -231,10 +232,11 @@ Top-level fields:
 - `confidence` (`string`)
 - `score` (`number`)
 
-Phase 5/6 keeps schema 2 stable and adds precision controls through CLI options:
-`--max-targeted` bounds symbol-derived targeted rows (default cap `8`, `0` means none),
-while changed runnable test targets and the `cargo test` full-suite gate remain preserved.
-Phase 6 adds additive changed-scope filters:
+Phase 5/6 keeps schema 2 stable and adds precision controls through CLI options: `--max-targeted`
+bounds symbol-derived targeted rows (default cap `8`, `0` means none), while changed runnable test
+targets and the `cargo test` full-suite gate remain preserved. Phase 6 adds additive changed-scope
+filters:
+
 - repeatable `--changed-line path:start[:end]` limits symbol-derived targeted rows by span overlap,
 - repeatable `--changed-symbol` limits symbol-derived targeted rows to named symbols.
 
@@ -287,14 +289,14 @@ below remains schema-stable and unchanged.
 
 Top-level fields:
 
-| Field | Type | Required | Notes |
-| --- | --- | --- | --- |
-| `schema_version` | `number` | yes | Always `3`. |
-| `command` | `string` | yes | Always `"diff-impact"`. |
-| `changed_files` | `array<string>` | yes | Repo-relative, normalized, sorted, deduplicated. |
-| `max_distance` | `number` | yes | Echoes resolved traversal distance. |
-| `include_tests` | `boolean` | yes | Echoes resolved test-target behavior (`true` default, `false` with `--exclude-tests`). |
-| `results` | `array<DiffImpactResult>` | yes | Deterministically ordered (see rules below). |
+| Field            | Type                      | Required | Notes                                                                                  |
+| ---------------- | ------------------------- | -------- | -------------------------------------------------------------------------------------- |
+| `schema_version` | `number`                  | yes      | Always `3`.                                                                            |
+| `command`        | `string`                  | yes      | Always `"diff-impact"`.                                                                |
+| `changed_files`  | `array<string>`           | yes      | Repo-relative, normalized, sorted, deduplicated.                                       |
+| `max_distance`   | `number`                  | yes      | Echoes resolved traversal distance.                                                    |
+| `include_tests`  | `boolean`                 | yes      | Echoes resolved test-target behavior (`true` default, `false` with `--exclude-tests`). |
+| `results`        | `array<DiffImpactResult>` | yes      | Deterministically ordered (see rules below).                                           |
 
 Phase 4/5/6/8 option effects (schema unchanged):
 
@@ -318,39 +320,39 @@ Phase 4/5/6/8 option effects (schema unchanged):
 
 `DiffImpactResult` union discriminator:
 
-| Field | Type | Required | Notes |
-| --- | --- | --- | --- |
-| `result_kind` | `string` | yes | `"impacted_symbol"` or `"test_target"`. |
+| Field         | Type     | Required | Notes                                   |
+| ------------- | -------- | -------- | --------------------------------------- |
+| `result_kind` | `string` | yes      | `"impacted_symbol"` or `"test_target"`. |
 
 `DiffImpactResult` when `result_kind = "impacted_symbol"`:
 
-| Field | Type | Required | Notes |
-| --- | --- | --- | --- |
-| `symbol` | `string` | yes | Unqualified symbol text. |
-| `qualified_symbol` | `string` | yes | Stable qualified symbol ID. |
-| `kind` | `string` | yes | Symbol kind enum. |
-| `language` | `string` | yes | Language enum. |
-| `file_path` | `string` | yes | Repo-relative path to symbol definition. |
-| `line` | `number` | yes | 1-based start line. |
-| `column` | `number` | yes | 1-based start column. |
-| `distance` | `number` | yes | Graph distance from changed symbol (`0` means changed symbol itself). |
-| `relationship` | `string` | yes | Relationship enum. |
-| `why_included` | `string` | yes | Human-readable deterministic rationale. |
-| `confidence` | `string` | yes | Confidence enum. |
-| `provenance` | `string` | yes | Provenance enum. |
-| `score` | `number` | yes | Ranking score. |
+| Field              | Type     | Required | Notes                                                                 |
+| ------------------ | -------- | -------- | --------------------------------------------------------------------- |
+| `symbol`           | `string` | yes      | Unqualified symbol text.                                              |
+| `qualified_symbol` | `string` | yes      | Stable qualified symbol ID.                                           |
+| `kind`             | `string` | yes      | Symbol kind enum.                                                     |
+| `language`         | `string` | yes      | Language enum.                                                        |
+| `file_path`        | `string` | yes      | Repo-relative path to symbol definition.                              |
+| `line`             | `number` | yes      | 1-based start line.                                                   |
+| `column`           | `number` | yes      | 1-based start column.                                                 |
+| `distance`         | `number` | yes      | Graph distance from changed symbol (`0` means changed symbol itself). |
+| `relationship`     | `string` | yes      | Relationship enum.                                                    |
+| `why_included`     | `string` | yes      | Human-readable deterministic rationale.                               |
+| `confidence`       | `string` | yes      | Confidence enum.                                                      |
+| `provenance`       | `string` | yes      | Provenance enum.                                                      |
+| `score`            | `number` | yes      | Ranking score.                                                        |
 
 `DiffImpactResult` when `result_kind = "test_target"`:
 
-| Field | Type | Required | Notes |
-| --- | --- | --- | --- |
-| `target` | `string` | yes | Repo-relative test file path. |
-| `target_kind` | `string` | yes | Currently `"integration_test_file"`. |
-| `language` | `string` | yes | Language enum for the target file. |
-| `why_included` | `string` | yes | Human-readable deterministic rationale. |
-| `confidence` | `string` | yes | Confidence enum. |
-| `provenance` | `string` | yes | Provenance enum. |
-| `score` | `number` | yes | Ranking score. |
+| Field          | Type     | Required | Notes                                   |
+| -------------- | -------- | -------- | --------------------------------------- |
+| `target`       | `string` | yes      | Repo-relative test file path.           |
+| `target_kind`  | `string` | yes      | Currently `"integration_test_file"`.    |
+| `language`     | `string` | yes      | Language enum for the target file.      |
+| `why_included` | `string` | yes      | Human-readable deterministic rationale. |
+| `confidence`   | `string` | yes      | Confidence enum.                        |
+| `provenance`   | `string` | yes      | Provenance enum.                        |
+| `score`        | `number` | yes      | Ranking score.                          |
 
 Deterministic ordering rules for `results`:
 
@@ -402,35 +404,35 @@ Deterministic ordering rules for `results`:
 
 Top-level fields:
 
-| Field | Type | Required | Notes |
-| --- | --- | --- | --- |
-| `schema_version` | `number` | yes | Always `3`. |
-| `command` | `string` | yes | Always `"explain"`. |
-| `query` | `string` | yes | Input symbol/query string. |
-| `include_snippets` | `boolean` | yes | Echoes resolved snippet behavior. |
-| `results` | `array<ExplainMatch>` | yes | Deterministically ordered. |
+| Field              | Type                  | Required | Notes                             |
+| ------------------ | --------------------- | -------- | --------------------------------- |
+| `schema_version`   | `number`              | yes      | Always `3`.                       |
+| `command`          | `string`              | yes      | Always `"explain"`.               |
+| `query`            | `string`              | yes      | Input symbol/query string.        |
+| `include_snippets` | `boolean`             | yes      | Echoes resolved snippet behavior. |
+| `results`          | `array<ExplainMatch>` | yes      | Deterministically ordered.        |
 
 `ExplainMatch` fields:
 
-| Field | Type | Required | Notes |
-| --- | --- | --- | --- |
-| `symbol` | `string` | yes | Unqualified symbol text. |
-| `qualified_symbol` | `string` | yes | Stable qualified symbol ID. |
-| `kind` | `string` | yes | Symbol kind enum. |
-| `language` | `string` | yes | Language enum. |
-| `file_path` | `string` | yes | Repo-relative path. |
-| `start_line` | `number` | yes | 1-based start line. |
-| `start_column` | `number` | yes | 1-based start column. |
-| `end_line` | `number` | yes | 1-based end line. |
-| `end_column` | `number` | yes | 1-based end column. |
-| `signature` | `string` | no | Present when extractor provides one. |
-| `inbound` | `object` | yes | Relationship counters (see below). |
-| `outbound` | `object` | yes | Relationship counters (see below). |
-| `why_included` | `string` | yes | Human-readable deterministic rationale. |
-| `confidence` | `string` | yes | Confidence enum. |
-| `provenance` | `string` | yes | Provenance enum. |
-| `score` | `number` | yes | Ranking score. |
-| `snippet` | `string` | no | Present only when `include_snippets = true` and snippet extraction succeeds. |
+| Field              | Type     | Required | Notes                                                                        |
+| ------------------ | -------- | -------- | ---------------------------------------------------------------------------- |
+| `symbol`           | `string` | yes      | Unqualified symbol text.                                                     |
+| `qualified_symbol` | `string` | yes      | Stable qualified symbol ID.                                                  |
+| `kind`             | `string` | yes      | Symbol kind enum.                                                            |
+| `language`         | `string` | yes      | Language enum.                                                               |
+| `file_path`        | `string` | yes      | Repo-relative path.                                                          |
+| `start_line`       | `number` | yes      | 1-based start line.                                                          |
+| `start_column`     | `number` | yes      | 1-based start column.                                                        |
+| `end_line`         | `number` | yes      | 1-based end line.                                                            |
+| `end_column`       | `number` | yes      | 1-based end column.                                                          |
+| `signature`        | `string` | no       | Present when extractor provides one.                                         |
+| `inbound`          | `object` | yes      | Relationship counters (see below).                                           |
+| `outbound`         | `object` | yes      | Relationship counters (see below).                                           |
+| `why_included`     | `string` | yes      | Human-readable deterministic rationale.                                      |
+| `confidence`       | `string` | yes      | Confidence enum.                                                             |
+| `provenance`       | `string` | yes      | Provenance enum.                                                             |
+| `score`            | `number` | yes      | Ranking score.                                                               |
+| `snippet`          | `string` | no       | Present only when `include_snippets = true` and snippet extraction succeeds. |
 
 `inbound` fields (all required numbers):
 

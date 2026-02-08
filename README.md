@@ -1,10 +1,11 @@
 # repo-scout
 
-`repo-scout` is a local, deterministic CLI for indexing a repository and answering code-navigation questions fast.
+`repo-scout` is a local, deterministic CLI for indexing a repository and answering code-navigation
+questions fast.
 
 Phase 8 is fully implemented and adds semantic-precision closure, strict lint hardening
-(`cargo clippy --all-targets --all-features -- -D warnings`), explicit `diff-impact`
-test-target opt-out (`--exclude-tests`), and deterministic row-level terminal output.
+(`cargo clippy --all-targets --all-features -- -D warnings`), explicit `diff-impact` test-target
+opt-out (`--exclude-tests`), and deterministic row-level terminal output.
 
 ## What It Does
 
@@ -92,15 +93,16 @@ cargo run -- explain impact_matches --repo /path/to/repo --json
   - `--max-results` applies deterministic truncation after ranking.
   - Scope flags apply to text fallback only; AST-priority behavior is unchanged.
 - `impact <SYMBOL> --repo <PATH> [--json]`
-  - Returns one-hop incoming graph neighbors (`called_by`, `contained_by`, `imported_by`, `implemented_by`).
+  - Returns one-hop incoming graph neighbors (`called_by`, `contained_by`, `imported_by`,
+    `implemented_by`).
   - Applies deterministic semantic score calibration so stronger edge evidence stays in a
     high-confidence ranking band.
 - `context --task <TEXT> --repo <PATH> [--budget <N>] [--json] [--exclude-tests] [--code-only]`
   - Uses deterministic token-overlap relevance to rank direct symbol definitions plus graph
     neighbors, truncated by budget.
 - `tests-for <SYMBOL> --repo <PATH> [--include-support] [--json]`
-  - Returns runnable test targets by default and restores support paths when
-    `--include-support` is set.
+  - Returns runnable test targets by default and restores support paths when `--include-support` is
+    set.
 - `verify-plan --changed-file <PATH> --repo <PATH> [--changed-line <path:start[:end]>] [--changed-symbol <symbol> ...] [--max-targeted <N>] [--json]`
   - Produces deterministic verification steps (bounded targeted test commands + `cargo test`).
   - `--changed-line` and repeatable `--changed-symbol` narrow symbol-derived targeted steps.
@@ -173,11 +175,13 @@ cargo run -- refs <symbol> --repo .
 cargo test
 ```
 
-If dogfooding exposes a defect, add a failing integration test first, implement the minimum fix, then refactor with the full suite green.
+If dogfooding exposes a defect, add a failing integration test first, implement the minimum fix,
+then refactor with the full suite green.
 
 ## Error Recovery
 
-If the index DB is corrupted or not a valid SQLite database, `repo-scout` prints a recovery hint with the exact index path and tells you to delete the DB and rerun `index`.
+If the index DB is corrupted or not a valid SQLite database, `repo-scout` prints a recovery hint
+with the exact index path and tells you to delete the DB and rerun `index`.
 
 ## More Docs
 
