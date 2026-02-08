@@ -29,10 +29,10 @@ deeply, and include prototypes to guide a fuller implementation.
 
 ## Contract System v2 integration
 
-When this repository (or the target repository) contains Contract System v2 assets, every ExecPlan
-must explicitly integrate them. The core files are `contracts/core/`, the language contracts in
-`contracts/languages/`, delivery templates in `templates/`, review checklists in `checklists/`, and
-CI enforcement in `scripts/` plus `.github/workflows/contract-gates.yml`.
+This repository includes Contract System v2 assets, and every ExecPlan must explicitly integrate
+them. The core files are `contracts/core/`, the language contracts in `contracts/languages/`,
+delivery templates in `templates/`, review checklists in `checklists/`, and CI enforcement in
+`scripts/` plus `.github/workflows/contract-gates.yml`.
 
 An ExecPlan must map plan content to these assets. The plan must include task framing fields aligned
 with `templates/TASK_PACKET_TEMPLATE.md`, define test intent aligned with
@@ -43,8 +43,8 @@ Tier 3 work, the plan must include adversarial review activities aligned with
 `checklists/ADVERSARIAL_REVIEW_CHECKLIST.md`.
 
 Before implementation starts, the plan must list the exact contract validation commands to run in
-the target repository, including `scripts/validate_tdd_cycle.sh` and
-`scripts/validate_evidence_packet.sh` when present.
+the target repository, including `scripts/validate_tdd_cycle.sh --base <base-ref>` and
+`scripts/validate_evidence_packet.sh --pr-body .github/pull_request_template.md`.
 
 ## AGENTS.md integration
 
@@ -142,8 +142,8 @@ a novice can navigate confidently. When running commands, show the working direc
 command line. When outcomes depend on environment, state the assumptions and provide alternatives
 when reasonable.
 
-When contracts and templates exist in the target repository, reference the exact file paths in the
-plan and state how each one is consumed. At minimum, map the plan narrative to
+When planning in this repository or any other repository with Contract System v2 assets, reference
+the exact file paths in the plan and state how each one is consumed. At minimum, map the plan narrative to
 `templates/TASK_PACKET_TEMPLATE.md`, `templates/TEST_PLAN_TEMPLATE.md`, and
 `templates/EVIDENCE_PACKET_TEMPLATE.md`, and map enforcement to `scripts/validate_tdd_cycle.sh` and
 `scripts/validate_evidence_packet.sh`.
@@ -296,7 +296,7 @@ implements the features we need in isolation.
         cargo test
         # refactor gate: full suite must pass
         scripts/validate_tdd_cycle.sh --base <base-ref>
-        scripts/validate_evidence_packet.sh --file .evidence/EVIDENCE_PACKET.md
+        scripts/validate_evidence_packet.sh --pr-body .github/pull_request_template.md
 
     ## Validation and Acceptance
 
