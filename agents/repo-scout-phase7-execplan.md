@@ -45,7 +45,13 @@ quantifies recommendation quality under known noisy scenarios.
 - [ ] Milestone 32 strict TDD contract-lock slices
       (completed: red failures for `tests/milestone32_semantic_contracts.rs`;
       remaining: green/refactor completion tracked in Milestones 33-34 as semantic behavior lands).
-- [ ] Run Milestone 33 strict TDD slices for TypeScript namespace/module-aware call resolution.
+- [x] (2026-02-08 01:43Z) Ran required pre-milestone baseline dogfood for Milestone 33:
+      `cargo run -- index --repo .`,
+      `cargo run -- find resolve_symbol_id_in_tx --repo . --json`,
+      `cargo run -- refs resolve_symbol_id_in_tx --repo . --json`.
+- [ ] Milestone 33 strict TDD slices for TypeScript namespace/module-aware call resolution
+      (completed: 33A/33B red-green + fixture behavior-check pack; remaining: full-suite refactor
+      closure deferred until Milestone 34 resolves Python contract tests introduced in Milestone 32).
 - [ ] Run Milestone 34 strict TDD slices for Python module-aware call resolution.
 - [ ] Run Milestone 35 strict TDD slices for semantic-confidence ranking and benchmark guardrails.
 - [ ] Run Milestone 36 documentation/evidence refresh and post-refresh full dogfood checks.
@@ -90,6 +96,17 @@ quantifies recommendation quality under known noisy scenarios.
   `src/py_app.py::run_py` `called_by`; `cargo test milestone32_schema_contracts_stay_stable --
   --nocapture` failed on missing schema-3 semantic caller rows.
 
+- Observation: Milestone 33 TypeScript changes produce caller rows for namespace alias calls in
+  fixture dogfood, while Python fixture still shows only changed-symbol rows before Milestone 34.
+  Evidence: `cargo run -- diff-impact --changed-file src/util_a.ts --repo
+  tests/fixtures/phase7/semantic_precision --json` returned `src/app.ts::run` `called_by`, while
+  the matching Python command for `src/pkg_a/util.py` returned only `changed_symbol`.
+
+- Observation: Milestone 33 regression guard slice (preserve Milestone 15 behavior) was already
+  green before TypeScript production edits and stayed green after import-context updates.
+  Evidence: `cargo test milestone33_typescript_semantics_preserve_existing_m15_behavior --
+  --nocapture` passed in both pre-change and post-change runs.
+
 ## Decision Log
 
 - Decision: Keep schema envelopes stable (`schema_version` 1/2/3) through Phase 7 and implement
@@ -128,6 +145,13 @@ quantifies recommendation quality under known noisy scenarios.
   behavior slices are implemented.
   Rationale: This is the smallest plan-aligned path that preserves strict red-before-production
   evidence while avoiding duplicate temporary contract rewrites.
+  Date/Author: 2026-02-08 / Codex
+
+- Decision: Add the shared benchmark fixture tree at
+  `tests/fixtures/phase7/semantic_precision/` during Milestone 33 so required behavior-check
+  command packs can run after Milestones 33/34/35 without ad-hoc setup.
+  Rationale: Required command packs execute immediately after each milestone; creating the fixture
+  once early keeps evidence deterministic and repeatable.
   Date/Author: 2026-02-08 / Codex
 
 ## Outcomes & Retrospective
@@ -437,6 +461,57 @@ Milestone 32 strict TDD evidence (red stage):
     ...
     schema 3 should include semantic caller row for TypeScript fixture
 
+Milestone 33 strict TDD evidence:
+
+    # 33A red
+    cargo test milestone33_typescript_namespace_alias_resolves_changed_callee -- --nocapture
+    ...
+    expected namespace alias call to resolve changed callee with called_by row
+
+    # 33A green
+    cargo test milestone33_typescript_namespace_alias_resolves_changed_callee -- --nocapture
+    ...
+    test milestone33_typescript_namespace_alias_resolves_changed_callee ... ok
+
+    # 33B red
+    cargo test milestone33_typescript_member_call_prefers_import_context -- --nocapture
+    ...
+    expected utilA.helper() to resolve to util_a helper
+
+    # 33B green
+    cargo test milestone33_typescript_member_call_prefers_import_context -- --nocapture
+    ...
+    test milestone33_typescript_member_call_prefers_import_context ... ok
+
+    # 33C red check (regression guard already satisfied)
+    cargo test milestone33_typescript_semantics_preserve_existing_m15_behavior -- --nocapture
+    ...
+    test milestone33_typescript_semantics_preserve_existing_m15_behavior ... ok
+
+    # 33C green re-run
+    cargo test milestone33_typescript_semantics_preserve_existing_m15_behavior -- --nocapture
+    ...
+    test milestone33_typescript_semantics_preserve_existing_m15_behavior ... ok
+
+    # 33 refactor gate (expected to remain red until Milestone 34)
+    cargo test
+    ...
+    failures:
+      milestone32_python_module_alias_call_contract
+      milestone32_schema_contracts_stay_stable
+
+Milestone 33 behavior-check pack evidence:
+
+    cargo run -- index --repo tests/fixtures/phase7/semantic_precision
+    cargo run -- diff-impact --changed-file src/util_a.ts --repo tests/fixtures/phase7/semantic_precision --json
+    cargo run -- diff-impact --changed-file src/pkg_a/util.py --repo tests/fixtures/phase7/semantic_precision --json
+    cargo run -- impact helper --repo tests/fixtures/phase7/semantic_precision --json
+
+    # observed after Milestone 33:
+    # - TypeScript fixture includes `src/app.ts::run` as `called_by` for `src/util_a.ts::helper`
+    # - Python fixture still returns changed-symbol-only for `src/pkg_a/util.py::helper`
+    # - `impact helper` on fixture now includes TypeScript caller row
+
 ## Interfaces and Dependencies
 
 Phase 7 should continue using current dependencies (`tree-sitter`, language grammars, `rusqlite`,
@@ -486,3 +561,7 @@ Phase 6 and aligned to `agents/PLANS.md` strict TDD/living-plan requirements.
 
 2026-02-08: Updated live plan with Milestone 32 pre-dogfood transcripts, strict red-stage
 contract-test evidence, and decision-log handling for cross-milestone green/refactor closure.
+
+2026-02-08: Updated live plan with Milestone 33 TypeScript red/green transcripts, fixture
+behavior-check evidence, and decision log entries for shared fixture setup and deferred
+cross-milestone refactor closure.

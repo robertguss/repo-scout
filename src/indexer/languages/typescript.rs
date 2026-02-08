@@ -192,6 +192,7 @@ impl LanguageAdapter for TypeScriptLanguageAdapter {
                             caller.as_deref(),
                             file_path,
                             &language,
+                            &import_target_hints,
                             &mut references,
                             &mut edges,
                         );
@@ -267,12 +268,24 @@ impl LanguageAdapter for TypeScriptLanguageAdapter {
             left.from_symbol_key
                 .symbol
                 .cmp(&right.from_symbol_key.symbol)
+                .then(
+                    left.from_symbol_key
+                        .qualified_symbol
+                        .cmp(&right.from_symbol_key.qualified_symbol),
+                )
                 .then(left.to_symbol_key.symbol.cmp(&right.to_symbol_key.symbol))
+                .then(
+                    left.to_symbol_key
+                        .qualified_symbol
+                        .cmp(&right.to_symbol_key.qualified_symbol),
+                )
                 .then(left.edge_kind.cmp(&right.edge_kind))
         });
         edges.dedup_by(|left, right| {
             left.from_symbol_key.symbol == right.from_symbol_key.symbol
+                && left.from_symbol_key.qualified_symbol == right.from_symbol_key.qualified_symbol
                 && left.to_symbol_key.symbol == right.to_symbol_key.symbol
+                && left.to_symbol_key.qualified_symbol == right.to_symbol_key.qualified_symbol
                 && left.edge_kind == right.edge_kind
         });
 
@@ -372,6 +385,7 @@ fn collect_call_symbols(
     caller: Option<&str>,
     file_path: &str,
     language: &str,
+    import_target_hints: &HashMap<String, String>,
     references: &mut Vec<ExtractedReference>,
     edges: &mut Vec<ExtractedEdge>,
 ) {
@@ -401,9 +415,48 @@ fn collect_call_symbols(
             }
         }
         "member_expression" => {
+            let object_symbol = node
+                .child_by_field_name("object")
+                .and_then(|object| node_text(object, source));
             if let Some(property) = node.child_by_field_name("property") {
+                if let Some(property_symbol) = node_text(property, source) {
+                    let (line, column) = start_position(property);
+                    references.push(ExtractedReference {
+                        symbol: property_symbol.clone(),
+                        line,
+                        column,
+                    });
+
+                    if let Some(caller_symbol) = caller
+                        && let Some(object_symbol) = object_symbol
+                        && let Some(import_path) = import_target_hints.get(&object_symbol)
+                    {
+                        edges.push(ExtractedEdge {
+                            from_symbol_key: scoped_symbol_key(file_path, language, caller_symbol),
+                            to_symbol_key: SymbolKey {
+                                symbol: property_symbol.clone(),
+                                qualified_symbol: Some(format!(
+                                    "{language}:{import_path}::{property_symbol}"
+                                )),
+                                file_path: Some(import_path.clone()),
+                                language: Some(language.to_string()),
+                            },
+                            edge_kind: "calls".to_string(),
+                            confidence: 0.95,
+                            provenance: "call_resolution".to_string(),
+                        });
+                        return;
+                    }
+                }
                 collect_call_symbols(
-                    property, source, caller, file_path, language, references, edges,
+                    property,
+                    source,
+                    caller,
+                    file_path,
+                    language,
+                    import_target_hints,
+                    references,
+                    edges,
                 );
             }
         }
@@ -411,7 +464,14 @@ fn collect_call_symbols(
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
                 collect_call_symbols(
-                    child, source, caller, file_path, language, references, edges,
+                    child,
+                    source,
+                    caller,
+                    file_path,
+                    language,
+                    import_target_hints,
+                    references,
+                    edges,
                 );
             }
         }
@@ -539,6 +599,30 @@ fn import_target_hints(file_path: &str, source: &str) -> HashMap<String, String>
         let Some(import_path) = resolve_typescript_import_path(file_path, &module_specifier) else {
             continue;
         };
+        let clause = head.trim_start_matches("import").trim();
+
+        if let Some(namespace_clause) = clause
+            .split(',')
+            .find(|part| part.trim_start().starts_with("* as "))
+        {
+            let alias = namespace_clause
+                .trim()
+                .trim_start_matches("* as ")
+                .trim();
+            if !alias.is_empty() {
+                hints.insert(alias.to_string(), import_path.clone());
+            }
+
+            let default_binding = clause
+                .split(',')
+                .next()
+                .map(str::trim)
+                .filter(|candidate| !candidate.is_empty() && !candidate.starts_with("* as "));
+            if let Some(default_binding) = default_binding {
+                hints.insert(default_binding.to_string(), import_path.clone());
+            }
+            continue;
+        }
 
         if let (Some(left_brace), Some(right_brace)) = (head.find('{'), head.find('}')) {
             let clause = &head[left_brace + 1..right_brace];
