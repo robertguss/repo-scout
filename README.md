@@ -2,8 +2,8 @@
 
 `repo-scout` is a local, deterministic CLI for indexing a repository and answering code-navigation questions fast.
 
-Phase 5 is fully implemented and adds recommendation-quality and multi-hop impact-fidelity
-workflows on the existing command surface.
+Phase 6 is fully implemented and adds change-scope precision and output-focus controls on top of
+the Phase 5 recommendation-quality and multi-hop impact-fidelity workflows.
 
 ## What It Does
 
@@ -52,11 +52,14 @@ cargo run -- verify-plan --changed-file src/lib.rs --repo /path/to/repo
 cargo run -- diff-impact --changed-file src/lib.rs --repo /path/to/repo
 cargo run -- explain impact_matches --repo /path/to/repo
 
-# Phase 5 controls
+# Phase 5/6 controls
 cargo run -- refs launch --repo /path/to/repo --code-only --exclude-tests
+cargo run -- refs launch --repo /path/to/repo --code-only --exclude-tests --max-results 10
+cargo run -- find launch --repo /path/to/repo --max-results 10
+cargo run -- context --task "update launch flow and reduce test noise" --repo /path/to/repo --budget 1200 --exclude-tests --code-only
 cargo run -- tests-for launch --repo /path/to/repo --include-support
-cargo run -- verify-plan --changed-file src/lib.rs --repo /path/to/repo --max-targeted 6
-cargo run -- diff-impact --changed-file src/lib.rs --changed-line src/lib.rs:20:80 --repo /path/to/repo
+cargo run -- verify-plan --changed-file src/lib.rs --changed-line src/lib.rs:20:80 --changed-symbol launch --repo /path/to/repo --max-targeted 6
+cargo run -- diff-impact --changed-file src/lib.rs --changed-line src/lib.rs:20:80 --changed-symbol launch --exclude-changed --max-results 12 --repo /path/to/repo
 cargo run -- diff-impact --changed-file src/lib.rs --include-imports --repo /path/to/repo
 cargo run -- diff-impact --changed-file src/lib.rs --repo /path/to/repo --max-distance 3
 ```
@@ -77,27 +80,32 @@ cargo run -- explain impact_matches --repo /path/to/repo --json
   - Prints `index_path`, `schema_version`, `indexed_files`, and `skipped_files`.
 - `status --repo <PATH>`
   - Prints index path and schema version.
-- `find <SYMBOL> --repo <PATH> [--json] [--code-only] [--exclude-tests]`
+- `find <SYMBOL> --repo <PATH> [--json] [--code-only] [--exclude-tests] [--max-results <N>]`
   - Prefers AST definitions (`ast_definition`), then falls back to text ranking.
-- `refs <SYMBOL> --repo <PATH> [--json] [--code-only] [--exclude-tests]`
+- `refs <SYMBOL> --repo <PATH> [--json] [--code-only] [--exclude-tests] [--max-results <N>]`
   - Prefers AST references (`ast_reference`), then falls back to text ranking.
+  - Fallback ties now prefer code paths over test/docs paths at equal score tiers.
+  - `--max-results` applies deterministic truncation after ranking.
   - Scope flags apply to text fallback only; AST-priority behavior is unchanged.
 - `impact <SYMBOL> --repo <PATH> [--json]`
   - Returns one-hop incoming graph neighbors (`called_by`, `contained_by`, `imported_by`, `implemented_by`).
-- `context --task <TEXT> --repo <PATH> [--budget <N>] [--json]`
+- `context --task <TEXT> --repo <PATH> [--budget <N>] [--json] [--exclude-tests] [--code-only]`
   - Uses deterministic token-overlap relevance to rank direct symbol definitions plus graph
     neighbors, truncated by budget.
 - `tests-for <SYMBOL> --repo <PATH> [--include-support] [--json]`
   - Returns runnable test targets by default and restores support paths when
     `--include-support` is set.
-- `verify-plan --changed-file <PATH> --repo <PATH> [--max-targeted <N>] [--json]`
+- `verify-plan --changed-file <PATH> --repo <PATH> [--changed-line <path:start[:end]>] [--changed-symbol <symbol> ...] [--max-targeted <N>] [--json]`
   - Produces deterministic verification steps (bounded targeted test commands + `cargo test`).
+  - `--changed-line` and repeatable `--changed-symbol` narrow symbol-derived targeted steps.
   - Default targeted cap is `8`; changed runnable test files are preserved even when
     `--max-targeted=0`.
-- `diff-impact --changed-file <PATH> --repo <PATH> [--max-distance <N>] [--include-tests] [--include-imports] [--changed-line <path:start[:end]>] [--json]`
+- `diff-impact --changed-file <PATH> --repo <PATH> [--max-distance <N>] [--include-tests] [--include-imports] [--changed-line <path:start[:end]>] [--changed-symbol <symbol> ...] [--exclude-changed] [--max-results <N>] [--json]`
   - Emits changed-symbol rows plus deterministic bounded multi-hop impacted symbols/test targets.
   - By default, changed-symbol seeds exclude import definitions unless `--include-imports` is set.
-  - `--changed-line` limits changed-symbol seeds to symbols overlapping the provided ranges.
+  - `--changed-line` and repeatable `--changed-symbol` narrow changed-symbol seeds.
+  - `--exclude-changed` omits `distance=0` changed-symbol rows from output.
+  - `--max-results` applies deterministic post-sort truncation.
 - `explain <SYMBOL> --repo <PATH> [--include-snippets] [--json]`
   - Produces a deterministic symbol dossier with spans, signature, and relationship counts.
 

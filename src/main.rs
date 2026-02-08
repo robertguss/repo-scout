@@ -9,9 +9,9 @@ use clap::Parser;
 use crate::cli::{Cli, Command};
 use crate::indexer::index_repository;
 use crate::query::{
-    ChangedLineRange, DiffImpactOptions, context_matches, diff_impact_for_changed_files,
-    explain_symbol, find_matches_scoped, impact_matches, refs_matches_scoped, tests_for_symbol,
-    verify_plan_for_changed_files,
+    ChangedLineRange, DiffImpactOptions, QueryScope, VerifyPlanOptions, context_matches,
+    context_matches_scoped, diff_impact_for_changed_files, explain_symbol, find_matches_scoped,
+    impact_matches, refs_matches_scoped, tests_for_symbol, verify_plan_for_changed_files,
 };
 use crate::store::ensure_store;
 
@@ -84,7 +84,7 @@ fn run_status(args: crate::cli::RepoArgs) -> anyhow::Result<()> {
 
 fn run_find(args: crate::cli::FindArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
-    let matches = find_matches_scoped(
+    let mut matches = find_matches_scoped(
         &store.db_path,
         &args.symbol,
         &crate::query::QueryScope {
@@ -92,6 +92,9 @@ fn run_find(args: crate::cli::FindArgs) -> anyhow::Result<()> {
             exclude_tests: args.exclude_tests,
         },
     )?;
+    if let Some(max_results) = args.max_results {
+        matches.truncate(max_results);
+    }
     if args.json {
         output::print_query_json("find", &args.symbol, &matches)?;
     } else {
@@ -118,12 +121,13 @@ fn run_find(args: crate::cli::FindArgs) -> anyhow::Result<()> {
 ///     json: false,
 ///     code_only: false,
 ///     exclude_tests: false,
+///     max_results: None,
 /// };
 /// let _ = run_refs(args);
 /// ```
 fn run_refs(args: crate::cli::RefsArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
-    let matches = refs_matches_scoped(
+    let mut matches = refs_matches_scoped(
         &store.db_path,
         &args.symbol,
         &crate::query::QueryScope {
@@ -131,6 +135,9 @@ fn run_refs(args: crate::cli::RefsArgs) -> anyhow::Result<()> {
             exclude_tests: args.exclude_tests,
         },
     )?;
+    if let Some(max_results) = args.max_results {
+        matches.truncate(max_results);
+    }
     if args.json {
         output::print_query_json("refs", &args.symbol, &matches)?;
     } else {
@@ -193,12 +200,22 @@ fn run_impact(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
 ///     task: "build".into(),
 ///     budget: 10,
 ///     json: false,
+///     code_only: false,
+///     exclude_tests: false,
 /// };
 /// let _ = crate::run_context(args);
 /// ```
 fn run_context(args: crate::cli::ContextArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
-    let matches = context_matches(&store.db_path, &args.task, args.budget)?;
+    let scope = QueryScope {
+        code_only: args.code_only,
+        exclude_tests: args.exclude_tests,
+    };
+    let matches = if scope == QueryScope::default() {
+        context_matches(&store.db_path, &args.task, args.budget)?
+    } else {
+        context_matches_scoped(&store.db_path, &args.task, args.budget, &scope)?
+    };
     if args.json {
         output::print_context_json(&args.task, args.budget, &matches)?;
     } else {
@@ -251,6 +268,9 @@ fn run_tests_for(args: crate::cli::TestsForArgs) -> anyhow::Result<()> {
 /// let args = VerifyPlanArgs {
 ///     repo: ".".into(),
 ///     changed_files: vec!["src/lib.rs".into()],
+///     changed_lines: vec![],
+///     changed_symbols: vec![],
+///     max_targeted: None,
 ///     json: false,
 /// };
 /// let _ = run_verify_plan(args);
@@ -270,7 +290,32 @@ fn run_verify_plan(args: crate::cli::VerifyPlanArgs) -> anyhow::Result<()> {
     changed_files.sort();
     changed_files.dedup();
 
-    let steps = verify_plan_for_changed_files(&store.db_path, &changed_files, args.max_targeted)?;
+    let mut changed_lines = args
+        .changed_lines
+        .iter()
+        .map(|spec| parse_changed_line_spec(&args.repo, spec))
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    changed_lines.sort_by(|left, right| {
+        left.file_path
+            .cmp(&right.file_path)
+            .then(left.start_line.cmp(&right.start_line))
+            .then(left.end_line.cmp(&right.end_line))
+    });
+    changed_lines.dedup_by(|left, right| {
+        left.file_path == right.file_path
+            && left.start_line == right.start_line
+            && left.end_line == right.end_line
+    });
+    let mut changed_symbols = args.changed_symbols.clone();
+    changed_symbols.sort();
+    changed_symbols.dedup();
+
+    let options = VerifyPlanOptions {
+        max_targeted: args.max_targeted,
+        changed_lines,
+        changed_symbols,
+    };
+    let steps = verify_plan_for_changed_files(&store.db_path, &changed_files, &options)?;
     if args.json {
         output::print_verify_plan_json(&changed_files, &steps)?;
     } else {
@@ -305,12 +350,18 @@ fn run_diff_impact(args: crate::cli::DiffImpactArgs) -> anyhow::Result<()> {
             && left.start_line == right.start_line
             && left.end_line == right.end_line
     });
+    let mut changed_symbols = args.changed_symbols.clone();
+    changed_symbols.sort();
+    changed_symbols.dedup();
 
     let options = DiffImpactOptions {
         max_distance: args.max_distance,
         include_tests: args.include_tests,
         include_imports: args.include_imports,
         changed_lines,
+        changed_symbols,
+        exclude_changed: args.exclude_changed,
+        max_results: args.max_results,
     };
     let matches = diff_impact_for_changed_files(&store.db_path, &changed_files, &options)?;
     if args.json {

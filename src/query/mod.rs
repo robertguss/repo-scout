@@ -16,7 +16,7 @@ pub struct QueryMatch {
     pub score: f64,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct QueryScope {
     pub code_only: bool,
     pub exclude_tests: bool,
@@ -148,6 +148,16 @@ pub struct DiffImpactOptions {
     pub include_tests: bool,
     pub include_imports: bool,
     pub changed_lines: Vec<ChangedLineRange>,
+    pub changed_symbols: Vec<String>,
+    pub exclude_changed: bool,
+    pub max_results: Option<usize>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct VerifyPlanOptions {
+    pub max_targeted: Option<usize>,
+    pub changed_lines: Vec<ChangedLineRange>,
+    pub changed_symbols: Vec<String>,
 }
 
 pub const DEFAULT_VERIFY_PLAN_MAX_TARGETED: usize = 8;
@@ -162,6 +172,11 @@ pub fn diff_impact_for_changed_files(
     let mut seen = HashSet::new();
     let mut changed_symbol_ids = Vec::new();
     let changed_lines_by_file = changed_lines_by_file(&options.changed_lines);
+    let changed_symbol_filter = options
+        .changed_symbols
+        .iter()
+        .cloned()
+        .collect::<HashSet<_>>();
 
     for changed_file in changed_files {
         let mut statement = connection.prepare(
@@ -202,6 +217,9 @@ pub fn diff_impact_for_changed_files(
                     line_range_overlaps(line, end_line, range.start_line, range.end_line)
                 })
             {
+                continue;
+            }
+            if !changed_symbol_filter.is_empty() && !changed_symbol_filter.contains(&symbol) {
                 continue;
             }
             let language = normalized_language(&language, &file_path).to_string();
@@ -390,7 +408,19 @@ pub fn diff_impact_for_changed_files(
         results.extend(selected_test_targets.into_values());
     }
 
+    if options.exclude_changed {
+        results.retain(|item| {
+            !matches!(
+                item,
+                DiffImpactMatch::ImpactedSymbol { relationship, .. } if relationship == "changed_symbol"
+            )
+        });
+    }
+
     results.sort_by(diff_impact_sort_key);
+    if let Some(max_results) = options.max_results {
+        results.truncate(max_results);
+    }
     Ok(results)
 }
 
@@ -883,6 +913,15 @@ pub fn context_matches(
     task: &str,
     budget: usize,
 ) -> anyhow::Result<Vec<ContextMatch>> {
+    context_matches_scoped(db_path, task, budget, &QueryScope::default())
+}
+
+pub fn context_matches_scoped(
+    db_path: &Path,
+    task: &str,
+    budget: usize,
+    scope: &QueryScope,
+) -> anyhow::Result<Vec<ContextMatch>> {
     let connection = Connection::open(db_path)?;
     let keywords = extract_keywords(task);
     if keywords.is_empty() {
@@ -921,7 +960,7 @@ pub fn context_matches(
             .any(|keyword| keyword == &symbol.to_ascii_lowercase());
         let direct_score =
             context_direct_score(overlap_count, exact_symbol_match, symbol_tokens.len());
-        let key = format!("{file_path}:{start_line}:{symbol}:direct");
+        let key = format!("{file_path}:{start_line}:{symbol}:{kind}:direct");
         if seen.insert(key) {
             matches.push(ContextMatch {
                 file_path: file_path.clone(),
@@ -961,7 +1000,7 @@ pub fn context_matches(
 
         for neighbor in neighbor_rows {
             let (n_file, n_symbol, n_kind, n_start, n_end) = neighbor?;
-            let neighbor_key = format!("{n_file}:{n_start}:{n_symbol}:neighbor");
+            let neighbor_key = format!("{n_file}:{n_start}:{n_symbol}:{n_kind}:neighbor");
             if seen.insert(neighbor_key) {
                 matches.push(ContextMatch {
                     file_path: n_file,
@@ -980,6 +1019,11 @@ pub fn context_matches(
         }
     }
 
+    matches.retain(|item| {
+        (!scope.code_only || is_code_file_path(&item.file_path))
+            && (!scope.exclude_tests || !is_test_like_path(&item.file_path))
+    });
+
     matches.sort_by(|left, right| {
         right
             .score
@@ -988,6 +1032,9 @@ pub fn context_matches(
             .then(left.file_path.cmp(&right.file_path))
             .then(left.start_line.cmp(&right.start_line))
             .then(left.symbol.cmp(&right.symbol))
+            .then(left.kind.cmp(&right.kind))
+            .then(left.end_line.cmp(&right.end_line))
+            .then(left.why_included.cmp(&right.why_included))
     });
 
     let max_results = std::cmp::max(1, budget / 200);
@@ -1087,16 +1134,22 @@ pub fn tests_for_symbol(
 /// use std::path::Path;
 /// let db = Path::new("code_index.sqlite");
 /// let changed = vec!["src/lib.rs".to_string(), "tests/my_test.rs".to_string()];
-/// let steps = verify_plan_for_changed_files(db, &changed, None).unwrap();
+/// let steps = verify_plan_for_changed_files(db, &changed, &VerifyPlanOptions::default()).unwrap();
 /// // `steps` is a Vec<VerificationStep> describing targeted test commands and a final
 /// // "cargo test" full-suite step.
 /// ```
 pub fn verify_plan_for_changed_files(
     db_path: &Path,
     changed_files: &[String],
-    max_targeted: Option<usize>,
+    options: &VerifyPlanOptions,
 ) -> anyhow::Result<Vec<VerificationStep>> {
     let connection = Connection::open(db_path)?;
+    let changed_lines_by_file = changed_lines_by_file(&options.changed_lines);
+    let changed_symbol_filter = options
+        .changed_symbols
+        .iter()
+        .cloned()
+        .collect::<HashSet<_>>();
 
     let mut steps_by_command: HashMap<String, VerificationStep> = HashMap::new();
 
@@ -1115,16 +1168,31 @@ pub fn verify_plan_for_changed_files(
         }
 
         let mut symbols_statement = connection.prepare(
-            "SELECT DISTINCT symbol
+            "SELECT DISTINCT symbol, start_line, end_line
              FROM symbols_v2
              WHERE file_path = ?1
-             ORDER BY symbol ASC",
+             ORDER BY symbol ASC, start_line ASC, end_line ASC",
         )?;
-        let symbol_rows =
-            symbols_statement.query_map(params![changed_file], |row| row.get::<_, String>(0))?;
+        let symbol_rows = symbols_statement.query_map(params![changed_file], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i64>(1)? as u32,
+                row.get::<_, i64>(2)? as u32,
+            ))
+        })?;
 
         for symbol_row in symbol_rows {
-            let symbol = symbol_row?;
+            let (symbol, start_line, end_line) = symbol_row?;
+            if !changed_symbol_filter.is_empty() && !changed_symbol_filter.contains(&symbol) {
+                continue;
+            }
+            if let Some(ranges) = changed_lines_by_file.get(changed_file)
+                && !ranges.iter().any(|range| {
+                    line_range_overlaps(start_line, end_line, range.start_line, range.end_line)
+                })
+            {
+                continue;
+            }
             if is_generic_changed_symbol(&symbol) {
                 continue;
             }
@@ -1176,7 +1244,9 @@ pub fn verify_plan_for_changed_files(
             .then(left.why_included.cmp(&right.why_included))
     });
 
-    let targeted_cap = max_targeted.unwrap_or(DEFAULT_VERIFY_PLAN_MAX_TARGETED);
+    let targeted_cap = options
+        .max_targeted
+        .unwrap_or(DEFAULT_VERIFY_PLAN_MAX_TARGETED);
     let mut capped = Vec::new();
     let mut capped_count = 0usize;
     for step in steps {
@@ -1280,6 +1350,21 @@ fn ranked_text_matches(
 ) -> anyhow::Result<Vec<QueryMatch>> {
     let mut matches = text_exact_matches(connection, symbol, scope)?;
     matches.extend(text_substring_matches(connection, symbol, scope)?);
+    matches.sort_by(|left, right| {
+        right
+            .score
+            .partial_cmp(&left.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(
+                fallback_path_class_rank(&left.file_path)
+                    .cmp(&fallback_path_class_rank(&right.file_path)),
+            )
+            .then(left.file_path.cmp(&right.file_path))
+            .then(left.line.cmp(&right.line))
+            .then(left.column.cmp(&right.column))
+            .then(left.symbol.cmp(&right.symbol))
+            .then(left.why_matched.cmp(&right.why_matched))
+    });
     Ok(matches)
 }
 
@@ -1355,6 +1440,16 @@ fn is_test_like_path(file_path: &str) -> bool {
     file_path.starts_with("tests/")
         || file_path.contains("/tests/")
         || file_path.ends_with("_test.rs")
+}
+
+fn fallback_path_class_rank(file_path: &str) -> u8 {
+    if is_code_file_path(file_path) && !is_test_like_path(file_path) {
+        0
+    } else if is_test_like_path(file_path) {
+        1
+    } else {
+        2
+    }
 }
 
 /// Collects all mapped rows into a vector of `QueryMatch`.
