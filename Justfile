@@ -21,6 +21,25 @@ test:
 
 check: fmt-check clippy test
 
+# Contract System v2 validators
+# Usage: just contract-lint
+contract-lint:
+    bash -n scripts/validate_tdd_cycle.sh
+    bash -n scripts/validate_evidence_packet.sh
+
+# Usage: just contract-tdd [base]
+contract-tdd base="origin/main":
+    bash scripts/validate_tdd_cycle.sh --base "{{base}}"
+
+# Usage: just contract-evidence-pr [pr_body]
+contract-evidence-pr pr_body=".github/pull_request_template.md":
+    bash scripts/validate_evidence_packet.sh --pr-body "{{pr_body}}"
+
+# Usage: just contract-check [base] [pr_body]
+contract-check base="origin/main" pr_body=".github/pull_request_template.md": contract-lint
+    bash scripts/validate_tdd_cycle.sh --base "{{base}}"
+    bash scripts/validate_evidence_packet.sh --pr-body "{{pr_body}}"
+
 # Dogfood loops
 # Usage: just dogfood-pre <symbol> [repo]
 dogfood-pre symbol repo=".":
