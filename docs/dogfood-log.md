@@ -20,6 +20,59 @@ This log captures real `repo-scout` usage while building `repo-scout`.
 
 ## Entries
 
+- Date: `2026-02-08`
+- Task: Phase 6 Milestones 27-30 change-scope precision and output-focus controls.
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find verify_plan_for_changed_files --repo . --json`
+  - `cargo run -- refs verify_plan_for_changed_files --repo . --json`
+  - `cargo test milestone27_context_exclude_tests_omits_test_paths -- --nocapture`
+  - `cargo test milestone27_context_code_only_restricts_to_code_extensions -- --nocapture`
+  - `cargo test milestone27_context_scope_flags_preserve_deterministic_json -- --nocapture`
+  - `cargo test milestone28_verify_plan_changed_line_limits_targeted_symbol_set -- --nocapture`
+  - `cargo test milestone28_verify_plan_changed_symbol_filters_targeted_recommendations -- --nocapture`
+  - `cargo test milestone28_verify_plan_scope_filters_preserve_changed_test_and_full_suite_gate -- --nocapture`
+  - `cargo test milestone29_diff_impact_changed_symbol_filters_seed_rows -- --nocapture`
+  - `cargo test milestone29_diff_impact_exclude_changed_hides_distance_zero_rows -- --nocapture`
+  - `cargo test milestone29_diff_impact_max_results_caps_deterministically -- --nocapture`
+  - `cargo test milestone30_refs_fallback_prefers_code_paths_over_docs_and_tests -- --nocapture`
+  - `cargo test milestone30_find_and_refs_max_results_cap_deterministically -- --nocapture`
+  - `cargo test milestone30_query_caps_compose_with_code_only_and_exclude_tests -- --nocapture`
+  - `cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --json`
+  - `cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --exclude-tests --json`
+  - `cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --code-only --exclude-tests --json`
+  - `cargo run -- verify-plan --changed-file src/query/mod.rs --changed-line src/query/mod.rs:1094:1165 --changed-symbol verify_plan_for_changed_files --repo . --json`
+  - `cargo run -- diff-impact --changed-file src/query/mod.rs --changed-symbol verify_plan_for_changed_files --exclude-changed --max-results 12 --repo . --json`
+  - `cargo run -- refs helper --repo . --max-results 10 --json`
+  - `cargo test`
+- What helped:
+  - Additive scope filters (`context`, `verify-plan`, `diff-impact`) cut broad payload noise in
+    large files without schema changes.
+  - `find`/`refs --max-results` plus fallback code-first tie-breaks improved deterministic scan
+    quality in fallback-heavy queries.
+  - `diff-impact --exclude-changed --max-results` produced focused impacted/test outputs while
+    preserving traversal semantics.
+- What failed or felt weak:
+  - `refs helper --max-results 10` remains test-heavy in this repository because exact fallback
+    hits for that token are concentrated under `tests/`.
+  - Slice 30C regression guard was already satisfied on first run; no new production change was
+    needed for cap/scope composition once max-result plumbing landed.
+- Action taken:
+  - failing test added:
+    - `tests/milestone27_context_scope.rs`
+    - `tests/milestone28_verify_plan_scope.rs`
+    - `tests/milestone29_diff_impact_scope.rs`
+    - `tests/milestone30_query_focus.rs`
+  - fix commit:
+    - `Implement Milestone 27 context scope controls via TDD`
+    - `Implement Milestone 28 verify-plan scope controls via TDD`
+    - `Implement Milestone 29 diff-impact scope controls via TDD`
+    - `Implement Milestone 30 query fallback focus and deterministic caps via TDD`
+  - docs update: `README.md`, `docs/cli-reference.md`, `docs/json-output.md`,
+    `docs/architecture.md`, `docs/dogfood-log.md`, `docs/performance-baseline.md`,
+    `agents/repo-scout-phase6-execplan.md`.
+- Status: `fixed`
+
 - Date: `2026-02-07`
 - Task: Phase 5 Milestones 22-24 recommendation quality (`tests-for`, `verify-plan`, `context`).
 - Commands run:

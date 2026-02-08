@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the current `repo-scout` architecture after Phase 5.
+This document describes the current `repo-scout` architecture after Phase 6.
 
 ## High-Level Flow
 
@@ -87,12 +87,16 @@ Lifecycle guarantees covered by integration tests include stale-file pruning, re
 - Optional fallback-only scope controls:
   - `--code-only` keeps `.rs`, `.ts`, `.tsx`, `.py` paths.
   - `--exclude-tests` drops test-like paths (`tests/`, `/tests/`, `*_test.rs`).
+- Fallback ties are path-class ranked (`code`, then `test-like`, then `docs/other`).
+- Optional deterministic output cap: `--max-results <N>`.
 
 ### `refs`
 
 - Prefer exact AST references.
 - Fall back to text exact token, then text substring.
 - Uses the same fallback-only scope controls as `find` (`--code-only`, `--exclude-tests`).
+- Uses the same fallback path-class tie-break and deterministic cap behavior as `find`
+  (`--max-results`).
 
 ### `impact`
 
@@ -105,6 +109,7 @@ Lifecycle guarantees covered by integration tests include stale-file pruning, re
 - Extract normalized task keywords (ASCII alnum + `_`, lowercased, deduped, stopword-filtered).
 - Score direct symbol definition hits using deterministic token-overlap relevance.
 - Expand one-hop neighbors from edges with deterministic neighbor scoring.
+- Optionally filter rows with `--code-only` and `--exclude-tests`.
 - Sort deterministically and truncate to `max(1, budget / 200)`.
 
 ### `tests-for`
@@ -117,6 +122,8 @@ Lifecycle guarantees covered by integration tests include stale-file pruning, re
 ### `verify-plan`
 
 - Normalize and dedupe `--changed-file` inputs.
+- Parse and normalize repeatable `--changed-line path:start[:end]`.
+- Apply additive repeatable `--changed-symbol` filters.
 - Skip generic changed symbols to reduce low-signal targeted recommendations.
 - Suggest targeted test commands from:
   - changed file itself when it is a runnable test target,
@@ -134,9 +141,12 @@ Lifecycle guarantees covered by integration tests include stale-file pruning, re
 - Exclude `kind=import` changed-symbol seeds by default.
 - Re-include import seeds only when `--include-imports` is set.
 - Optionally constrain changed-symbol seeds by `--changed-line path:start[:end]` overlap.
+- Optionally constrain changed-symbol seeds by repeatable `--changed-symbol`.
 - Expand bounded multi-hop incoming neighbors from `symbol_edges_v2` up to `--max-distance`.
 - Use per-seed minimum-distance tracking and changed-seed suppression to avoid cycle-driven
   duplicate growth.
+- Optionally remove changed-symbol output rows with `--exclude-changed`.
+- Optionally cap results deterministically with `--max-results`.
 - Optionally attach ranked test targets.
 - Sort mixed result kinds deterministically.
 
@@ -153,7 +163,8 @@ Determinism is enforced by:
 - explicit SQL ordering and tie-breakers,
 - stable confidence/label vocabularies,
 - repository-relative path normalization,
-- fixed JSON field shapes.
+- fixed JSON field shapes,
+- deterministic handler-stage truncation for capped commands (`find`, `refs`, `diff-impact`).
 
 ## Corruption Recovery
 

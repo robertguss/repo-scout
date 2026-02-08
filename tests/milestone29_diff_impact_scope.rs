@@ -33,16 +33,26 @@ fn milestone29_diff_impact_changed_symbol_filters_seed_rows() {
 
     let changed_rows = results
         .iter()
-        .filter(|row| row["result_kind"] == "impacted_symbol" && row["relationship"] == "changed_symbol")
+        .filter(|row| {
+            row["result_kind"] == "impacted_symbol" && row["relationship"] == "changed_symbol"
+        })
         .collect::<Vec<_>>();
     assert!(!changed_rows.is_empty());
-    assert!(changed_rows.iter().all(|row| row["symbol"] == "changed_beta"));
+    assert!(
+        changed_rows
+            .iter()
+            .all(|row| row["symbol"] == "changed_beta")
+    );
 
     assert!(results.iter().any(|row| {
-        row["result_kind"] == "impacted_symbol" && row["symbol"] == "caller_beta" && row["distance"] == 1
+        row["result_kind"] == "impacted_symbol"
+            && row["symbol"] == "caller_beta"
+            && row["distance"] == 1
     }));
     assert!(!results.iter().any(|row| {
-        row["result_kind"] == "impacted_symbol" && row["symbol"] == "caller_alpha" && row["distance"] == 1
+        row["result_kind"] == "impacted_symbol"
+            && row["symbol"] == "caller_alpha"
+            && row["distance"] == 1
     }));
 }
 
@@ -78,10 +88,13 @@ fn milestone29_diff_impact_exclude_changed_hides_distance_zero_rows() {
     assert!(
         !results
             .iter()
-            .any(|row| row["result_kind"] == "impacted_symbol" && row["relationship"] == "changed_symbol")
+            .any(|row| row["result_kind"] == "impacted_symbol"
+                && row["relationship"] == "changed_symbol")
     );
     assert!(results.iter().any(|row| {
-        row["result_kind"] == "impacted_symbol" && row["symbol"] == "caller_beta" && row["distance"] == 1
+        row["result_kind"] == "impacted_symbol"
+            && row["symbol"] == "caller_beta"
+            && row["distance"] == 1
     }));
 }
 

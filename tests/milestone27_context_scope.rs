@@ -11,7 +11,10 @@ fn is_test_like_path(path: &str) -> bool {
 }
 
 fn is_code_path(path: &str) -> bool {
-    path.ends_with(".rs") || path.ends_with(".ts") || path.ends_with(".tsx") || path.ends_with(".py")
+    path.ends_with(".rs")
+        || path.ends_with(".ts")
+        || path.ends_with(".tsx")
+        || path.ends_with(".py")
 }
 
 fn insert_symbol(
@@ -73,11 +76,11 @@ fn milestone27_context_exclude_tests_omits_test_paths() {
     let baseline_results = baseline["results"]
         .as_array()
         .expect("results should be array");
-    assert!(baseline_results.iter().any(|row| {
-        row["file_path"]
-            .as_str()
-            .is_some_and(is_test_like_path)
-    }));
+    assert!(
+        baseline_results
+            .iter()
+            .any(|row| { row["file_path"].as_str().is_some_and(is_test_like_path) })
+    );
 
     let scoped_out = run_stdout(&[
         "context",
@@ -91,7 +94,9 @@ fn milestone27_context_exclude_tests_omits_test_paths() {
         "--json",
     ]);
     let scoped: Value = serde_json::from_str(&scoped_out).expect("context json should parse");
-    let scoped_results = scoped["results"].as_array().expect("results should be array");
+    let scoped_results = scoped["results"]
+        .as_array()
+        .expect("results should be array");
 
     assert!(
         scoped_results
@@ -159,7 +164,9 @@ fn milestone27_context_code_only_restricts_to_code_extensions() {
         "--json",
     ]);
     let scoped: Value = serde_json::from_str(&scoped_out).expect("context json should parse");
-    let scoped_results = scoped["results"].as_array().expect("results should be array");
+    let scoped_results = scoped["results"]
+        .as_array()
+        .expect("results should be array");
 
     assert!(
         scoped_results
@@ -249,7 +256,9 @@ fn milestone27_context_scope_flags_preserve_deterministic_json() {
     assert_eq!(first, second);
 
     let payload: Value = serde_json::from_str(&first).expect("context json should parse");
-    let results = payload["results"].as_array().expect("results should be array");
+    let results = payload["results"]
+        .as_array()
+        .expect("results should be array");
     assert!(
         results
             .iter()
@@ -260,11 +269,7 @@ fn milestone27_context_scope_flags_preserve_deterministic_json() {
             .iter()
             .all(|row| !row["file_path"].as_str().is_some_and(is_test_like_path))
     );
-    assert!(
-        results
-            .iter()
-            .any(|row| row["file_path"] == "src/lib.rs")
-    );
+    assert!(results.iter().any(|row| row["file_path"] == "src/lib.rs"));
 
     let scoped_kinds = results
         .iter()

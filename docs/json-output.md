@@ -60,8 +60,13 @@ Top-level fields:
 - `confidence` (`string`)
 - `score` (`number`)
 
-Schema 1 remains unchanged when using Phase 4 scope flags (`--code-only`, `--exclude-tests`).
-Those flags only filter text fallback rows; AST-priority rows and JSON envelope shape stay stable.
+Schema 1 remains unchanged when using Phase 4/6 controls (`--code-only`, `--exclude-tests`,
+`--max-results`).
+These options only affect result selection/ranking order:
+- scope flags filter text fallback rows only,
+- fallback ties prefer code paths over test/docs at equal fallback score tiers,
+- `--max-results` applies deterministic truncation after ranking,
+while AST-priority rows and JSON envelope shape stay stable.
 
 Observed `why_matched` vocabulary:
 
@@ -145,9 +150,10 @@ Per-result fields:
 - `confidence` (`context_high | context_medium`)
 - `score` (`number`)
 
-Phase 5 keeps schema 2 stable and upgrades matching/ranking only: context rows now use
+Phase 5/6 keeps schema 2 stable and upgrades matching/ranking only: context rows now use
 token-overlap rationale text (for example `token-overlap relevance`) and deterministic
-definition-first scoring.
+definition-first scoring, with optional additive scope controls (`--code-only`, `--exclude-tests`)
+that filter rows without changing the schema envelope.
 
 ## `tests-for --json` (Schema 2)
 
@@ -221,9 +227,12 @@ Top-level fields:
 - `confidence` (`string`)
 - `score` (`number`)
 
-Phase 5 keeps schema 2 stable and adds precision controls through CLI options:
+Phase 5/6 keeps schema 2 stable and adds precision controls through CLI options:
 `--max-targeted` bounds symbol-derived targeted rows (default cap `8`, `0` means none),
 while changed runnable test targets and the `cargo test` full-suite gate remain preserved.
+Phase 6 adds additive changed-scope filters:
+- repeatable `--changed-line path:start[:end]` limits symbol-derived targeted rows by span overlap,
+- repeatable `--changed-symbol` limits symbol-derived targeted rows to named symbols.
 
 ## Schema 3 Contracts (Implemented, Frozen)
 
@@ -280,7 +289,7 @@ Top-level fields:
 | `include_tests` | `boolean` | yes | Echoes resolved test-target behavior. |
 | `results` | `array<DiffImpactResult>` | yes | Deterministically ordered (see rules below). |
 
-Phase 4/5 option effects (schema unchanged):
+Phase 4/5/6 option effects (schema unchanged):
 
 - `--include-imports` changes changed-symbol seed selection by allowing `kind=import` at
   `distance=0`.
@@ -289,6 +298,10 @@ Phase 4/5 option effects (schema unchanged):
 - `--max-distance` now drives true bounded multi-hop inbound traversal for `distance >= 1`.
 - Traversal suppresses changed-symbol re-entry at `distance > 0` and uses deterministic dedupe for
   cycle safety.
+- repeatable `--changed-symbol` narrows changed-symbol seeds additively.
+- `--exclude-changed` removes `relationship = changed_symbol` rows from final output while keeping
+  traversal rooted at those seeds.
+- `--max-results` applies deterministic post-sort truncation.
 - Neither option requires new mandatory top-level fields in schema 3.
 
 `DiffImpactResult` union discriminator:

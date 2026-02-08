@@ -55,11 +55,12 @@ non-code paths, and faster conversion from “what changed” to “what do I ru
       cap/scope composition with AST-priority preserved).
 - [x] (2026-02-08 00:13Z) Ran Milestone 30 post-dogfood checks; verify-plan + diff-impact scoped
       commands and `refs --max-results` all succeed with full test suite green.
-- [ ] Run required pre-milestone dogfood baseline for Milestone 31.
-- [ ] Update docs and evidence artifacts for Phase 6:
+- [x] (2026-02-08 00:14Z) Ran required pre-milestone dogfood baseline for Milestone 31.
+- [x] (2026-02-08 00:15Z) Updated docs and evidence artifacts for Phase 6:
       `README.md`, `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`,
       `docs/dogfood-log.md`, `docs/performance-baseline.md`.
-- [ ] Re-run required post-milestone dogfood checks after docs refresh and pass final `cargo test`.
+- [x] (2026-02-08 00:16Z) Re-ran required post-milestone dogfood checks after docs refresh,
+      executed `cargo fmt`, and passed final `cargo test`.
 
 ## Surprises & Discoveries
 
@@ -110,6 +111,12 @@ non-code paths, and faster conversion from “what changed” to “what do I ru
   test-heavy for this repository token because non-test code exact matches are sparse.
   Evidence: Milestone 30 post-dogfood output returned schema 1 JSON with 10 deterministic rows,
   all from `tests/...` exact fallback matches.
+
+- Observation: the post-refresh Milestone 31 dogfood rerun produced the same scoped command
+  behavior and schema envelopes as Milestone 30, confirming documentation-only edits did not drift
+  command semantics.
+  Evidence: final command pack (`context`, `verify-plan`, `diff-impact`, `refs --max-results`,
+  `cargo test`) completed successfully with unchanged schema versions (1/2/3).
 
 ## Decision Log
 
@@ -199,6 +206,11 @@ shape and traversal semantics stable.
 Milestone 30 outcome (2026-02-08): fallback-heavy `find`/`refs` now rank code paths ahead of
 test/docs paths at equal fallback score tiers, both commands support deterministic
 `--max-results`, and cap behavior composes with existing scope flags without changing AST-priority.
+
+Milestone 31 outcome (2026-02-08): all user-facing docs and evidence artifacts now reflect Phase 6
+controls (`context` scope flags, `verify-plan` change-scope filters, `diff-impact` focused output
+controls, and `find`/`refs` deterministic caps), with post-refresh dogfood and full-suite tests
+confirming contract alignment.
 
 ## Context and Orientation
 
@@ -772,6 +784,35 @@ Milestone 30 post-dogfood evidence:
     # - refs --max-results now succeeds with schema 1 deterministic output
     # - full cargo test suite passes
 
+Milestone 31 documentation refresh and final validation evidence:
+
+    cargo run -- index --repo .
+    cargo run -- find verify_plan_for_changed_files --repo . --json
+    cargo run -- refs verify_plan_for_changed_files --repo . --json
+
+    # docs update pass:
+    # README.md
+    # docs/cli-reference.md
+    # docs/json-output.md
+    # docs/architecture.md
+    # docs/dogfood-log.md
+    # docs/performance-baseline.md
+
+    cargo run -- index --repo .
+    cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --json
+    cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --exclude-tests --json
+    cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --code-only --exclude-tests --json
+    cargo run -- verify-plan --changed-file src/query/mod.rs --changed-line src/query/mod.rs:1094:1165 --changed-symbol verify_plan_for_changed_files --repo . --json
+    cargo run -- diff-impact --changed-file src/query/mod.rs --changed-symbol verify_plan_for_changed_files --exclude-changed --max-results 12 --repo . --json
+    cargo run -- refs helper --repo . --max-results 10 --json
+    cargo fmt
+    cargo test
+
+    # expected at Milestone 31:
+    # - docs and evidence artifacts match implemented Phase 6 behavior
+    # - post-refresh dogfood command pack succeeds unchanged
+    # - formatting and full suite both pass
+
 ## Interfaces and Dependencies
 
 Phase 6 should not require new external crates by default. Continue using the current dependency
@@ -830,3 +871,6 @@ evidence, and milestone decision/progress/outcome updates.
 Revision Note (2026-02-08): Updated live plan during Milestone 30 implementation with find/refs
 fallback ranking and cap transcripts, post-dogfood evidence (including successful
 `refs --max-results`), and milestone decision/progress/outcome updates.
+
+Revision Note (2026-02-08): Completed Milestone 31 documentation/evidence refresh with final
+post-refresh dogfood transcripts, formatting/test validation, and Phase 6 closeout outcomes.

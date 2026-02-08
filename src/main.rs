@@ -10,9 +10,8 @@ use crate::cli::{Cli, Command};
 use crate::indexer::index_repository;
 use crate::query::{
     ChangedLineRange, DiffImpactOptions, QueryScope, VerifyPlanOptions, context_matches,
-    context_matches_scoped, diff_impact_for_changed_files,
-    explain_symbol, find_matches_scoped, impact_matches, refs_matches_scoped, tests_for_symbol,
-    verify_plan_for_changed_files,
+    context_matches_scoped, diff_impact_for_changed_files, explain_symbol, find_matches_scoped,
+    impact_matches, refs_matches_scoped, tests_for_symbol, verify_plan_for_changed_files,
 };
 use crate::store::ensure_store;
 

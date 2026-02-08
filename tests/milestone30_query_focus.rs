@@ -7,7 +7,11 @@ use serde_json::Value;
 fn milestone30_refs_fallback_prefers_code_paths_over_docs_and_tests() {
     let repo = common::temp_repo();
     common::write_file(repo.path(), "src/code.rs", "// phase30helpertoken\n");
-    common::write_file(repo.path(), "tests/query_focus_test.rs", "// phase30helpertoken\n");
+    common::write_file(
+        repo.path(),
+        "tests/query_focus_test.rs",
+        "// phase30helpertoken\n",
+    );
     common::write_file(repo.path(), "docs/guide.md", "phase30helpertoken\n");
 
     run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
@@ -63,7 +67,9 @@ fn milestone30_find_and_refs_max_results_cap_deterministically() {
         .expect("results should be array");
     assert_eq!(find_results.len(), 2);
     for item in find_results {
-        let path = item["file_path"].as_str().expect("file_path should be string");
+        let path = item["file_path"]
+            .as_str()
+            .expect("file_path should be string");
         assert!(
             path.starts_with("src/"),
             "expected capped find results to prioritize code paths, got {path}"
@@ -95,7 +101,9 @@ fn milestone30_find_and_refs_max_results_cap_deterministically() {
         .expect("results should be array");
     assert_eq!(refs_results.len(), 2);
     for item in refs_results {
-        let path = item["file_path"].as_str().expect("file_path should be string");
+        let path = item["file_path"]
+            .as_str()
+            .expect("file_path should be string");
         assert!(
             path.starts_with("src/"),
             "expected capped refs results to prioritize code paths, got {path}"
@@ -111,7 +119,11 @@ fn milestone30_query_caps_compose_with_code_only_and_exclude_tests() {
         "src/lib.rs",
         "pub fn phase30_ast_focus() {}\n\npub fn wrapper() {\n    phase30_ast_focus();\n}\n",
     );
-    common::write_file(repo.path(), "docs/guide.md", "phase30_ast_focus phase30capscope\n");
+    common::write_file(
+        repo.path(),
+        "docs/guide.md",
+        "phase30_ast_focus phase30capscope\n",
+    );
     common::write_file(
         repo.path(),
         "tests/query_focus_scope_test.rs",
