@@ -1350,6 +1350,21 @@ fn ranked_text_matches(
 ) -> anyhow::Result<Vec<QueryMatch>> {
     let mut matches = text_exact_matches(connection, symbol, scope)?;
     matches.extend(text_substring_matches(connection, symbol, scope)?);
+    matches.sort_by(|left, right| {
+        right
+            .score
+            .partial_cmp(&left.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(
+                fallback_path_class_rank(&left.file_path)
+                    .cmp(&fallback_path_class_rank(&right.file_path)),
+            )
+            .then(left.file_path.cmp(&right.file_path))
+            .then(left.line.cmp(&right.line))
+            .then(left.column.cmp(&right.column))
+            .then(left.symbol.cmp(&right.symbol))
+            .then(left.why_matched.cmp(&right.why_matched))
+    });
     Ok(matches)
 }
 
@@ -1425,6 +1440,16 @@ fn is_test_like_path(file_path: &str) -> bool {
     file_path.starts_with("tests/")
         || file_path.contains("/tests/")
         || file_path.ends_with("_test.rs")
+}
+
+fn fallback_path_class_rank(file_path: &str) -> u8 {
+    if is_code_file_path(file_path) && !is_test_like_path(file_path) {
+        0
+    } else if is_test_like_path(file_path) {
+        1
+    } else {
+        2
+    }
 }
 
 /// Collects all mapped rows into a vector of `QueryMatch`.

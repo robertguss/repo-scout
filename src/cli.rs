@@ -50,6 +50,8 @@ pub struct FindArgs {
     pub code_only: bool,
     #[arg(long, default_value_t = false)]
     pub exclude_tests: bool,
+    #[arg(long = "max-results")]
+    pub max_results: Option<usize>,
 }
 
 #[derive(Debug, Args)]
@@ -63,6 +65,8 @@ pub struct RefsArgs {
     pub code_only: bool,
     #[arg(long, default_value_t = false)]
     pub exclude_tests: bool,
+    #[arg(long = "max-results")]
+    pub max_results: Option<usize>,
 }
 
 #[derive(Debug, Args)]

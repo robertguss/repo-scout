@@ -85,7 +85,7 @@ fn run_status(args: crate::cli::RepoArgs) -> anyhow::Result<()> {
 
 fn run_find(args: crate::cli::FindArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
-    let matches = find_matches_scoped(
+    let mut matches = find_matches_scoped(
         &store.db_path,
         &args.symbol,
         &crate::query::QueryScope {
@@ -93,6 +93,9 @@ fn run_find(args: crate::cli::FindArgs) -> anyhow::Result<()> {
             exclude_tests: args.exclude_tests,
         },
     )?;
+    if let Some(max_results) = args.max_results {
+        matches.truncate(max_results);
+    }
     if args.json {
         output::print_query_json("find", &args.symbol, &matches)?;
     } else {
@@ -119,12 +122,13 @@ fn run_find(args: crate::cli::FindArgs) -> anyhow::Result<()> {
 ///     json: false,
 ///     code_only: false,
 ///     exclude_tests: false,
+///     max_results: None,
 /// };
 /// let _ = run_refs(args);
 /// ```
 fn run_refs(args: crate::cli::RefsArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
-    let matches = refs_matches_scoped(
+    let mut matches = refs_matches_scoped(
         &store.db_path,
         &args.symbol,
         &crate::query::QueryScope {
@@ -132,6 +136,9 @@ fn run_refs(args: crate::cli::RefsArgs) -> anyhow::Result<()> {
             exclude_tests: args.exclude_tests,
         },
     )?;
+    if let Some(max_results) = args.max_results {
+        matches.truncate(max_results);
+    }
     if args.json {
         output::print_query_json("refs", &args.symbol, &matches)?;
     } else {

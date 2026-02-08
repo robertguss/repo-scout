@@ -49,9 +49,12 @@ non-code paths, and faster conversion from “what changed” to “what do I ru
       controls (`--changed-symbol`, `--exclude-changed`, deterministic `--max-results` cap).
 - [x] (2026-02-08 00:09Z) Ran Milestone 29 post-dogfood checks; diff-impact focused command now
       succeeds while future Milestone 30 `refs --max-results` still fails as expected.
-- [ ] Run required pre-milestone dogfood baseline for Milestone 30.
-- [ ] Complete Milestone 30 strict TDD slices for fallback ranking/limit controls in find/refs.
-- [ ] Run Milestone 30 post-dogfood checks.
+- [x] (2026-02-08 00:10Z) Ran required pre-milestone dogfood baseline for Milestone 30.
+- [x] (2026-02-08 00:13Z) Completed Milestone 30 strict TDD slices for fallback relevance/limit
+      controls in find/refs (`code-first` fallback path-class tie-breaks, `--max-results`, and
+      cap/scope composition with AST-priority preserved).
+- [x] (2026-02-08 00:13Z) Ran Milestone 30 post-dogfood checks; verify-plan + diff-impact scoped
+      commands and `refs --max-results` all succeed with full test suite green.
 - [ ] Run required pre-milestone dogfood baseline for Milestone 31.
 - [ ] Update docs and evidence artifacts for Phase 6:
       `README.md`, `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`,
@@ -97,6 +100,16 @@ non-code paths, and faster conversion from “what changed” to “what do I ru
   and produced focused neighbor/test payloads without distance-0 seed rows.
   Evidence: Milestone 29 post-check produced schema 3 JSON with test targets only for
   `verify_plan_for_changed_files` when `--exclude-changed` was set.
+
+- Observation: Milestone 30 cap/scope composition behavior (`--code-only --exclude-tests
+  --max-results`) was already satisfied on first run once `--max-results` landed for find/refs.
+  Evidence: `milestone30_query_caps_compose_with_code_only_and_exclude_tests` passed on its first
+  execution and again on the required re-run.
+
+- Observation: `refs helper --max-results 10` now succeeds deterministically but still skews
+  test-heavy for this repository token because non-test code exact matches are sparse.
+  Evidence: Milestone 30 post-dogfood output returned schema 1 JSON with 10 deterministic rows,
+  all from `tests/...` exact fallback matches.
 
 ## Decision Log
 
@@ -147,6 +160,18 @@ non-code paths, and faster conversion from “what changed” to “what do I ru
   focused output controls additive and easy to reason about.
   Date/Author: 2026-02-08 / Codex
 
+- Decision: apply `find`/`refs --max-results` as a handler-stage truncation after query-layer
+  scope filtering and AST/fallback selection.
+  Rationale: this keeps AST-priority behavior unchanged while ensuring deterministic caps for both
+  AST and fallback result sets.
+  Date/Author: 2026-02-08 / Codex
+
+- Decision: implement code-first fallback tie-breaks only inside shared text fallback ranking and
+  leave AST ordering untouched.
+  Rationale: Phase 6 requires fallback focus improvements without changing established AST-first
+  semantics or schema 1 output contracts.
+  Date/Author: 2026-02-08 / Codex
+
 ## Outcomes & Retrospective
 
 Planning outcome: Phase 6 scope is constrained to high-impact precision controls for existing
@@ -170,6 +195,10 @@ changed runnable test targets and the mandatory `cargo test` gate.
 Milestone 29 outcome (2026-02-08): `diff-impact` now supports repeatable `--changed-symbol`,
 `--exclude-changed`, and deterministic `--max-results` truncation while keeping schema 3 envelope
 shape and traversal semantics stable.
+
+Milestone 30 outcome (2026-02-08): fallback-heavy `find`/`refs` now rank code paths ahead of
+test/docs paths at equal fallback score tiers, both commands support deterministic
+`--max-results`, and cap behavior composes with existing scope flags without changing AST-priority.
 
 ## Context and Orientation
 
@@ -678,6 +707,71 @@ Milestone 29 post-dogfood evidence:
     # - refs --max-results still fails with "unexpected argument" until Milestone 30
     # - full cargo test suite passes
 
+Milestone 30 strict TDD evidence:
+
+    # 30A red
+    cargo test milestone30_refs_fallback_prefers_code_paths_over_docs_and_tests -- --nocapture
+    ...
+    assertion `left == right` failed
+    left: String("docs/guide.md")
+    right: "src/code.rs"
+
+    # 30A green
+    cargo test milestone30_refs_fallback_prefers_code_paths_over_docs_and_tests -- --nocapture
+    ...
+    test milestone30_refs_fallback_prefers_code_paths_over_docs_and_tests ... ok
+
+    # 30A refactor
+    cargo test
+    ...
+    test result: ok. (full suite)
+
+    # 30B red
+    cargo test milestone30_find_and_refs_max_results_cap_deterministically -- --nocapture
+    ...
+    error: unexpected argument '--max-results' found
+
+    # 30B green
+    cargo test milestone30_find_and_refs_max_results_cap_deterministically -- --nocapture
+    ...
+    test milestone30_find_and_refs_max_results_cap_deterministically ... ok
+
+    # 30B refactor
+    cargo test
+    ...
+    test result: ok. (full suite)
+
+    # 30C red check (regression guard already satisfied)
+    cargo test milestone30_query_caps_compose_with_code_only_and_exclude_tests -- --nocapture
+    ...
+    test milestone30_query_caps_compose_with_code_only_and_exclude_tests ... ok
+
+    # 30C green re-run
+    cargo test milestone30_query_caps_compose_with_code_only_and_exclude_tests -- --nocapture
+    ...
+    test milestone30_query_caps_compose_with_code_only_and_exclude_tests ... ok
+
+    # 30C refactor
+    cargo test
+    ...
+    test result: ok. (full suite)
+
+Milestone 30 post-dogfood evidence:
+
+    cargo run -- index --repo .
+    cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --json
+    cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --exclude-tests --json
+    cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --code-only --exclude-tests --json
+    cargo run -- verify-plan --changed-file src/query/mod.rs --changed-line src/query/mod.rs:1094:1165 --changed-symbol verify_plan_for_changed_files --repo . --json
+    cargo run -- diff-impact --changed-file src/query/mod.rs --changed-symbol verify_plan_for_changed_files --exclude-changed --max-results 12 --repo . --json
+    cargo run -- refs helper --repo . --max-results 10 --json
+    cargo test
+
+    # expected at Milestone 30:
+    # - verify-plan and diff-impact scoped commands succeed
+    # - refs --max-results now succeeds with schema 1 deterministic output
+    # - full cargo test suite passes
+
 ## Interfaces and Dependencies
 
 Phase 6 should not require new external crates by default. Continue using the current dependency
@@ -732,3 +826,7 @@ evidence, and updated decision/progress/outcome logs.
 Revision Note (2026-02-08): Updated live plan during Milestone 29 implementation with diff-impact
 scope transcripts (`--changed-symbol`, `--exclude-changed`, `--max-results`), post-dogfood
 evidence, and milestone decision/progress/outcome updates.
+
+Revision Note (2026-02-08): Updated live plan during Milestone 30 implementation with find/refs
+fallback ranking and cap transcripts, post-dogfood evidence (including successful
+`refs --max-results`), and milestone decision/progress/outcome updates.
