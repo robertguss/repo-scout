@@ -326,6 +326,9 @@ pub fn diff_impact_for_changed_files(
                         .unwrap_or_else(|| format!("{language}:{file_path}::{symbol}"));
                     let relationship = edge_kind_relationship(&edge_kind);
                     let provenance = normalized_provenance(&provenance, &edge_kind);
+                    let calibrated_score =
+                        calibrated_semantic_score(relationship, &provenance, next_distance, score);
+                    let confidence = calibrated_semantic_confidence(&provenance);
                     let key = format!(
                         "{file_path}:{line}:{column}:{qualified_symbol}:{relationship}:distance{next_distance}"
                     );
@@ -346,9 +349,9 @@ pub fn diff_impact_for_changed_files(
                         why_included: format!(
                             "direct {relationship} neighbor of changed symbol '{changed_symbol}'"
                         ),
-                        confidence: "graph_likely".to_string(),
+                        confidence,
                         provenance,
-                        score,
+                        score: calibrated_score,
                     });
                     if should_expand_frontier {
                         frontier.push_back((from_symbol_id, next_distance));
@@ -372,11 +375,7 @@ pub fn diff_impact_for_changed_files(
         let mut selected_test_targets: BTreeMap<String, DiffImpactMatch> = BTreeMap::new();
         for symbol in impacted_symbols {
             for (target, hit_count) in test_targets_for_symbol(&connection, &symbol)? {
-                let (confidence, score) = if hit_count > 1 {
-                    ("graph_likely", 0.86)
-                } else {
-                    ("context_medium", 0.72)
-                };
+                let (confidence, score) = calibrated_test_target_rank(hit_count);
 
                 let key = format!("integration_test_file:{target}");
                 let should_replace = match selected_test_targets.get(&key) {
@@ -670,6 +669,50 @@ fn normalized_provenance(provenance: &str, edge_kind: &str) -> String {
     }
 }
 
+fn calibrated_semantic_confidence(provenance: &str) -> String {
+    match provenance {
+        "call_resolution" | "import_resolution" | "ast_definition" | "ast_reference" => {
+            "graph_likely".to_string()
+        }
+        "text_fallback" => "context_medium".to_string(),
+        _ => "context_low".to_string(),
+    }
+}
+
+fn calibrated_semantic_score(
+    relationship: &str,
+    provenance: &str,
+    distance: u32,
+    _raw_score: f64,
+) -> f64 {
+    let baseline = match (provenance, relationship) {
+        ("call_resolution", "called_by") => 0.97,
+        ("import_resolution", "imported_by") => 0.95,
+        ("ast_reference", "implemented_by") => 0.94,
+        ("ast_definition", "contained_by") => 0.94,
+        ("call_resolution", _) => 0.95,
+        ("import_resolution", _) => 0.94,
+        ("ast_reference", _) => 0.93,
+        ("ast_definition", _) => 0.93,
+        ("text_fallback", _) => 0.72,
+        _ => 0.90,
+    };
+    let distance_penalty = if distance > 1 {
+        (distance.saturating_sub(1) as f64) * 0.01
+    } else {
+        0.0
+    };
+    (baseline - distance_penalty).clamp(0.0, 1.0)
+}
+
+fn calibrated_test_target_rank(hit_count: i64) -> (&'static str, f64) {
+    if hit_count > 1 {
+        ("graph_likely", 0.84)
+    } else {
+        ("context_medium", 0.70)
+    }
+}
+
 fn language_for_file_path(file_path: &str) -> &'static str {
     if file_path.ends_with(".rs") {
         "rust"
@@ -840,7 +883,7 @@ pub fn impact_matches(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<Impact
 
     for target_id in target_ids {
         let mut incoming_statement = connection.prepare(
-            "SELECT fs.file_path, fs.start_line, fs.start_column, fs.symbol, fs.kind, e.edge_kind, e.confidence
+            "SELECT fs.file_path, fs.start_line, fs.start_column, fs.symbol, fs.kind, e.edge_kind, e.confidence, e.provenance
              FROM symbol_edges_v2 e
              JOIN symbols_v2 fs ON fs.symbol_id = e.from_symbol_id
              WHERE e.to_symbol_id = ?1
@@ -853,8 +896,11 @@ pub fn impact_matches(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<Impact
                 "contains" => "contained_by".to_string(),
                 "imports" => "imported_by".to_string(),
                 "implements" => "implemented_by".to_string(),
-                _ => edge_kind,
+                _ => edge_kind.clone(),
             };
+            let raw_score = row.get::<_, f64>(6)?;
+            let raw_provenance = row.get::<_, String>(7)?;
+            let provenance = normalized_provenance(&raw_provenance, &edge_kind);
             Ok(ImpactMatch {
                 file_path: row.get(0)?,
                 line: row.get::<_, i64>(1)? as u32,
@@ -862,9 +908,9 @@ pub fn impact_matches(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<Impact
                 symbol: row.get(3)?,
                 kind: row.get(4)?,
                 distance: 1,
-                relationship,
-                confidence: "graph_likely".to_string(),
-                score: row.get(6)?,
+                relationship: relationship.clone(),
+                confidence: calibrated_semantic_confidence(&provenance),
+                score: calibrated_semantic_score(&relationship, &provenance, 1, raw_score),
             })
         })?;
         for row in incoming_rows {

@@ -61,7 +61,13 @@ quantifies recommendation quality under known noisy scenarios.
       to passing.
 - [x] (2026-02-08 01:46Z) Closed Milestone 32 contract-lock suite with green behavior after
       Milestones 33-34 semantic implementations.
-- [ ] Run Milestone 35 strict TDD slices for semantic-confidence ranking and benchmark guardrails.
+- [x] (2026-02-08 01:46Z) Ran required pre-milestone baseline dogfood for Milestone 35:
+      `cargo run -- index --repo .`,
+      `cargo run -- find resolve_symbol_id_in_tx --repo . --json`,
+      `cargo run -- refs resolve_symbol_id_in_tx --repo . --json`.
+- [x] (2026-02-08 01:50Z) Completed Milestone 35 strict TDD slices for semantic-confidence
+      ranking/benchmark guardrails, including calibrated scoring in `impact`/`diff-impact`,
+      benchmark fixture assertions, and full-suite refactor gate (`cargo test`) green.
 - [ ] Run Milestone 36 documentation/evidence refresh and post-refresh full dogfood checks.
 
 ## Surprises & Discoveries
@@ -122,6 +128,11 @@ quantifies recommendation quality under known noisy scenarios.
   caller rows; after a no-behavior fixture content touch and rerun (`indexed_files: 1`), the same
   command emitted `src/py_app.py::run_py` as `called_by`.
 
+- Observation: Query-layer calibration can ship independently of index rebuild because it only
+  transforms persisted edge/test evidence during read-time ranking.
+  Evidence: Milestone 35 fixture behavior-check pack reported calibrated `score: 0.97` for both
+  TypeScript and Python `called_by` rows even with `indexed_files: 0` on fixture reindex.
+
 ## Decision Log
 
 - Decision: Keep schema envelopes stable (`schema_version` 1/2/3) through Phase 7 and implement
@@ -175,6 +186,13 @@ quantifies recommendation quality under known noisy scenarios.
   avoids stale edge evidence without altering command contracts or schema behavior.
   Date/Author: 2026-02-08 / Codex
 
+- Decision: Introduce deterministic query-time semantic score baselines keyed by
+  relationship/provenance/distance, and keep confidence labels stable (`graph_likely`) for semantic
+  edge rows.
+  Rationale: This improves ranking precision and benchmark signal without schema churn or broad
+  downstream label contract changes.
+  Date/Author: 2026-02-08 / Codex
+
 ## Outcomes & Retrospective
 
 Planning outcome: Phase 7 is constrained to high-value semantic precision and benchmark guardrails
@@ -195,6 +213,11 @@ calls under duplicate-name ambiguity while preserving Milestone 15 import/implem
 Milestone 34 outcome (2026-02-08): Python attribute-call extraction now uses module-alias import
 context, producing deterministic `called_by` rows for `import pkg.mod as alias; alias.func()`
 patterns under duplicate-name ambiguity while preserving Milestone 16 dotted-import behavior.
+
+Milestone 35 outcome (2026-02-08): `impact`/`diff-impact` now apply deterministic semantic score
+calibration by relationship/provenance/distance, benchmark fixture checks lock high-confidence
+caller ranking (`score >= 0.96` for semantic caller rows), and ordering remains deterministic
+without schema contract changes.
 
 ## Context and Orientation
 
@@ -590,6 +613,55 @@ Milestone 34 behavior-check pack evidence:
     # - Python fixture now includes `src/py_app.py::run_py` called_by row for `src/pkg_a/util.py::helper`
     # - impact helper returns both `run` and `run_py` caller rows
 
+Milestone 35 strict TDD evidence:
+
+    # 35A red
+    cargo test milestone35_diff_impact_semantic_confidence_ranking -- --nocapture
+    ...
+    semantic caller rows should receive calibrated high confidence score
+
+    # 35A green
+    cargo test milestone35_diff_impact_semantic_confidence_ranking -- --nocapture
+    ...
+    test milestone35_diff_impact_semantic_confidence_ranking ... ok
+
+    # 35B red
+    cargo test milestone35_impact_semantic_rows_rank_deterministically -- --nocapture
+    ...
+    assertion failed: results.iter().all(... score >= 0.96)
+
+    # 35B green
+    cargo test milestone35_impact_semantic_rows_rank_deterministically -- --nocapture
+    ...
+    test milestone35_impact_semantic_rows_rank_deterministically ... ok
+
+    # 35C red
+    cargo test milestone35_fixture_quality_benchmark_is_stable -- --nocapture
+    ...
+    benchmark semantic caller average score should stay in calibrated high-confidence band
+
+    # 35C green
+    cargo test milestone35_fixture_quality_benchmark_is_stable -- --nocapture
+    ...
+    test milestone35_fixture_quality_benchmark_is_stable ... ok
+
+    # 35 refactor gate
+    cargo test
+    ...
+    test result: ok. (full suite)
+
+Milestone 35 behavior-check pack evidence:
+
+    cargo run -- index --repo tests/fixtures/phase7/semantic_precision
+    cargo run -- diff-impact --changed-file src/util_a.ts --repo tests/fixtures/phase7/semantic_precision --json
+    cargo run -- diff-impact --changed-file src/pkg_a/util.py --repo tests/fixtures/phase7/semantic_precision --json
+    cargo run -- impact helper --repo tests/fixtures/phase7/semantic_precision --json
+
+    # observed after Milestone 35:
+    # - semantic `called_by` rows in fixture now carry calibrated `score: 0.97`
+    # - semantic rows still outrank fallback rows deterministically
+    # - schema envelopes remain unchanged (1/2/3)
+
 ## Interfaces and Dependencies
 
 Phase 7 should continue using current dependencies (`tree-sitter`, language grammars, `rusqlite`,
@@ -647,3 +719,6 @@ cross-milestone refactor closure.
 2026-02-08: Updated live plan with Milestone 34 Python red/green/refactor transcripts, resolved
 Milestone 32 contract closure, and refreshed fixture behavior-check evidence reflecting both
 TypeScript and Python caller rows.
+
+2026-02-08: Updated live plan with Milestone 35 ranking-calibration transcripts, query-time
+calibration design decisions, benchmark-guardrail outcomes, and fixture behavior-check evidence.
