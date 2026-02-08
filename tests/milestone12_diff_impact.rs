@@ -139,6 +139,43 @@ fn milestone12_diff_impact_includes_tests() {
 }
 
 #[test]
+fn milestone12_diff_impact_exclude_tests_hides_test_targets() {
+    let repo = common::temp_repo();
+    common::write_file(
+        repo.path(),
+        "src/lib.rs",
+        include_str!("fixtures/phase2/validation/src/lib.rs"),
+    );
+    common::write_file(
+        repo.path(),
+        "tests/plan_test.rs",
+        "#[test]\nfn compute_plan_smoke_test() {\n    compute_plan();\n    compute_plan();\n}\n",
+    );
+
+    run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
+    let json_out = run_stdout(&[
+        "diff-impact",
+        "--changed-file",
+        "src/lib.rs",
+        "--exclude-tests",
+        "--repo",
+        repo.path().to_str().unwrap(),
+        "--json",
+    ]);
+    let payload: Value =
+        serde_json::from_str(&json_out).expect("diff-impact --json should produce valid json");
+    assert_eq!(payload["include_tests"], false);
+    let results = payload["results"]
+        .as_array()
+        .expect("results should be array");
+    assert!(
+        !results
+            .iter()
+            .any(|item| item["result_kind"] == "test_target")
+    );
+}
+
+#[test]
 fn milestone12_diff_impact_deterministic_ordering() {
     let repo = common::temp_repo();
     common::write_file(
@@ -154,7 +191,7 @@ fn milestone12_diff_impact_deterministic_ordering() {
     common::write_file(
         repo.path(),
         "tests/impact_test.rs",
-        "#[test]\nfn covers_changed_entry() {\n    changed_entry();\n    changed_entry();\n}\n",
+        "fn changed_entry() {}\n\n#[test]\nfn covers_changed_entry() {\n    changed_entry();\n    changed_entry();\n}\n",
     );
 
     run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);

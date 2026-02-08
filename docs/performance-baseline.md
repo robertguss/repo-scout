@@ -14,10 +14,15 @@ Track wall-clock timings for:
 - Phase 4 precision controls (`diff-impact --include-imports/--changed-line`,
   `refs --code-only --exclude-tests`)
 - Phase 5 recommendation/fidelity controls (`tests-for --include-support`,
-  `verify-plan --max-targeted`, context token-overlap matching, multi-hop `diff-impact --max-distance`)
+  `verify-plan --max-targeted`, context token-overlap matching, multi-hop
+  `diff-impact --max-distance`)
 - Phase 6 change-scope/output-focus controls (`context --exclude-tests --code-only`,
-  `verify-plan --changed-line/--changed-symbol`, `diff-impact --changed-symbol --exclude-changed --max-results`,
-  `find/refs --max-results`)
+  `verify-plan --changed-line/--changed-symbol`,
+  `diff-impact --changed-symbol --exclude-changed --max-results`, `find/refs --max-results`)
+- Phase 7/8 semantic precision and hardening controls (TypeScript/Python module-aware `diff-impact`,
+  calibrated `impact`/`diff-impact` semantic ranking, explicit `diff-impact --exclude-tests`,
+  deterministic row-level terminal output checks, fixture benchmark pack under
+  `tests/fixtures/phase8/semantic_precision`)
 
 ## Commands
 
@@ -45,10 +50,20 @@ Equivalent manual commands:
 /usr/bin/time -p cargo run --release -- verify-plan --changed-file src/query/mod.rs --repo . --max-targeted 6 --json
 /usr/bin/time -p cargo run --release -- verify-plan --changed-file src/query/mod.rs --changed-line src/query/mod.rs:1094:1165 --changed-symbol verify_plan_for_changed_files --repo . --json
 /usr/bin/time -p cargo run --release -- diff-impact --changed-file src/query/mod.rs --repo . --json
+/usr/bin/time -p cargo run --release -- diff-impact --changed-file src/query/mod.rs --repo .
+/usr/bin/time -p cargo run --release -- diff-impact --changed-file src/query/mod.rs --repo . --exclude-tests --json
+/usr/bin/time -p cargo run --release -- diff-impact --changed-file src/query/mod.rs --repo . --include-tests --json
 /usr/bin/time -p cargo run --release -- diff-impact --changed-file src/query/mod.rs --repo . --max-distance 3 --json
 /usr/bin/time -p cargo run --release -- diff-impact --changed-file src/query/mod.rs --changed-line src/query/mod.rs:132:220 --repo .
 /usr/bin/time -p cargo run --release -- diff-impact --changed-file src/query/mod.rs --changed-symbol verify_plan_for_changed_files --exclude-changed --max-results 12 --repo . --json
 /usr/bin/time -p cargo run --release -- refs verify_plan_for_changed_files --repo . --code-only --exclude-tests --json
+/usr/bin/time -p cargo run --release -- index --repo tests/fixtures/phase8/semantic_precision
+/usr/bin/time -p cargo run --release -- diff-impact --changed-file src/util_a.ts --repo tests/fixtures/phase8/semantic_precision --json
+/usr/bin/time -p cargo run --release -- diff-impact --changed-file src/pkg_a/util.py --repo tests/fixtures/phase8/semantic_precision --json
+/usr/bin/time -p cargo run --release -- impact helper --repo tests/fixtures/phase8/semantic_precision --json
+/usr/bin/time -p cargo run --release -- diff-impact --changed-file src/indexer/languages/typescript.rs --repo . --json
+/usr/bin/time -p cargo run --release -- diff-impact --changed-file src/indexer/languages/python.rs --repo . --json
+/usr/bin/time -p cargo run --release -- refs helper --repo . --code-only --exclude-tests --max-results 10 --json
 ```
 
 ## Coverage Check

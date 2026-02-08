@@ -1,9 +1,11 @@
 # repo-scout
 
-`repo-scout` is a local, deterministic CLI for indexing a repository and answering code-navigation questions fast.
+`repo-scout` is a local, deterministic CLI for indexing a repository and answering code-navigation
+questions fast.
 
-Phase 6 is fully implemented and adds change-scope precision and output-focus controls on top of
-the Phase 5 recommendation-quality and multi-hop impact-fidelity workflows.
+Phase 8 is fully implemented and adds semantic-precision closure, strict lint hardening
+(`cargo clippy --all-targets --all-features -- -D warnings`), explicit `diff-impact` test-target
+opt-out (`--exclude-tests`), and deterministic row-level terminal output.
 
 ## What It Does
 
@@ -52,7 +54,7 @@ cargo run -- verify-plan --changed-file src/lib.rs --repo /path/to/repo
 cargo run -- diff-impact --changed-file src/lib.rs --repo /path/to/repo
 cargo run -- explain impact_matches --repo /path/to/repo
 
-# Phase 5/6 controls
+# Phase 5/6/7/8 controls
 cargo run -- refs launch --repo /path/to/repo --code-only --exclude-tests
 cargo run -- refs launch --repo /path/to/repo --code-only --exclude-tests --max-results 10
 cargo run -- find launch --repo /path/to/repo --max-results 10
@@ -62,6 +64,9 @@ cargo run -- verify-plan --changed-file src/lib.rs --changed-line src/lib.rs:20:
 cargo run -- diff-impact --changed-file src/lib.rs --changed-line src/lib.rs:20:80 --changed-symbol launch --exclude-changed --max-results 12 --repo /path/to/repo
 cargo run -- diff-impact --changed-file src/lib.rs --include-imports --repo /path/to/repo
 cargo run -- diff-impact --changed-file src/lib.rs --repo /path/to/repo --max-distance 3
+# semantic-precision examples (TypeScript/Python module aliases)
+cargo run -- diff-impact --changed-file src/util_a.ts --repo tests/fixtures/phase8/semantic_precision --json
+cargo run -- diff-impact --changed-file src/pkg_a/util.py --repo tests/fixtures/phase8/semantic_precision --json
 ```
 
 JSON output is supported by query commands:
@@ -88,26 +93,33 @@ cargo run -- explain impact_matches --repo /path/to/repo --json
   - `--max-results` applies deterministic truncation after ranking.
   - Scope flags apply to text fallback only; AST-priority behavior is unchanged.
 - `impact <SYMBOL> --repo <PATH> [--json]`
-  - Returns one-hop incoming graph neighbors (`called_by`, `contained_by`, `imported_by`, `implemented_by`).
+  - Returns one-hop incoming graph neighbors (`called_by`, `contained_by`, `imported_by`,
+    `implemented_by`).
+  - Applies deterministic semantic score calibration so stronger edge evidence stays in a
+    high-confidence ranking band.
 - `context --task <TEXT> --repo <PATH> [--budget <N>] [--json] [--exclude-tests] [--code-only]`
   - Uses deterministic token-overlap relevance to rank direct symbol definitions plus graph
     neighbors, truncated by budget.
 - `tests-for <SYMBOL> --repo <PATH> [--include-support] [--json]`
-  - Returns runnable test targets by default and restores support paths when
-    `--include-support` is set.
+  - Returns runnable test targets by default and restores support paths when `--include-support` is
+    set.
 - `verify-plan --changed-file <PATH> --repo <PATH> [--changed-line <path:start[:end]>] [--changed-symbol <symbol> ...] [--max-targeted <N>] [--json]`
   - Produces deterministic verification steps (bounded targeted test commands + `cargo test`).
   - `--changed-line` and repeatable `--changed-symbol` narrow symbol-derived targeted steps.
   - Default targeted cap is `8`; changed runnable test files are preserved even when
     `--max-targeted=0`.
-- `diff-impact --changed-file <PATH> --repo <PATH> [--max-distance <N>] [--include-tests] [--include-imports] [--changed-line <path:start[:end]>] [--changed-symbol <symbol> ...] [--exclude-changed] [--max-results <N>] [--json]`
+- `diff-impact --changed-file <PATH> --repo <PATH> [--max-distance <N>] [--exclude-tests|--include-tests] [--include-imports] [--changed-line <path:start[:end]>] [--changed-symbol <symbol> ...] [--exclude-changed] [--max-results <N>] [--json]`
   - Emits changed-symbol rows plus deterministic bounded multi-hop impacted symbols/test targets.
-  - Test-target emission is currently enabled by default (`include_tests = true` in schema 3);
-    `--include-tests` is retained as a compatibility flag.
+  - TypeScript namespace/member calls and Python module-alias attribute calls now resolve with
+    module-aware context to avoid duplicate-name cross-link ambiguity.
+  - Test-target emission remains default-on (`include_tests = true` in schema 3); use
+    `--exclude-tests` for symbol-only output, or `--include-tests` for explicit default behavior.
   - By default, changed-symbol seeds exclude import definitions unless `--include-imports` is set.
   - `--changed-line` and repeatable `--changed-symbol` narrow changed-symbol seeds.
   - `--exclude-changed` omits `distance=0` changed-symbol rows from output.
   - `--max-results` applies deterministic post-sort truncation.
+  - Semantic caller rows use calibrated scoring that ranks above text-fallback test-target rows.
+  - Terminal mode now prints deterministic row-level `impacted_symbol` and `test_target` lines.
 - `explain <SYMBOL> --repo <PATH> [--include-snippets] [--json]`
   - Produces a deterministic symbol dossier with spans, signature, and relationship counts.
 
@@ -163,11 +175,13 @@ cargo run -- refs <symbol> --repo .
 cargo test
 ```
 
-If dogfooding exposes a defect, add a failing integration test first, implement the minimum fix, then refactor with the full suite green.
+If dogfooding exposes a defect, add a failing integration test first, implement the minimum fix,
+then refactor with the full suite green.
 
 ## Error Recovery
 
-If the index DB is corrupted or not a valid SQLite database, `repo-scout` prints a recovery hint with the exact index path and tells you to delete the DB and rerun `index`.
+If the index DB is corrupted or not a valid SQLite database, `repo-scout` prints a recovery hint
+with the exact index path and tells you to delete the DB and rerun `index`.
 
 ## More Docs
 

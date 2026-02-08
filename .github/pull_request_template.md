@@ -4,7 +4,7 @@ Describe the change in 2-5 sentences.
 
 ## What Changed
 
-- 
+-
 
 ## Strict TDD Evidence (Required)
 
@@ -15,7 +15,7 @@ Describe the change in 2-5 sentences.
 
 Red/green/refactor transcripts or links:
 
-- 
+-
 
 ## Dogfooding Evidence (Required)
 
@@ -32,7 +32,7 @@ Red/green/refactor transcripts or links:
 
 Dogfood transcripts or links:
 
-- 
+-
 
 ## Validation
 
@@ -41,7 +41,7 @@ Dogfood transcripts or links:
 
 Commands/output:
 
-- 
+-
 
 ## Docs and Plans
 

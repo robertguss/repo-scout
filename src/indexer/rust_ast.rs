@@ -292,10 +292,10 @@ fn push_named_definition(
 fn enclosing_impl_container(node: Node<'_>, source: &str) -> Option<String> {
     let mut current = node.parent();
     while let Some(parent) = current {
-        if parent.kind() == "impl_item" {
-            if let Some(type_node) = parent.child_by_field_name("type") {
-                return last_identifier_text(type_node, source);
-            }
+        if parent.kind() == "impl_item"
+            && let Some(type_node) = parent.child_by_field_name("type")
+        {
+            return last_identifier_text(type_node, source);
         }
         current = parent.parent();
     }

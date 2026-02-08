@@ -3,11 +3,11 @@
 This ExecPlan is a living document. The sections `Progress`, `Surprises & Discoveries`,
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-This repository includes `agents/PLANS.md`, and this document must be maintained in accordance
-with that file.
+This repository includes `agents/PLANS.md`, and this document must be maintained in accordance with
+that file.
 
-This plan builds on `agents/repo-scout-phase4-execplan.md`, which delivered resolver
-disambiguation, `diff-impact` seed controls, and fallback scope flags for `find` and `refs`.
+This plan builds on `agents/repo-scout-phase4-execplan.md`, which delivered resolver disambiguation,
+`diff-impact` seed controls, and fallback scope flags for `find` and `refs`.
 
 ## Purpose / Big Picture
 
@@ -29,8 +29,8 @@ User-visible outcome: a tighter “what should I run next” loop with higher-si
       `cargo run -- index --repo .`,
       `cargo run -- find verify_plan_for_changed_files --repo . --json`,
       `cargo run -- refs verify_plan_for_changed_files --repo . --json`.
-- [x] (2026-02-07 17:10Z) Captured baseline recommendation-noise evidence for
-      `verify-plan`, `tests-for`, and `context`.
+- [x] (2026-02-07 17:10Z) Captured baseline recommendation-noise evidence for `verify-plan`,
+      `tests-for`, and `context`.
 - [x] (2026-02-07 17:11Z) Captured baseline traversal evidence proving
       `diff-impact --max-distance > 1` currently emits no distance-2/3 rows.
 - [x] (2026-02-07 17:12Z) Authored this Phase 5 ExecPlan as planning-only work.
@@ -44,7 +44,8 @@ User-visible outcome: a tighter “what should I run next” loop with higher-si
       `milestone22_tests_for_include_support_restores_paths`.
 - [x] (2026-02-07 22:51Z) Ran Milestone 22 post-dogfood checks; observed expected
       `verify-plan --max-targeted` CLI failure pending Milestone 23 implementation.
-- [x] (2026-02-07 22:51Z) Milestone 22 complete: `tests-for` target-quality contracts and implementation.
+- [x] (2026-02-07 22:51Z) Milestone 22 complete: `tests-for` target-quality contracts and
+      implementation.
 - [x] (2026-02-07 22:56Z) Ran required pre-milestone dogfood baseline for Milestone 23:
       `cargo run -- index --repo .`,
       `cargo run -- find verify_plan_for_changed_files --repo . --json`,
@@ -55,7 +56,8 @@ User-visible outcome: a tighter “what should I run next” loop with higher-si
       `milestone23_verify_plan_preserves_changed_test_target_and_full_suite_gate`.
 - [x] (2026-02-07 22:56Z) Ran Milestone 23 post-dogfood checks with passing
       `verify-plan --max-targeted` behavior and deterministic targeted capping.
-- [x] (2026-02-07 22:56Z) Milestone 23 complete: `verify-plan` high-signal recommendation contracts and implementation.
+- [x] (2026-02-07 22:56Z) Milestone 23 complete: `verify-plan` high-signal recommendation contracts
+      and implementation.
 - [x] (2026-02-07 23:00Z) Ran required pre-milestone dogfood baseline for Milestone 24:
       `cargo run -- index --repo .`,
       `cargo run -- find verify_plan_for_changed_files --repo . --json`,
@@ -66,7 +68,8 @@ User-visible outcome: a tighter “what should I run next” loop with higher-si
       `milestone24_context_json_is_stable_with_relevance_scoring`.
 - [x] (2026-02-07 23:00Z) Ran Milestone 24 post-dogfood checks with richer context recall and
       deterministic relevance-scored JSON output.
-- [x] (2026-02-07 23:00Z) Milestone 24 complete: `context` relevance/recall contracts and implementation.
+- [x] (2026-02-07 23:00Z) Milestone 24 complete: `context` relevance/recall contracts and
+      implementation.
 - [x] (2026-02-07 23:07Z) Ran required pre-milestone dogfood baseline for Milestone 25:
       `cargo run -- index --repo .`,
       `cargo run -- find verify_plan_for_changed_files --repo . --json`,
@@ -77,21 +80,17 @@ User-visible outcome: a tighter “what should I run next” loop with higher-si
       `milestone25_diff_impact_handles_cycles_without_duplicate_growth`.
 - [x] (2026-02-07 23:07Z) Ran Milestone 25 post-dogfood checks with deterministic multi-hop
       traversal output and bounded distance behavior.
-- [x] (2026-02-07 23:07Z) Milestone 25 complete: true multi-hop `diff-impact` traversal contracts and implementation.
+- [x] (2026-02-07 23:07Z) Milestone 25 complete: true multi-hop `diff-impact` traversal contracts
+      and implementation.
 - [x] (2026-02-07 23:07Z) Ran required pre-milestone dogfood baseline for Milestone 26:
       `cargo run -- index --repo .`,
       `cargo run -- find verify_plan_for_changed_files --repo . --json`,
       `cargo run -- refs verify_plan_for_changed_files --repo . --json`.
-- [x] (2026-02-07 23:07Z) Updated Phase 5 docs and evidence artifacts:
-      `README.md`,
-      `docs/cli-reference.md`,
-      `docs/json-output.md`,
-      `docs/architecture.md`,
-      `docs/dogfood-log.md`,
+- [x] (2026-02-07 23:07Z) Updated Phase 5 docs and evidence artifacts: `README.md`,
+      `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`, `docs/dogfood-log.md`,
       `docs/performance-baseline.md`.
 - [x] (2026-02-07 23:07Z) Re-ran required post-milestone dogfood checks after docs refresh:
-      `cargo run -- index --repo .`,
-      `cargo run -- tests-for Path --repo . --json`,
+      `cargo run -- index --repo .`, `cargo run -- tests-for Path --repo . --json`,
       `cargo run -- tests-for Path --repo . --include-support --json`,
       `cargo run -- verify-plan --changed-file src/main.rs --repo . --json`,
       `cargo run -- verify-plan --changed-file src/main.rs --repo . --max-targeted 6 --json`,
@@ -102,35 +101,35 @@ User-visible outcome: a tighter “what should I run next” loop with higher-si
 
 ## Surprises & Discoveries
 
-- Observation: `verify-plan` is still over-sensitive to generic symbols in changed files.
-  Evidence: `cargo run --quiet -- verify-plan --changed-file src/main.rs --repo . --json | jq`
-  reported `total_steps: 21`, `targeted: 20`, with 16 targeted rows sharing why text
+- Observation: `verify-plan` is still over-sensitive to generic symbols in changed files. Evidence:
+  `cargo run --quiet -- verify-plan --changed-file src/main.rs --repo . --json | jq` reported
+  `total_steps: 21`, `targeted: 20`, with 16 targeted rows sharing why text
   `targeted test references changed symbol 'output'`.
 
-- Observation: `tests-for` can recommend non-runnable support modules.
-  Evidence: `cargo run --quiet -- tests-for Path --repo . --json | jq` showed
-  `has_common_mod: true` for `tests/common/mod.rs`.
+- Observation: `tests-for` can recommend non-runnable support modules. Evidence:
+  `cargo run --quiet -- tests-for Path --repo . --json | jq` showed `has_common_mod: true` for
+  `tests/common/mod.rs`.
 
-- Observation: `context` has low recall for realistic natural-language phrasing.
-  Evidence: `cargo run --quiet -- context --task "...recommendation quality..." --repo . --budget 1200 --json | jq`
+- Observation: `context` has low recall for realistic natural-language phrasing. Evidence:
+  `cargo run --quiet -- context --task "...recommendation quality..." --repo . --budget 1200 --json | jq`
   returned `results: 1` and a low-signal module token row (`symbol: "files"`).
 
-- Observation: `diff-impact` currently ignores effective distance beyond one hop.
-  Evidence: `cargo run --quiet -- diff-impact --changed-file src/query/mod.rs --max-distance 3 --repo . --json | jq`
+- Observation: `diff-impact` currently ignores effective distance beyond one hop. Evidence:
+  `cargo run --quiet -- diff-impact --changed-file src/query/mod.rs --max-distance 3 --repo . --json | jq`
   reported `dist2: 0`, `dist3: 0`.
 
-- Observation: fallback text noise remains high when AST matches are absent.
-  Evidence: `cargo run --quiet -- refs helper --repo . --json | jq` showed `total: 72`, `tests: 58`,
-  all `text_fallback`.
+- Observation: fallback text noise remains high when AST matches are absent. Evidence:
+  `cargo run --quiet -- refs helper --repo . --json | jq` showed `total: 72`, `tests: 58`, all
+  `text_fallback`.
 
-- Observation: post-Milestone-22 dogfood still fails on `verify-plan --max-targeted`.
-  Evidence: CLI error `unexpected argument '--max-targeted' found` while running the required
-  post-milestone command list; implementation is tracked in Milestone 23.
+- Observation: post-Milestone-22 dogfood still fails on `verify-plan --max-targeted`. Evidence: CLI
+  error `unexpected argument '--max-targeted' found` while running the required post-milestone
+  command list; implementation is tracked in Milestone 23.
 
 - Observation: `tests-for` default output now omits support paths, while `--include-support`
-  restores them with explicit support classification.
-  Evidence: default `tests-for Path --json` no longer emits `tests/common/mod.rs`; with
-  `--include-support`, the row appears as `target_kind: "support_test_file"`.
+  restores them with explicit support classification. Evidence: default `tests-for Path --json` no
+  longer emits `tests/common/mod.rs`; with `--include-support`, the row appears as
+  `target_kind: "support_test_file"`.
 
 - Observation: strict per-slice TDD required staging future-slice tests after each refactor gate.
   Evidence: adding Milestone 23 tests for slices 23B/23C before finishing 23A caused the 23A
@@ -141,14 +140,13 @@ User-visible outcome: a tighter “what should I run next” loop with higher-si
   `milestone6_schema_migration`) plus the full-suite gate instead of broad 20+ targeted rows.
 
 - Observation: richer context scoring increases recall but can surface test-function symbols quickly
-  when task wording overlaps many verification terms.
-  Evidence: post-Milestone-24 dogfood `context` returned 6 high-score rows, including
-  `tests/milestone10_validation.rs` and `tests/milestone23_verify_plan_precision.rs` symbols.
+  when task wording overlaps many verification terms. Evidence: post-Milestone-24 dogfood `context`
+  returned 6 high-score rows, including `tests/milestone10_validation.rs` and
+  `tests/milestone23_verify_plan_precision.rs` symbols.
 
 - Observation: multi-hop traversal can reintroduce changed symbols at `distance > 0` when changed
-  files seed many symbols by default.
-  Evidence: slice-25C red test showed `changed_c` emitted as an impacted symbol in a cycle until
-  traversal suppressed symbol re-entry for all changed-seed IDs.
+  files seed many symbols by default. Evidence: slice-25C red test showed `changed_c` emitted as an
+  impacted symbol in a cycle until traversal suppressed symbol re-entry for all changed-seed IDs.
 
 - Observation: documentation drifted behind behavior for `context` and `diff-impact` details.
   Evidence: pre-update docs still described one-hop `diff-impact` output and pre-Phase-5 context
@@ -157,68 +155,57 @@ User-visible outcome: a tighter “what should I run next” loop with higher-si
 ## Decision Log
 
 - Decision: prioritize recommendation precision and actionability before adding any new command
-  families.
-  Rationale: current command surface is broad and stable; remaining user pain is signal quality.
-  Date/Author: 2026-02-07 / Codex
+  families. Rationale: current command surface is broad and stable; remaining user pain is signal
+  quality. Date/Author: 2026-02-07 / Codex
 
 - Decision: keep schema versions stable where possible and prefer additive behavior/option changes.
   Rationale: Phase 1-4 contracts are already consumed by automation and should not be churned.
   Date/Author: 2026-02-07 / Codex
 
 - Decision: treat true multi-hop `diff-impact` as required in Phase 5 because the public CLI already
-  exposes `--max-distance`.
-  Rationale: current behavior violates the expectation implied by the existing interface.
-  Date/Author: 2026-02-07 / Codex
+  exposes `--max-distance`. Rationale: current behavior violates the expectation implied by the
+  existing interface. Date/Author: 2026-02-07 / Codex
 
 - Decision: default recommendations should prefer runnable test files and suppress support/fixture
-  paths unless explicitly requested.
-  Rationale: agent loops need executable steps first; support files are useful but secondary.
-  Date/Author: 2026-02-07 / Codex
+  paths unless explicitly requested. Rationale: agent loops need executable steps first; support
+  files are useful but secondary. Date/Author: 2026-02-07 / Codex
 
 - Decision: add `tests-for --include-support` as the explicit opt-in, and classify restored support
-  results with `target_kind = "support_test_file"` plus support-specific rationale text.
-  Rationale: keeps default recommendations runnable-first while preserving additive, deterministic
-  schema-2 compatibility.
-  Date/Author: 2026-02-07 / Codex
+  results with `target_kind = "support_test_file"` plus support-specific rationale text. Rationale:
+  keeps default recommendations runnable-first while preserving additive, deterministic schema-2
+  compatibility. Date/Author: 2026-02-07 / Codex
 
 - Decision: treat Milestone 22 `verify-plan --max-targeted` command failure as expected post-check
-  evidence until Milestone 23 lands.
-  Rationale: the command is mandated by the plan, but its implementation scope belongs to the next
-  milestone.
-  Date/Author: 2026-02-07 / Codex
+  evidence until Milestone 23 lands. Rationale: the command is mandated by the plan, but its
+  implementation scope belongs to the next milestone. Date/Author: 2026-02-07 / Codex
 
-- Decision: set default verify-plan targeted cap to `DEFAULT_VERIFY_PLAN_MAX_TARGETED = 8` and
-  apply `--max-targeted` only to symbol-derived targeted recommendations.
-  Rationale: keeps omitted behavior bounded/non-zero while preserving deterministic command quality.
-  Date/Author: 2026-02-07 / Codex
+- Decision: set default verify-plan targeted cap to `DEFAULT_VERIFY_PLAN_MAX_TARGETED = 8` and apply
+  `--max-targeted` only to symbol-derived targeted recommendations. Rationale: keeps omitted
+  behavior bounded/non-zero while preserving deterministic command quality. Date/Author: 2026-02-07
+  / Codex
 
-- Decision: preserve changed runnable test targets even when `--max-targeted=0`.
-  Rationale: changed test files are high-priority safety steps and should not be dropped by
-  symbol-target truncation.
+- Decision: preserve changed runnable test targets even when `--max-targeted=0`. Rationale: changed
+  test files are high-priority safety steps and should not be dropped by symbol-target truncation.
   Date/Author: 2026-02-07 / Codex
 
 - Decision: replace exact-symbol-only context matching with deterministic token-overlap scoring
   (including snake/camel tokenization, stopword filtering, and singular/plural overlap handling).
-  Rationale: realistic task phrasing is often paraphrased and should still retrieve relevant
-  symbols without introducing nondeterminism.
-  Date/Author: 2026-02-07 / Codex
+  Rationale: realistic task phrasing is often paraphrased and should still retrieve relevant symbols
+  without introducing nondeterminism. Date/Author: 2026-02-07 / Codex
 
 - Decision: bias context ranking toward multi-token definition specificity and standardize why text
-  around “token-overlap relevance”.
-  Rationale: prevents short incidental tokens from outranking meaningful definitions and enables
-  stable, auditable recommendation rationale.
-  Date/Author: 2026-02-07 / Codex
+  around “token-overlap relevance”. Rationale: prevents short incidental tokens from outranking
+  meaningful definitions and enables stable, auditable recommendation rationale. Date/Author:
+  2026-02-07 / Codex
 
 - Decision: enforce cycle-safe multi-hop traversal by tracking minimum discovered distance per seed
-  and suppressing changed-seed symbol re-entry at non-zero distance.
-  Rationale: prevents duplicate growth, avoids changed-symbol echo rows, and keeps traversal
-  deterministic while honoring `--max-distance`.
-  Date/Author: 2026-02-07 / Codex
+  and suppressing changed-seed symbol re-entry at non-zero distance. Rationale: prevents duplicate
+  growth, avoids changed-symbol echo rows, and keeps traversal deterministic while honoring
+  `--max-distance`. Date/Author: 2026-02-07 / Codex
 
 - Decision: keep schema envelopes unchanged for Milestone 26 docs refresh and document Phase 5 as
-  behavior/option semantics over existing schema 1/2/3 payloads.
-  Rationale: avoids contract churn while making option-driven behavior explicit to users.
-  Date/Author: 2026-02-07 / Codex
+  behavior/option semantics over existing schema 1/2/3 payloads. Rationale: avoids contract churn
+  while making option-driven behavior explicit to users. Date/Author: 2026-02-07 / Codex
 
 ## Outcomes & Retrospective
 
@@ -242,16 +229,16 @@ targeted capping via `--max-targeted`, and preserves changed runnable test targe
 required full-suite gate.
 
 Milestone 24 outcome: `context` now matches paraphrased task text using deterministic token-overlap
-relevance scoring, ranks meaningful definitions above incidental short tokens, and keeps stable
-JSON output across repeated runs.
+relevance scoring, ranks meaningful definitions above incidental short tokens, and keeps stable JSON
+output across repeated runs.
 
 Milestone 25 outcome: `diff-impact` now performs bounded true multi-hop inbound traversal with
 deterministic dedupe, emits valid distance-2 neighbors on chain fixtures, and avoids cycle-driven
 duplicate growth while preserving schema-3 output shape.
 
 Milestone 26 outcome: user and contributor docs now reflect Phase 5 recommendation-quality and
-multi-hop traversal behavior, with updated command examples, schema notes, dogfood transcripts,
-and performance-baseline command coverage.
+multi-hop traversal behavior, with updated command examples, schema notes, dogfood transcripts, and
+performance-baseline command coverage.
 
 ## Context and Orientation
 
@@ -312,9 +299,8 @@ that asserts `tests/common/mod.rs` is not returned for generic symbol queries wh
 targets exist.
 
 Feature slice 22B defines runnable-target priority. Add test
-`tests/milestone22_recommendation_quality.rs::milestone22_tests_for_prefers_runnable_targets`
-that asserts direct `tests/<name>.rs` targets rank ahead of non-runnable paths when both are
-present.
+`tests/milestone22_recommendation_quality.rs::milestone22_tests_for_prefers_runnable_targets` that
+asserts direct `tests/<name>.rs` targets rank ahead of non-runnable paths when both are present.
 
 Feature slice 22C defines explicit opt-in behavior for suppressed paths. Add test
 `tests/milestone22_recommendation_quality.rs::milestone22_tests_for_include_support_restores_paths`
@@ -337,8 +323,8 @@ that asserts recommendations are not dominated by high-frequency symbols like `o
 Feature slice 23B defines deterministic targeted-step bounds. Add test
 `tests/milestone23_verify_plan_precision.rs::milestone23_verify_plan_applies_targeted_cap_deterministically`
 for a bounded targeted recommendation list with stable order. Add additive flag
-`verify-plan --max-targeted <N>` (default non-zero bounded value) and define clear behavior for
-`0` (no targeted rows) versus omitted (default bounded behavior).
+`verify-plan --max-targeted <N>` (default non-zero bounded value) and define clear behavior for `0`
+(no targeted rows) versus omitted (default bounded behavior).
 
 Feature slice 23C defines preservation of high-priority safety steps. Add test
 `tests/milestone23_verify_plan_precision.rs::milestone23_verify_plan_preserves_changed_test_target_and_full_suite_gate`
@@ -368,8 +354,8 @@ Feature slice 24C defines deterministic stability under richer matching. Add tes
 that compares repeated JSON runs for byte-identical output.
 
 Implementation orientation: refine `src/query/mod.rs::extract_keywords` and
-`src/query/mod.rs::context_matches` with deterministic matching/scoring adjustments, avoiding
-schema changes.
+`src/query/mod.rs::context_matches` with deterministic matching/scoring adjustments, avoiding schema
+changes.
 
 ### Milestone 25: True multi-hop `diff-impact` traversal
 
@@ -378,8 +364,8 @@ precision and deterministic output.
 
 Feature slice 25A defines distance-2 traversal. Add test
 `tests/milestone25_diff_impact_multihop.rs::milestone25_diff_impact_max_distance_two_emits_distance_two_neighbors`
-using a call-chain fixture where changed symbol C is called by B, which is called by A.
-Expected result includes `A` at `distance = 2`.
+using a call-chain fixture where changed symbol C is called by B, which is called by A. Expected
+result includes `A` at `distance = 2`.
 
 Feature slice 25B defines traversal bounds and no-overreach behavior. Add test
 `tests/milestone25_diff_impact_multihop.rs::milestone25_diff_impact_respects_max_distance_bound`
@@ -532,7 +518,8 @@ New recommendation filters/caps must be explicit, reversible by option when appl
 not require database resets or schema rewrites unless an additive migration is justified and tested.
 
 If traversal changes in Milestone 25 increase result volume unexpectedly, the implementation must
-include deterministic dedupe and bounded frontier handling to maintain predictable runtime and output.
+include deterministic dedupe and bounded frontier handling to maintain predictable runtime and
+output.
 
 ## Artifacts and Notes
 
@@ -818,7 +805,8 @@ Revision Note (2026-02-07): Updated progress, decisions, surprises, outcomes, an
 Milestone 22 implementation details, strict TDD transcripts, and post-milestone dogfood evidence.
 
 Revision Note (2026-02-07): Updated progress, decisions, surprises, outcomes, and artifacts with
-Milestone 23 implementation details, strict TDD transcripts, and capped verify-plan dogfood evidence.
+Milestone 23 implementation details, strict TDD transcripts, and capped verify-plan dogfood
+evidence.
 
 Revision Note (2026-02-07): Updated progress, decisions, surprises, outcomes, and artifacts with
 Milestone 24 context relevance work, strict TDD transcripts, and refreshed dogfood evidence.

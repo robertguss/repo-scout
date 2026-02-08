@@ -124,6 +124,13 @@ Relationship labels are normalized to:
 - `imported_by`
 - `implemented_by`
 
+Ranking notes:
+
+- Semantic edge rows are deterministically calibrated by relationship/provenance.
+- `called_by` rows from resolved call edges are ranked in a high-confidence band (for example
+  `score ≈ 0.97` in Phase 8 fixture scenarios).
+- Deterministic tie-breaks remain `file_path`, `line`, `column`, `symbol`, `relationship`.
+
 Example:
 
 ```bash
@@ -193,7 +200,8 @@ Behavior:
 - Parses and normalizes repeatable `--changed-line` ranges (`path:start[:end]`).
 - Applies repeatable `--changed-symbol` filters additively to changed-file symbol selection.
 - Dampens high-frequency generic changed symbols (for example `Path`, `output`) for better signal.
-- Suggests runnable targeted commands only (`cargo test --test <name>` for direct `tests/<file>.rs` targets).
+- Suggests runnable targeted commands only (`cargo test --test <name>` for direct `tests/<file>.rs`
+  targets).
 - Caps symbol-derived targeted rows to `8` by default.
 - `--max-targeted 0` suppresses symbol-derived targeted rows, while still preserving changed
   runnable test targets and the required full-suite gate.
@@ -208,7 +216,7 @@ cargo run -- verify-plan --changed-file src/main.rs --repo . --max-targeted 6 --
 cargo run -- verify-plan --changed-file src/query/mod.rs --changed-line src/query/mod.rs:1094:1165 --changed-symbol verify_plan_for_changed_files --repo . --json
 ```
 
-### `diff-impact --changed-file <PATH> [--changed-file <PATH> ...] --repo <PATH> [--max-distance <N>] [--include-tests] [--include-imports] [--changed-line <path:start[:end]>] [--changed-symbol <symbol> ...] [--exclude-changed] [--max-results <N>] [--json]`
+### `diff-impact --changed-file <PATH> [--changed-file <PATH> ...] --repo <PATH> [--max-distance <N>] [--exclude-tests|--include-tests] [--include-imports] [--changed-line <path:start[:end]>] [--changed-symbol <symbol> ...] [--exclude-changed] [--max-results <N>] [--json]`
 
 Generate deterministic changed-file impact results.
 
@@ -221,13 +229,21 @@ Behavior:
 - Applies repeatable `--changed-symbol` filters to changed-symbol seeds.
 - Emits bounded multi-hop incoming neighbors (`called_by`, `contained_by`, `imported_by`,
   `implemented_by`) up to `--max-distance`.
+- Uses module-aware TypeScript/Python call resolution so namespace/member and module-alias attribute
+  calls resolve to the intended module under duplicate symbol names.
 - Uses cycle-safe, deterministic dedupe to prevent duplicate growth and changed-symbol echo rows at
   non-zero distances.
 - `--exclude-changed` removes changed-symbol (`distance=0`) rows from final output while traversal
   still uses those seeds.
 - `--max-results <N>` truncates results deterministically after ranking.
-- Emits test targets (`result_kind = test_target`) when available; this is currently default-on
-  behavior (`include_tests = true`).
+- Emits test targets (`result_kind = test_target`) when available; default behavior remains
+  `include_tests = true`.
+- `--exclude-tests` suppresses test-target rows and flips schema-3 `include_tests` to `false`.
+- `--include-tests` keeps explicit default behavior and conflicts with `--exclude-tests`.
+- Semantic impacted-symbol rows use deterministic calibrated scoring (for example `call_resolution`
+  `called_by` rows in Phase 8 fixtures score `0.97`) and rank ahead of fallback test-target rows.
+- Terminal output is row-oriented: one deterministic `impacted_symbol ...` or `test_target ...` line
+  per result with confidence/provenance/score fields.
 
 `--changed-line` parsing rules:
 
@@ -241,6 +257,7 @@ Examples:
 ```bash
 cargo run -- diff-impact --changed-file src/query/mod.rs --repo .
 cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --json
+cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --exclude-tests --json
 cargo run -- diff-impact --changed-file src/query/mod.rs --changed-symbol verify_plan_for_changed_files --exclude-changed --max-results 12 --repo . --json
 ```
 
@@ -268,4 +285,5 @@ cargo run -- explain impact_matches --repo . --include-snippets --json
 - Success: `0`
 - Failure: non-zero
 
-Corrupt or invalid index DB errors include a hint with the index path and recovery action (`delete file, rerun index`).
+Corrupt or invalid index DB errors include a hint with the index path and recovery action
+(`delete file, rerun index`).

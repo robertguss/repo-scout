@@ -1,8 +1,8 @@
 # Phase 2 Fixtures
 
-These fixtures are pre-implementation scaffolding for Phase 2 milestone tests.
-They intentionally capture representative source patterns for lifecycle cleanup,
-richer Rust symbol extraction, graph edges, and test recommendation heuristics.
+These fixtures are pre-implementation scaffolding for Phase 2 milestone tests. They intentionally
+capture representative source patterns for lifecycle cleanup, richer Rust symbol extraction, graph
+edges, and test recommendation heuristics.
 
 Layout:
 

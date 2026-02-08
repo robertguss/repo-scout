@@ -1,4 +1,5 @@
 use anyhow::Context;
+use std::collections::HashMap;
 use tree_sitter::{Node, Parser};
 
 use crate::indexer::languages::{
@@ -6,6 +7,12 @@ use crate::indexer::languages::{
 };
 
 pub struct PythonLanguageAdapter;
+
+#[derive(Debug, Clone)]
+struct ImportCallHint {
+    import_path: String,
+    imported_symbol: String,
+}
 
 fn scoped_symbol_key(file_path: &str, language: &str, symbol: &str) -> SymbolKey {
     SymbolKey {
@@ -45,6 +52,8 @@ impl LanguageAdapter for PythonLanguageAdapter {
             .context("failed to parse python source")?;
 
         let language = self.language_id().to_string();
+        let import_target_hints = import_target_hints(file_path, source);
+        let import_call_hints = import_call_hints(file_path, source);
         let mut symbols = Vec::new();
         let mut references = Vec::new();
         let mut edges = Vec::new();
@@ -102,6 +111,8 @@ impl LanguageAdapter for PythonLanguageAdapter {
                             caller.as_deref(),
                             file_path,
                             &language,
+                            &import_target_hints,
+                            &import_call_hints,
                             &mut references,
                             &mut edges,
                         );
@@ -181,12 +192,24 @@ impl LanguageAdapter for PythonLanguageAdapter {
             left.from_symbol_key
                 .symbol
                 .cmp(&right.from_symbol_key.symbol)
+                .then(
+                    left.from_symbol_key
+                        .qualified_symbol
+                        .cmp(&right.from_symbol_key.qualified_symbol),
+                )
                 .then(left.to_symbol_key.symbol.cmp(&right.to_symbol_key.symbol))
+                .then(
+                    left.to_symbol_key
+                        .qualified_symbol
+                        .cmp(&right.to_symbol_key.qualified_symbol),
+                )
                 .then(left.edge_kind.cmp(&right.edge_kind))
         });
         edges.dedup_by(|left, right| {
             left.from_symbol_key.symbol == right.from_symbol_key.symbol
+                && left.from_symbol_key.qualified_symbol == right.from_symbol_key.qualified_symbol
                 && left.to_symbol_key.symbol == right.to_symbol_key.symbol
+                && left.to_symbol_key.qualified_symbol == right.to_symbol_key.qualified_symbol
                 && left.edge_kind == right.edge_kind
         });
 
@@ -207,9 +230,7 @@ fn push_named_definition(
     language: &str,
     output: &mut Vec<ExtractedSymbol>,
 ) -> Option<String> {
-    let Some(name_node) = node.child_by_field_name("name") else {
-        return None;
-    };
+    let name_node = node.child_by_field_name("name")?;
     if name_node.kind() != "identifier" {
         return None;
     }
@@ -232,12 +253,15 @@ fn push_named_definition(
     Some(symbol)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn collect_call_symbols(
     node: Node<'_>,
     source: &str,
     caller: Option<&str>,
     file_path: &str,
     language: &str,
+    import_target_hints: &HashMap<String, String>,
+    import_call_hints: &HashMap<String, ImportCallHint>,
     references: &mut Vec<ExtractedReference>,
     edges: &mut Vec<ExtractedEdge>,
 ) {
@@ -250,6 +274,25 @@ fn collect_call_symbols(
                     line,
                     column,
                 });
+                if let Some(caller_symbol) = caller
+                    && let Some(call_hint) = import_call_hints.get(&symbol)
+                {
+                    edges.push(ExtractedEdge {
+                        from_symbol_key: scoped_symbol_key(file_path, language, caller_symbol),
+                        to_symbol_key: SymbolKey {
+                            symbol: call_hint.imported_symbol.clone(),
+                            qualified_symbol: Some(format!(
+                                "{language}:{}::{}",
+                                call_hint.import_path, call_hint.imported_symbol
+                            )),
+                            file_path: Some(call_hint.import_path.clone()),
+                            language: Some(language.to_string()),
+                        },
+                        edge_kind: "calls".to_string(),
+                        confidence: 0.95,
+                        provenance: "call_resolution".to_string(),
+                    });
+                }
                 if let Some(caller_symbol) = caller {
                     edges.push(ExtractedEdge {
                         from_symbol_key: scoped_symbol_key(file_path, language, caller_symbol),
@@ -267,13 +310,47 @@ fn collect_call_symbols(
             }
         }
         "attribute" => {
+            let object_symbol = node
+                .child_by_field_name("object")
+                .and_then(|object| node_text(object, source));
             if let Some(attribute_node) = node.child_by_field_name("attribute") {
+                if let Some(attribute_symbol) = node_text(attribute_node, source) {
+                    let (line, column) = start_position(attribute_node);
+                    references.push(ExtractedReference {
+                        symbol: attribute_symbol.clone(),
+                        line,
+                        column,
+                    });
+
+                    if let Some(caller_symbol) = caller
+                        && let Some(object_symbol) = object_symbol
+                        && let Some(import_path) = import_target_hints.get(&object_symbol)
+                    {
+                        edges.push(ExtractedEdge {
+                            from_symbol_key: scoped_symbol_key(file_path, language, caller_symbol),
+                            to_symbol_key: SymbolKey {
+                                symbol: attribute_symbol.clone(),
+                                qualified_symbol: Some(format!(
+                                    "{language}:{import_path}::{attribute_symbol}"
+                                )),
+                                file_path: Some(import_path.clone()),
+                                language: Some(language.to_string()),
+                            },
+                            edge_kind: "calls".to_string(),
+                            confidence: 0.95,
+                            provenance: "call_resolution".to_string(),
+                        });
+                        return;
+                    }
+                }
                 collect_call_symbols(
                     attribute_node,
                     source,
                     caller,
                     file_path,
                     language,
+                    import_target_hints,
+                    import_call_hints,
                     references,
                     edges,
                 );
@@ -306,7 +383,15 @@ fn collect_call_symbols(
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
                 collect_call_symbols(
-                    child, source, caller, file_path, language, references, edges,
+                    child,
+                    source,
+                    caller,
+                    file_path,
+                    language,
+                    import_target_hints,
+                    import_call_hints,
+                    references,
+                    edges,
                 );
             }
         }
@@ -476,10 +561,144 @@ fn import_bindings(node: Node<'_>, source: &str) -> Vec<ImportBinding> {
     bindings
 }
 
+fn import_target_hints(file_path: &str, source: &str) -> HashMap<String, String> {
+    let mut hints = HashMap::new();
+
+    for line in source.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("import ") {
+            for specifier in rest.split(',') {
+                let specifier = specifier.trim();
+                if specifier.is_empty() {
+                    continue;
+                }
+                let (imported_module, local_alias) =
+                    if let Some((left, right)) = specifier.split_once(" as ") {
+                        (left.trim(), Some(right.trim()))
+                    } else {
+                        (specifier, None)
+                    };
+                let Some(import_path) = resolve_python_import_path(file_path, imported_module)
+                else {
+                    continue;
+                };
+                let local_symbol = local_alias
+                    .map(str::to_string)
+                    .or_else(|| first_identifier(imported_module))
+                    .unwrap_or_default();
+                if local_symbol.is_empty() {
+                    continue;
+                }
+                hints.insert(local_symbol, import_path);
+            }
+        } else if let Some(rest) = trimmed.strip_prefix("from ")
+            && let Some((module_name, imports_part)) = rest.split_once(" import ")
+        {
+            for specifier in imports_part.split(',') {
+                let specifier = specifier.trim();
+                if specifier.is_empty() || specifier == "*" {
+                    continue;
+                }
+                let (imported_name, local_alias) =
+                    if let Some((left, right)) = specifier.split_once(" as ") {
+                        (left.trim(), Some(right.trim()))
+                    } else {
+                        (specifier, None)
+                    };
+                let local_symbol = local_alias
+                    .map(str::to_string)
+                    .or_else(|| last_identifier(imported_name))
+                    .unwrap_or_default();
+                if local_symbol.is_empty() {
+                    continue;
+                }
+                let import_path = resolve_python_import_path(
+                    file_path,
+                    &format!("{}.{}", module_name.trim(), imported_name.trim()),
+                )
+                .or_else(|| resolve_python_import_path(file_path, module_name.trim()));
+                let Some(import_path) = import_path else {
+                    continue;
+                };
+                hints.insert(local_symbol, import_path.clone());
+            }
+        }
+    }
+
+    hints
+}
+
+fn import_call_hints(file_path: &str, source: &str) -> HashMap<String, ImportCallHint> {
+    let mut hints = HashMap::new();
+
+    for line in source.lines() {
+        let trimmed = line.trim();
+        let Some(rest) = trimmed.strip_prefix("from ") else {
+            continue;
+        };
+        let Some((module_name, imports_part)) = rest.split_once(" import ") else {
+            continue;
+        };
+        let Some(import_path) = resolve_python_import_path(file_path, module_name.trim()) else {
+            continue;
+        };
+
+        for specifier in imports_part.split(',') {
+            let specifier = specifier.trim();
+            if specifier.is_empty() || specifier == "*" {
+                continue;
+            }
+            let (imported_name, local_alias) =
+                if let Some((left, right)) = specifier.split_once(" as ") {
+                    (left.trim(), Some(right.trim()))
+                } else {
+                    (specifier, None)
+                };
+            let Some(imported_symbol) = last_identifier(imported_name) else {
+                continue;
+            };
+            let local_symbol = local_alias
+                .map(str::to_string)
+                .unwrap_or_else(|| imported_symbol.clone());
+            if local_symbol.is_empty() {
+                continue;
+            }
+            hints.insert(
+                local_symbol,
+                ImportCallHint {
+                    import_path: import_path.clone(),
+                    imported_symbol,
+                },
+            );
+        }
+    }
+
+    hints
+}
+
+fn resolve_python_import_path(from_file_path: &str, module_name: &str) -> Option<String> {
+    let module_path = module_name.trim();
+    if module_path.is_empty() || module_path.starts_with('.') {
+        return None;
+    }
+
+    let normalized_module_path = module_path.replace('.', "/");
+    let mut components = std::path::Path::new(from_file_path).components();
+    let first_component = components
+        .next()
+        .and_then(|component| component.as_os_str().to_str())
+        .filter(|component| !component.is_empty());
+
+    if let Some(prefix) = first_component {
+        Some(format!("{prefix}/{normalized_module_path}.py"))
+    } else {
+        Some(format!("{normalized_module_path}.py"))
+    }
+}
+
 fn last_identifier(text: &str) -> Option<String> {
     text.split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
-        .filter(|part| !part.is_empty())
-        .last()
+        .rfind(|part| !part.is_empty())
         .map(str::to_string)
 }
 

@@ -124,8 +124,10 @@ pub struct DiffImpactArgs {
     pub max_distance: u32,
     #[arg(long = "max-results")]
     pub max_results: Option<usize>,
-    #[arg(long, default_value_t = true)]
+    #[arg(long, default_value_t = false, conflicts_with = "exclude_tests")]
     pub include_tests: bool,
+    #[arg(long, default_value_t = false, conflicts_with = "include_tests")]
+    pub exclude_tests: bool,
     #[arg(long, default_value_t = false)]
     pub include_imports: bool,
     #[arg(long, default_value_t = false)]

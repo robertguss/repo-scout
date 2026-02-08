@@ -1,11 +1,12 @@
 # Architecture
 
-This document describes the current `repo-scout` architecture after Phase 6.
+This document describes the current `repo-scout` architecture after Phase 8.
 
 ## High-Level Flow
 
 1. CLI parses a command in `src/cli.rs`.
-2. Store bootstrap (`src/store/mod.rs`) opens `<repo>/.repo-scout/index.db`, ensures schema, and reads schema version.
+2. Store bootstrap (`src/store/mod.rs`) opens `<repo>/.repo-scout/index.db`, ensures schema, and
+   reads schema version.
 3. `index` performs incremental indexing (`src/indexer/mod.rs`).
 4. Query commands read SQLite tables and apply deterministic ranking/ordering (`src/query/mod.rs`).
 5. Output is rendered as terminal text or JSON (`src/output.rs`).
@@ -28,6 +29,8 @@ This document describes the current `repo-scout` architecture after Phase 6.
   - Rust AST extraction for definitions/references.
 - `src/indexer/languages/`
   - Language adapters (`rust`, `typescript`, `python`) and normalized extraction contracts.
+  - TypeScript/Python adapters now include module-aware alias hints for namespace/member and
+    module-alias attribute call resolution.
 - `src/indexer/mod.rs`
   - Incremental indexing coordinator, stale-row pruning, adapter dispatch, deferred edge resolution,
     and symbol/edge persistence.
@@ -35,7 +38,8 @@ This document describes the current `repo-scout` architecture after Phase 6.
   - `find`, `refs`, `impact`, `context`, `tests-for`, `verify-plan`, `diff-impact`, and `explain`
     implementations.
 - `src/output.rs`
-  - Human-readable and JSON serialization paths.
+  - Human-readable and JSON serialization paths (`diff-impact` terminal output is row-oriented in
+    Phase 8).
 
 ## Storage Model
 
@@ -72,11 +76,13 @@ For each indexing run:
 3. For each live file:
    - compute hash,
    - skip unchanged files,
-   - otherwise delete existing rows for that file and reinsert fresh text/AST/symbol/edge rows in one transaction.
+   - otherwise delete existing rows for that file and reinsert fresh text/AST/symbol/edge rows in
+     one transaction.
 4. Resolve deferred cross-file edges after all files are indexed.
 5. Upsert file hash into `indexed_files`.
 
-Lifecycle guarantees covered by integration tests include stale-file pruning, rename handling, and schema migration safety.
+Lifecycle guarantees covered by integration tests include stale-file pruning, rename handling, and
+schema migration safety.
 
 ## Query Strategies
 
@@ -103,6 +109,7 @@ Lifecycle guarantees covered by integration tests include stale-file pruning, re
 - Resolve all matching symbols in `symbols_v2`.
 - Walk incoming edges in `symbol_edges_v2`.
 - Emit one-hop impacted neighbors with normalized relationship labels.
+- Apply deterministic semantic score calibration by relationship/provenance.
 
 ### `context`
 
@@ -128,8 +135,8 @@ Lifecycle guarantees covered by integration tests include stale-file pruning, re
 - Suggest targeted test commands from:
   - changed file itself when it is a runnable test target,
   - tests referencing symbols defined in changed files.
-- Apply deterministic targeted capping (`DEFAULT_VERIFY_PLAN_MAX_TARGETED = 8` or
-  `--max-targeted` override).
+- Apply deterministic targeted capping (`DEFAULT_VERIFY_PLAN_MAX_TARGETED = 8` or `--max-targeted`
+  override).
 - Preserve changed runnable test targets regardless cap value.
 - Keep best evidence for duplicate commands.
 - Always append `cargo test` full-suite gate.
@@ -145,11 +152,16 @@ Lifecycle guarantees covered by integration tests include stale-file pruning, re
 - Expand bounded multi-hop incoming neighbors from `symbol_edges_v2` up to `--max-distance`.
 - Use per-seed minimum-distance tracking and changed-seed suppression to avoid cycle-driven
   duplicate growth.
+- Resolve TypeScript namespace/member and Python module-alias attribute calls with module-aware
+  hints so duplicate-name callees do not cross-link ambiguously.
 - Optionally remove changed-symbol output rows with `--exclude-changed`.
 - Optionally cap results deterministically with `--max-results`.
-- Attach ranked test targets (`include_tests = true`; `--include-tests` retained for CLI
-  compatibility).
+- Attach ranked test targets by default (`include_tests = true`), disable with `--exclude-tests`, or
+  keep explicit default behavior with `--include-tests` (conflicting flags are rejected by clap).
+- Apply deterministic semantic score calibration so resolved semantic caller rows rank above
+  fallback test-target rows.
 - Sort mixed result kinds deterministically.
+- Render terminal output as deterministic row-level `impacted_symbol`/`test_target` lines.
 
 ### `explain`
 
@@ -167,6 +179,14 @@ Determinism is enforced by:
 - fixed JSON field shapes,
 - deterministic handler-stage truncation for capped commands (`find`, `refs`, `diff-impact`).
 
+## Quality Gates
+
+Phase 8 requires both quality gates to stay green for release-readiness:
+
+- `cargo clippy --all-targets --all-features -- -D warnings`
+- `cargo test`
+
 ## Corruption Recovery
 
-Store bootstrap maps SQLite corruption signatures (`DatabaseCorrupt`, `NotADatabase`) into an actionable error telling users to delete the index DB file and rerun `index`.
+Store bootstrap maps SQLite corruption signatures (`DatabaseCorrupt`, `NotADatabase`) into an
+actionable error telling users to delete the index DB file and rerun `index`.
