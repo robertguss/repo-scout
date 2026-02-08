@@ -32,8 +32,8 @@ checks become CI-safe, and day-to-day CLI usage is less noisy and easier to scan
 - [x] (2026-02-08 02:37Z) Completed Milestone 37 strict TDD slices for semantic-precision closure
       in TypeScript/Python alias-import call paths and added fixture
       `tests/fixtures/phase8/semantic_precision`.
-- [ ] Run Milestone 38 strict TDD slices to clear strict clippy quality gates without behavior
-      regressions.
+- [x] (2026-02-08 02:39Z) Completed Milestone 38 strict TDD slices; strict lint gate is green on
+      `cargo clippy --all-targets --all-features -- -D warnings` with full `cargo test` passing.
 - [ ] Run Milestone 39 strict TDD slices for explicit `diff-impact` test-target toggles.
 - [ ] Run Milestone 40 strict TDD slices for actionable deterministic `diff-impact` terminal
       output rows.
@@ -59,6 +59,11 @@ checks become CI-safe, and day-to-day CLI usage is less noisy and easier to scan
   Evidence: `cargo clippy --all-targets --all-features -- -D warnings` reports actionable lints in
   `src/indexer/languages/python.rs`, `src/indexer/languages/typescript.rs`,
   `src/indexer/languages/rust.rs`, `src/indexer/rust_ast.rs`, and `tests/common/mod.rs`.
+
+- Observation: direct semantic fixes in language adapters triggered `clippy::too_many_arguments`
+  for shared recursive helper signatures in both TypeScript and Python call collectors.
+  Evidence: `cargo clippy --bin repo-scout -- -D warnings` failed on
+  `collect_call_symbols` function arity in both adapter files.
 
 - Observation: `diff-impact --include-tests` is currently a compatibility no-op and cannot disable
   test rows.
@@ -106,6 +111,13 @@ checks become CI-safe, and day-to-day CLI usage is less noisy and easier to scan
   in earlier milestones.
   Date/Author: 2026-02-08 / Codex
 
+- Decision: keep recursive `collect_call_symbols` helper signatures and explicitly annotate them
+  with `#[allow(clippy::too_many_arguments)]` rather than introducing high-risk refactors in the
+  same milestone as strict lint-gate recovery.
+  Rationale: this keeps semantic behavior stable while satisfying strict clippy gates and limiting
+  scope creep in a hardening milestone.
+  Date/Author: 2026-02-08 / Codex
+
 ## Outcomes & Retrospective
 
 Planning outcome: Phase 8 is scoped to close semantic correctness debt first, then harden quality
@@ -122,6 +134,9 @@ for ranking quality across non-repo fixtures.
 Milestone 37 outcome (interim): `diff-impact` now returns deterministic `called_by` rows for both
 namespace/module alias calls and direct alias-import calls in the new Phase 8 fixture, while
 preserving legacy import-symbol impact behavior used by existing tests.
+
+Milestone 38 outcome (interim): strict clippy quality gates are green for test and bin targets and
+across all targets/features, with no behavior regressions in the full integration suite.
 
 ## Context and Orientation
 
@@ -432,6 +447,32 @@ Milestone 37 fixture dogfood evidence:
 
     $ cargo run -- impact helper --repo tests/fixtures/phase8/semantic_precision --json
     includes TypeScript and Python caller rows in deterministic order
+
+Milestone 38 strict lint evidence:
+
+    # Slice 38A red
+    $ cargo clippy --test harness_smoke -- -D warnings
+    error: collapsible_if in tests/common/mod.rs
+
+    # Slice 38A green
+    $ cargo clippy --test harness_smoke -- -D warnings
+    Finished ... target(s)
+
+    # Slice 38B red
+    $ cargo clippy --bin repo-scout -- -D warnings
+    errors: question_mark, too_many_arguments, double_ended_iterator_last, collapsible_if
+
+    # Slice 38B green
+    $ cargo clippy --bin repo-scout -- -D warnings
+    Finished ... target(s)
+
+    # Slice 38C gate
+    $ cargo clippy --all-targets --all-features -- -D warnings
+    Finished ... target(s)
+
+    # Slice refactor gate
+    $ cargo test
+    ok (full suite)
 
 ## Interfaces and Dependencies
 

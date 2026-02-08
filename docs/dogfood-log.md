@@ -21,6 +21,32 @@ This log captures real `repo-scout` usage while building `repo-scout`.
 ## Entries
 
 - Date: `2026-02-08`
+- Task: Phase 8 Milestone 38 strict clippy gate recovery.
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find diff_impact_for_changed_files --repo . --json`
+  - `cargo run -- refs diff_impact_for_changed_files --repo . --json`
+  - `cargo clippy --test harness_smoke -- -D warnings`
+  - `cargo clippy --bin repo-scout -- -D warnings`
+  - `cargo clippy --all-targets --all-features -- -D warnings`
+  - `cargo test`
+- What helped:
+  - Targeting lint failures by slice (`harness_smoke` then `bin`) kept edits tightly scoped.
+  - Preserving recursive helper signatures with explicit `#[allow(clippy::too_many_arguments)]`
+    prevented risky refactors while still meeting strict lint gates.
+- What failed or felt weak:
+  - Clippy warning classes evolved (`double_ended_iterator_last` to `filter_next`) as code changed,
+    so fixes needed a second pass (`rfind`) to settle.
+- Action taken:
+  - failing test added:
+    - no new behavior tests; milestone enforced static-analysis gates and full-suite regression pass.
+  - fix commit:
+    - pending (to be committed as Milestone 38 quality-gate cleanup commit)
+  - docs update:
+    - `agents/repo-scout-phase8-execplan.md`, `docs/dogfood-log.md`.
+- Status: `fixed`
+
+- Date: `2026-02-08`
 - Task: Phase 8 Milestone 37 semantic closure for direct alias-import call paths.
 - Commands run:
   - `cargo run -- index --repo .`
@@ -46,7 +72,7 @@ This log captures real `repo-scout` usage while building `repo-scout`.
   - failing test added:
     - `tests/milestone37_semantic_precision.rs`
   - fix commit:
-    - pending (to be committed as Milestone 37 implementation commit)
+    - `Implement Milestone 37 semantic alias-call closure via TDD`
   - docs update:
     - `agents/repo-scout-phase8-execplan.md`, `docs/dogfood-log.md`.
 - Status: `fixed`

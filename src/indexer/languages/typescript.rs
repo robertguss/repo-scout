@@ -314,9 +314,7 @@ fn push_named_definition(
     language: &str,
     output: &mut Vec<ExtractedSymbol>,
 ) -> Option<String> {
-    let Some(name_node) = node.child_by_field_name("name") else {
-        return None;
-    };
+    let name_node = node.child_by_field_name("name")?;
     if !matches!(
         name_node.kind(),
         "identifier" | "type_identifier" | "property_identifier"
@@ -387,6 +385,7 @@ fn collect_type_identifiers(node: Node<'_>, source: &str, output: &mut Vec<Strin
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn collect_call_symbols(
     node: Node<'_>,
     source: &str,

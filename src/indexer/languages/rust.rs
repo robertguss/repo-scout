@@ -223,7 +223,6 @@ fn strip_leading_impl_generics(segment: &str) -> Option<&str> {
 fn last_rust_identifier(segment: &str) -> Option<String> {
     segment
         .split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
-        .filter(|part| !part.is_empty())
-        .last()
+        .rfind(|part| !part.is_empty())
         .map(str::to_string)
 }

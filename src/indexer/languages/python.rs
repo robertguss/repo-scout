@@ -230,9 +230,7 @@ fn push_named_definition(
     language: &str,
     output: &mut Vec<ExtractedSymbol>,
 ) -> Option<String> {
-    let Some(name_node) = node.child_by_field_name("name") else {
-        return None;
-    };
+    let name_node = node.child_by_field_name("name")?;
     if name_node.kind() != "identifier" {
         return None;
     }
@@ -255,6 +253,7 @@ fn push_named_definition(
     Some(symbol)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn collect_call_symbols(
     node: Node<'_>,
     source: &str,
@@ -695,8 +694,7 @@ fn resolve_python_import_path(from_file_path: &str, module_name: &str) -> Option
 
 fn last_identifier(text: &str) -> Option<String> {
     text.split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
-        .filter(|part| !part.is_empty())
-        .last()
+        .rfind(|part| !part.is_empty())
         .map(str::to_string)
 }
 
