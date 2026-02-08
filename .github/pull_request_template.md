@@ -1,23 +1,77 @@
-## Summary
+## Objective
 
-Describe the change in 2-5 sentences.
+- Problem solved:
+- Intended outcome:
 
-## What Changed
+## Risk Tier
 
--
+- Tier: `0 | 1 | 2 | 3`
+- Rationale:
 
-## Strict TDD Evidence (Required)
+## Scope
 
-- [ ] Every feature slice started with a failing test (red).
-- [ ] Every feature slice was implemented with minimal code to pass (green).
-- [ ] Every feature slice finished with full-suite pass after refactor.
-- [ ] Red/green/refactor transcripts are included below or linked from planning artifacts.
+- Files/components changed:
+- Explicit exclusions:
 
-Red/green/refactor transcripts or links:
+## Red
 
--
+- Failing test(s):
+- Command(s):
+- Expected failure summary:
 
-## Dogfooding Evidence (Required)
+## Green
+
+- Minimal implementation summary:
+- Command(s):
+- Passing summary:
+
+## Refactor
+
+- Structural improvements:
+- Why behavior is unchanged:
+- Confirmation commands:
+
+## Invariants
+
+- Invariants added/updated:
+- Boundary checks added/updated:
+
+## Security Impact
+
+- Threats considered:
+- Mitigations:
+- Residual risk:
+
+## Performance Impact
+
+- Baseline:
+- Post-change:
+- Delta explanation:
+
+## Assumptions
+
+1. Assumption 1
+
+## Open Questions
+
+1. Question 1
+
+## Rollback Plan
+
+- Trigger conditions:
+- Rollback steps:
+
+## Validation Commands
+
+```bash
+# red
+
+# green
+
+# full validation
+```
+
+## Dogfooding Evidence (repo-scout required)
 
 - [ ] Ran pre-edit dogfood loop:
   - `cargo run -- index --repo .`
@@ -28,18 +82,9 @@ Red/green/refactor transcripts or links:
   - `cargo run -- find <symbol> --repo .`
   - `cargo run -- refs <symbol> --repo .`
   - `cargo test`
-- [ ] Added or updated at least one entry in `docs/dogfood-log.md` if any issue was found.
+- [ ] Added or updated an entry in `docs/dogfood-log.md` if any issue was found.
 
 Dogfood transcripts or links:
-
--
-
-## Validation
-
-- [ ] `cargo test`
-- [ ] Additional milestone or targeted commands:
-
-Commands/output:
 
 -
 

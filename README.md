@@ -144,6 +144,7 @@ just build
 just fmt
 just clippy
 just test
+just contract-check
 just dogfood-pre launch
 just dogfood-post launch
 
@@ -155,6 +156,38 @@ just context "update launch flow" . 1200
 just tests-for launch .
 just verify-plan src/lib.rs .
 ```
+
+## Contract System v2 Workflow
+
+This repository uses a one-time snapshot of Contract System v2 for strict TDD and evidence
+enforcement.
+
+- Core contracts: `contracts/core/`
+- Active language contract: `contracts/languages/RUST_CODING_CONTRACT.md`
+- Templates: `templates/`
+- Review checklists: `checklists/`
+- Validators: `scripts/validate_tdd_cycle.sh`, `scripts/validate_evidence_packet.sh`
+- CI gate: `.github/workflows/contract-gates.yml`
+
+Run these checks before opening a PR:
+
+```bash
+bash scripts/validate_tdd_cycle.sh --base origin/main
+bash scripts/validate_evidence_packet.sh --pr-body .github/pull_request_template.md
+cargo test
+```
+
+Equivalent `just` wrappers:
+
+```bash
+just contract-lint
+just contract-tdd origin/main
+just contract-evidence-pr .github/pull_request_template.md
+just contract-check
+```
+
+Evidence default: PR body headings in `.github/pull_request_template.md` are the primary evidence
+source. `.evidence/EVIDENCE_PACKET.md` is optional.
 
 ## Dogfood Procedure
 
