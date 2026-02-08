@@ -344,12 +344,18 @@ fn run_diff_impact(args: crate::cli::DiffImpactArgs) -> anyhow::Result<()> {
             && left.start_line == right.start_line
             && left.end_line == right.end_line
     });
+    let mut changed_symbols = args.changed_symbols.clone();
+    changed_symbols.sort();
+    changed_symbols.dedup();
 
     let options = DiffImpactOptions {
         max_distance: args.max_distance,
         include_tests: args.include_tests,
         include_imports: args.include_imports,
         changed_lines,
+        changed_symbols,
+        exclude_changed: args.exclude_changed,
+        max_results: args.max_results,
     };
     let matches = diff_impact_for_changed_files(&store.db_path, &changed_files, &options)?;
     if args.json {

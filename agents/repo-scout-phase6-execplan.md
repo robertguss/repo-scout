@@ -44,9 +44,11 @@ non-code paths, and faster conversion from “what changed” to “what do I ru
       controls (`--changed-line`, repeatable `--changed-symbol`, scope safety preservation).
 - [x] (2026-02-08 00:04Z) Ran Milestone 28 post-dogfood checks; verify-plan scoped dogfood command
       now succeeds while future Milestone 29/30 flags remain expected clap failures.
-- [ ] Run required pre-milestone dogfood baseline for Milestone 29.
-- [ ] Complete Milestone 29 strict TDD slices for diff-impact focused output controls.
-- [ ] Run Milestone 29 post-dogfood checks.
+- [x] (2026-02-08 00:05Z) Ran required pre-milestone dogfood baseline for Milestone 29.
+- [x] (2026-02-08 00:08Z) Completed Milestone 29 strict TDD slices for diff-impact focused output
+      controls (`--changed-symbol`, `--exclude-changed`, deterministic `--max-results` cap).
+- [x] (2026-02-08 00:09Z) Ran Milestone 29 post-dogfood checks; diff-impact focused command now
+      succeeds while future Milestone 30 `refs --max-results` still fails as expected.
 - [ ] Run required pre-milestone dogfood baseline for Milestone 30.
 - [ ] Complete Milestone 30 strict TDD slices for fallback ranking/limit controls in find/refs.
 - [ ] Run Milestone 30 post-dogfood checks.
@@ -89,6 +91,12 @@ non-code paths, and faster conversion from “what changed” to “what do I ru
   line/symbol scope controls (changed test target + full-suite gate survived restrictive filters).
   Evidence: `milestone28_verify_plan_scope_filters_preserve_changed_test_and_full_suite_gate`
   passed immediately on first run and again on the green re-run after scope feature work landed.
+
+- Observation: once Milestone 29 landed, the previously failing dogfood command
+  `diff-impact --changed-symbol ... --exclude-changed --max-results ...` became fully actionable
+  and produced focused neighbor/test payloads without distance-0 seed rows.
+  Evidence: Milestone 29 post-check produced schema 3 JSON with test targets only for
+  `verify_plan_for_changed_files` when `--exclude-changed` was set.
 
 ## Decision Log
 
@@ -133,6 +141,12 @@ non-code paths, and faster conversion from “what changed” to “what do I ru
   the intended outcome for this slice.
   Date/Author: 2026-02-08 / Codex
 
+- Decision: apply `diff-impact --exclude-changed` as an output-stage filter after seed collection
+  and traversal, and apply `--max-results` as post-sort truncation.
+  Rationale: this preserves traversal correctness and deterministic ordering semantics while making
+  focused output controls additive and easy to reason about.
+  Date/Author: 2026-02-08 / Codex
+
 ## Outcomes & Retrospective
 
 Planning outcome: Phase 6 scope is constrained to high-impact precision controls for existing
@@ -152,6 +166,10 @@ tests stayed green through each slice refactor gate.
 Milestone 28 outcome (2026-02-08): `verify-plan` now supports additive `--changed-line` and
 repeatable `--changed-symbol` scope controls with deterministic normalization, while preserving
 changed runnable test targets and the mandatory `cargo test` gate.
+
+Milestone 29 outcome (2026-02-08): `diff-impact` now supports repeatable `--changed-symbol`,
+`--exclude-changed`, and deterministic `--max-results` truncation while keeping schema 3 envelope
+shape and traversal semantics stable.
 
 ## Context and Orientation
 
@@ -597,6 +615,69 @@ Milestone 28 post-dogfood evidence:
     # - diff-impact and refs future flags still fail with "unexpected argument"
     # - full cargo test suite passes
 
+Milestone 29 strict TDD evidence:
+
+    # 29A red
+    cargo test milestone29_diff_impact_changed_symbol_filters_seed_rows -- --nocapture
+    ...
+    error: unexpected argument '--changed-symbol' found
+
+    # 29A green
+    cargo test milestone29_diff_impact_changed_symbol_filters_seed_rows -- --nocapture
+    ...
+    test milestone29_diff_impact_changed_symbol_filters_seed_rows ... ok
+
+    # 29A refactor
+    cargo test
+    ...
+    test result: ok. (full suite)
+
+    # 29B red
+    cargo test milestone29_diff_impact_exclude_changed_hides_distance_zero_rows -- --nocapture
+    ...
+    error: unexpected argument '--exclude-changed' found
+
+    # 29B green
+    cargo test milestone29_diff_impact_exclude_changed_hides_distance_zero_rows -- --nocapture
+    ...
+    test milestone29_diff_impact_exclude_changed_hides_distance_zero_rows ... ok
+
+    # 29B refactor
+    cargo test
+    ...
+    test result: ok. (full suite)
+
+    # 29C red
+    cargo test milestone29_diff_impact_max_results_caps_deterministically -- --nocapture
+    ...
+    error: unexpected argument '--max-results' found
+
+    # 29C green
+    cargo test milestone29_diff_impact_max_results_caps_deterministically -- --nocapture
+    ...
+    test milestone29_diff_impact_max_results_caps_deterministically ... ok
+
+    # 29C refactor
+    cargo test
+    ...
+    test result: ok. (full suite)
+
+Milestone 29 post-dogfood evidence:
+
+    cargo run -- index --repo .
+    cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --json
+    cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --exclude-tests --json
+    cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --code-only --exclude-tests --json
+    cargo run -- verify-plan --changed-file src/query/mod.rs --changed-line src/query/mod.rs:1094:1165 --changed-symbol verify_plan_for_changed_files --repo . --json
+    cargo run -- diff-impact --changed-file src/query/mod.rs --changed-symbol verify_plan_for_changed_files --exclude-changed --max-results 12 --repo . --json
+    cargo run -- refs helper --repo . --max-results 10 --json
+    cargo test
+
+    # expected at Milestone 29:
+    # - verify-plan and diff-impact scoped commands now succeed
+    # - refs --max-results still fails with "unexpected argument" until Milestone 30
+    # - full cargo test suite passes
+
 ## Interfaces and Dependencies
 
 Phase 6 should not require new external crates by default. Continue using the current dependency
@@ -647,3 +728,7 @@ future-flag dogfood commands before their owning milestones.
 Revision Note (2026-02-08): Updated live plan during Milestone 28 implementation with verify-plan
 scope transcripts (`--changed-line`, `--changed-symbol`, safety regression guard), post-dogfood
 evidence, and updated decision/progress/outcome logs.
+
+Revision Note (2026-02-08): Updated live plan during Milestone 29 implementation with diff-impact
+scope transcripts (`--changed-symbol`, `--exclude-changed`, `--max-results`), post-dogfood
+evidence, and milestone decision/progress/outcome updates.

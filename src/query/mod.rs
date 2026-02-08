@@ -148,6 +148,9 @@ pub struct DiffImpactOptions {
     pub include_tests: bool,
     pub include_imports: bool,
     pub changed_lines: Vec<ChangedLineRange>,
+    pub changed_symbols: Vec<String>,
+    pub exclude_changed: bool,
+    pub max_results: Option<usize>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -169,6 +172,11 @@ pub fn diff_impact_for_changed_files(
     let mut seen = HashSet::new();
     let mut changed_symbol_ids = Vec::new();
     let changed_lines_by_file = changed_lines_by_file(&options.changed_lines);
+    let changed_symbol_filter = options
+        .changed_symbols
+        .iter()
+        .cloned()
+        .collect::<HashSet<_>>();
 
     for changed_file in changed_files {
         let mut statement = connection.prepare(
@@ -209,6 +217,9 @@ pub fn diff_impact_for_changed_files(
                     line_range_overlaps(line, end_line, range.start_line, range.end_line)
                 })
             {
+                continue;
+            }
+            if !changed_symbol_filter.is_empty() && !changed_symbol_filter.contains(&symbol) {
                 continue;
             }
             let language = normalized_language(&language, &file_path).to_string();
@@ -397,7 +408,19 @@ pub fn diff_impact_for_changed_files(
         results.extend(selected_test_targets.into_values());
     }
 
+    if options.exclude_changed {
+        results.retain(|item| {
+            !matches!(
+                item,
+                DiffImpactMatch::ImpactedSymbol { relationship, .. } if relationship == "changed_symbol"
+            )
+        });
+    }
+
     results.sort_by(diff_impact_sort_key);
+    if let Some(max_results) = options.max_results {
+        results.truncate(max_results);
+    }
     Ok(results)
 }
 
