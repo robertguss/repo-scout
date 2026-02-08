@@ -8,6 +8,12 @@ use crate::indexer::languages::{
 
 pub struct PythonLanguageAdapter;
 
+#[derive(Debug, Clone)]
+struct ImportCallHint {
+    import_path: String,
+    imported_symbol: String,
+}
+
 fn scoped_symbol_key(file_path: &str, language: &str, symbol: &str) -> SymbolKey {
     SymbolKey {
         symbol: symbol.to_string(),
@@ -47,6 +53,7 @@ impl LanguageAdapter for PythonLanguageAdapter {
 
         let language = self.language_id().to_string();
         let import_target_hints = import_target_hints(file_path, source);
+        let import_call_hints = import_call_hints(file_path, source);
         let mut symbols = Vec::new();
         let mut references = Vec::new();
         let mut edges = Vec::new();
@@ -105,6 +112,7 @@ impl LanguageAdapter for PythonLanguageAdapter {
                             file_path,
                             &language,
                             &import_target_hints,
+                            &import_call_hints,
                             &mut references,
                             &mut edges,
                         );
@@ -254,6 +262,7 @@ fn collect_call_symbols(
     file_path: &str,
     language: &str,
     import_target_hints: &HashMap<String, String>,
+    import_call_hints: &HashMap<String, ImportCallHint>,
     references: &mut Vec<ExtractedReference>,
     edges: &mut Vec<ExtractedEdge>,
 ) {
@@ -266,6 +275,25 @@ fn collect_call_symbols(
                     line,
                     column,
                 });
+                if let Some(caller_symbol) = caller
+                    && let Some(call_hint) = import_call_hints.get(&symbol)
+                {
+                    edges.push(ExtractedEdge {
+                        from_symbol_key: scoped_symbol_key(file_path, language, caller_symbol),
+                        to_symbol_key: SymbolKey {
+                            symbol: call_hint.imported_symbol.clone(),
+                            qualified_symbol: Some(format!(
+                                "{language}:{}::{}",
+                                call_hint.import_path, call_hint.imported_symbol
+                            )),
+                            file_path: Some(call_hint.import_path.clone()),
+                            language: Some(language.to_string()),
+                        },
+                        edge_kind: "calls".to_string(),
+                        confidence: 0.95,
+                        provenance: "call_resolution".to_string(),
+                    });
+                }
                 if let Some(caller_symbol) = caller {
                     edges.push(ExtractedEdge {
                         from_symbol_key: scoped_symbol_key(file_path, language, caller_symbol),
@@ -323,6 +351,7 @@ fn collect_call_symbols(
                     file_path,
                     language,
                     import_target_hints,
+                    import_call_hints,
                     references,
                     edges,
                 );
@@ -361,6 +390,7 @@ fn collect_call_symbols(
                     file_path,
                     language,
                     import_target_hints,
+                    import_call_hints,
                     references,
                     edges,
                 );
@@ -589,6 +619,54 @@ fn import_target_hints(file_path: &str, source: &str) -> HashMap<String, String>
                 }
                 hints.insert(local_symbol, import_path.clone());
             }
+        }
+    }
+
+    hints
+}
+
+fn import_call_hints(file_path: &str, source: &str) -> HashMap<String, ImportCallHint> {
+    let mut hints = HashMap::new();
+
+    for line in source.lines() {
+        let trimmed = line.trim();
+        let Some(rest) = trimmed.strip_prefix("from ") else {
+            continue;
+        };
+        let Some((module_name, imports_part)) = rest.split_once(" import ") else {
+            continue;
+        };
+        let Some(import_path) = resolve_python_import_path(file_path, module_name.trim()) else {
+            continue;
+        };
+
+        for specifier in imports_part.split(',') {
+            let specifier = specifier.trim();
+            if specifier.is_empty() || specifier == "*" {
+                continue;
+            }
+            let (imported_name, local_alias) =
+                if let Some((left, right)) = specifier.split_once(" as ") {
+                    (left.trim(), Some(right.trim()))
+                } else {
+                    (specifier, None)
+                };
+            let Some(imported_symbol) = last_identifier(imported_name) else {
+                continue;
+            };
+            let local_symbol = local_alias
+                .map(str::to_string)
+                .unwrap_or_else(|| imported_symbol.clone());
+            if local_symbol.is_empty() {
+                continue;
+            }
+            hints.insert(
+                local_symbol,
+                ImportCallHint {
+                    import_path: import_path.clone(),
+                    imported_symbol,
+                },
+            );
         }
     }
 

@@ -21,6 +21,37 @@ This log captures real `repo-scout` usage while building `repo-scout`.
 ## Entries
 
 - Date: `2026-02-08`
+- Task: Phase 8 Milestone 37 semantic closure for direct alias-import call paths.
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find diff_impact_for_changed_files --repo . --json`
+  - `cargo run -- refs diff_impact_for_changed_files --repo . --json`
+  - `cargo test milestone37_typescript_namespace_alias_diff_impact_recalls_caller -- --nocapture`
+  - `cargo test milestone37_python_module_alias_diff_impact_recalls_caller -- --nocapture`
+  - `cargo test milestone37_semantic_precision_deterministic_ordering -- --nocapture`
+  - `cargo test`
+  - `cargo run -- index --repo tests/fixtures/phase8/semantic_precision`
+  - `cargo run -- diff-impact --changed-file src/util_a.ts --repo tests/fixtures/phase8/semantic_precision --json`
+  - `cargo run -- diff-impact --changed-file src/pkg_a/util.py --repo tests/fixtures/phase8/semantic_precision --json`
+  - `cargo run -- impact helper --repo tests/fixtures/phase8/semantic_precision --json`
+- What helped:
+  - New alias-call hint maps in TypeScript/Python adapters resolved direct alias-import calls to
+    qualified duplicate-name callees (`helperA()` and `helper_a()`).
+  - Keeping both direct and local-import call edges preserved existing `impact <import_alias>`
+    behavior while fixing `diff-impact` distance-1 caller recall.
+- What failed or felt weak:
+  - TypeScript fixture still includes an expected `imported_by` row for the local import symbol
+    (`helperA`) in addition to direct caller rows, which is correct but can add output noise.
+- Action taken:
+  - failing test added:
+    - `tests/milestone37_semantic_precision.rs`
+  - fix commit:
+    - pending (to be committed as Milestone 37 implementation commit)
+  - docs update:
+    - `agents/repo-scout-phase8-execplan.md`, `docs/dogfood-log.md`.
+- Status: `fixed`
+
+- Date: `2026-02-08`
 - Task: Phase 7 Milestones 32-36 cross-language semantic precision and quality benchmark guardrails.
 - Commands run:
   - `cargo run -- index --repo .`

@@ -8,6 +8,12 @@ use crate::indexer::languages::{
 
 pub struct TypeScriptLanguageAdapter;
 
+#[derive(Debug, Clone)]
+struct ImportCallHint {
+    import_path: String,
+    imported_symbol: String,
+}
+
 fn scoped_symbol_key(file_path: &str, language: &str, symbol: &str) -> SymbolKey {
     SymbolKey {
         symbol: symbol.to_string(),
@@ -53,6 +59,7 @@ impl LanguageAdapter for TypeScriptLanguageAdapter {
 
         let language = self.language_id().to_string();
         let import_target_hints = import_target_hints(file_path, source);
+        let import_call_hints = import_call_hints(file_path, source);
         let mut symbols = Vec::new();
         let mut references = Vec::new();
         let mut edges = Vec::new();
@@ -193,6 +200,7 @@ impl LanguageAdapter for TypeScriptLanguageAdapter {
                             file_path,
                             &language,
                             &import_target_hints,
+                            &import_call_hints,
                             &mut references,
                             &mut edges,
                         );
@@ -386,6 +394,7 @@ fn collect_call_symbols(
     file_path: &str,
     language: &str,
     import_target_hints: &HashMap<String, String>,
+    import_call_hints: &HashMap<String, ImportCallHint>,
     references: &mut Vec<ExtractedReference>,
     edges: &mut Vec<ExtractedEdge>,
 ) {
@@ -398,6 +407,25 @@ fn collect_call_symbols(
                     line,
                     column,
                 });
+                if let Some(caller_symbol) = caller
+                    && let Some(call_hint) = import_call_hints.get(&symbol)
+                {
+                    edges.push(ExtractedEdge {
+                        from_symbol_key: scoped_symbol_key(file_path, language, caller_symbol),
+                        to_symbol_key: SymbolKey {
+                            symbol: call_hint.imported_symbol.clone(),
+                            qualified_symbol: Some(format!(
+                                "{language}:{}::{}",
+                                call_hint.import_path, call_hint.imported_symbol
+                            )),
+                            file_path: Some(call_hint.import_path.clone()),
+                            language: Some(language.to_string()),
+                        },
+                        edge_kind: "calls".to_string(),
+                        confidence: 0.95,
+                        provenance: "call_resolution".to_string(),
+                    });
+                }
                 if let Some(caller_symbol) = caller {
                     edges.push(ExtractedEdge {
                         from_symbol_key: scoped_symbol_key(file_path, language, caller_symbol),
@@ -455,6 +483,7 @@ fn collect_call_symbols(
                     file_path,
                     language,
                     import_target_hints,
+                    import_call_hints,
                     references,
                     edges,
                 );
@@ -470,6 +499,7 @@ fn collect_call_symbols(
                     file_path,
                     language,
                     import_target_hints,
+                    import_call_hints,
                     references,
                     edges,
                 );
@@ -658,6 +688,61 @@ fn import_target_hints(file_path: &str, source: &str) -> HashMap<String, String>
             .filter(|symbol| !symbol.is_empty());
         if let Some(local_symbol) = default_binding {
             hints.insert(local_symbol.to_string(), import_path);
+        }
+    }
+
+    hints
+}
+
+fn import_call_hints(file_path: &str, source: &str) -> HashMap<String, ImportCallHint> {
+    let mut hints = HashMap::new();
+
+    for line in source.lines() {
+        let trimmed = line.trim();
+        if !trimmed.starts_with("import ") {
+            continue;
+        }
+        let Some((head, from_tail)) = trimmed.split_once(" from ") else {
+            continue;
+        };
+        let Some(module_specifier) = quoted_text(from_tail) else {
+            continue;
+        };
+        let Some(import_path) = resolve_typescript_import_path(file_path, &module_specifier) else {
+            continue;
+        };
+        let Some((left_brace, right_brace)) = head
+            .find('{')
+            .and_then(|left| head.find('}').map(|right| (left, right)))
+        else {
+            continue;
+        };
+        if right_brace <= left_brace {
+            continue;
+        }
+
+        let clause = &head[left_brace + 1..right_brace];
+        for specifier in clause.split(',') {
+            let specifier = specifier.trim();
+            if specifier.is_empty() {
+                continue;
+            }
+            let (imported_symbol, local_symbol) =
+                if let Some((imported, local)) = specifier.split_once(" as ") {
+                    (imported.trim(), local.trim())
+                } else {
+                    (specifier, specifier)
+                };
+            if imported_symbol.is_empty() || local_symbol.is_empty() {
+                continue;
+            }
+            hints.insert(
+                local_symbol.to_string(),
+                ImportCallHint {
+                    import_path: import_path.clone(),
+                    imported_symbol: imported_symbol.to_string(),
+                },
+            );
         }
     }
 
