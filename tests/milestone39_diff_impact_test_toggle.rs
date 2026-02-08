@@ -85,8 +85,8 @@ fn milestone39_diff_impact_default_and_include_tests_keep_test_targets() {
 
     let default_payload: Value =
         serde_json::from_str(&default_output).expect("default diff-impact json should parse");
-    let explicit_payload: Value =
-        serde_json::from_str(&explicit_output).expect("explicit include diff-impact json should parse");
+    let explicit_payload: Value = serde_json::from_str(&explicit_output)
+        .expect("explicit include diff-impact json should parse");
 
     assert_eq!(default_payload["include_tests"], true);
     assert_eq!(explicit_payload["include_tests"], true);

@@ -21,6 +21,102 @@ This log captures real `repo-scout` usage while building `repo-scout`.
 ## Entries
 
 - Date: `2026-02-08`
+- Task: Phase 8 Milestone 41 docs/evidence/performance refresh plus final verification.
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find diff_impact_for_changed_files --repo . --json`
+  - `cargo run -- refs diff_impact_for_changed_files --repo . --json`
+  - `cargo run -- diff-impact --changed-file src/query/mod.rs --repo .`
+  - `cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --exclude-tests --json`
+  - `cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --include-tests --json`
+  - `cargo run -- explain diff_impact_for_changed_files --repo . --json`
+  - `cargo run -- index --repo tests/fixtures/phase8/semantic_precision`
+  - `cargo run -- diff-impact --changed-file src/util_a.ts --repo tests/fixtures/phase8/semantic_precision --json`
+  - `cargo run -- diff-impact --changed-file src/pkg_a/util.py --repo tests/fixtures/phase8/semantic_precision --json`
+  - `cargo run -- impact helper --repo tests/fixtures/phase8/semantic_precision --json`
+  - `cargo clippy --all-targets --all-features -- -D warnings`
+  - `cargo test`
+  - `cargo fmt`
+- What helped:
+  - Updating docs directly from executed command output avoided drift in `include_tests` and
+    terminal `diff-impact` behavior descriptions.
+  - Re-running the semantic fixture pack confirmed Milestone 37 closure still holds after Milestone
+    39/40 changes.
+- What failed or felt weak:
+  - Terminal `diff-impact` output for large files can be long; `--exclude-tests` is useful to trim
+    noisy test-target rows during quick triage.
+- Action taken:
+  - failing test added:
+    - no new behavior tests (documentation/evidence and final verification milestone).
+  - fix commit:
+    - `Implement Milestone 41 Phase 8 docs and verification refresh`
+  - docs update:
+    - `README.md`, `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`,
+      `docs/performance-baseline.md`, `docs/dogfood-log.md`,
+      `agents/repo-scout-phase8-execplan.md`.
+- Status: `fixed`
+
+- Date: `2026-02-08`
+- Task: Phase 8 Milestone 40 actionable deterministic `diff-impact` terminal rows.
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find diff_impact_for_changed_files --repo . --json`
+  - `cargo run -- refs diff_impact_for_changed_files --repo . --json`
+  - `cargo test milestone40_diff_impact_terminal_lists_impacted_symbol_rows -- --nocapture`
+  - `cargo test milestone40_diff_impact_terminal_lists_test_target_rows_conditionally -- --nocapture`
+  - `cargo test milestone40_diff_impact_terminal_output_is_deterministic -- --nocapture`
+  - `cargo test`
+  - `cargo run -- index --repo .`
+  - `cargo run -- diff-impact --changed-file src/query/mod.rs --repo .`
+  - `cargo run -- diff-impact --changed-file src/query/mod.rs --repo .`
+- What helped:
+  - Reusing the existing deterministic `DiffImpactMatch` sort order made row-level rendering
+    straightforward and stable.
+  - Explicit `result_kind` row prefixes (`impacted_symbol`, `test_target`) made terminal output
+    machine- and human-scannable without changing schema 3 JSON.
+- What failed or felt weak:
+  - Pre-change terminal output only reported summary counts, which hid actionable details for fast
+    CLI triage.
+- Action taken:
+  - failing test added:
+    - `tests/milestone40_diff_impact_terminal_output.rs`
+  - fix commit:
+    - `Implement Milestone 40 deterministic diff-impact terminal rows via TDD`
+  - docs update:
+    - `agents/repo-scout-phase8-execplan.md`, `docs/dogfood-log.md`.
+- Status: `fixed`
+
+- Date: `2026-02-08`
+- Task: Phase 8 Milestone 39 explicit `diff-impact` test-target toggle.
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find diff_impact_for_changed_files --repo . --json`
+  - `cargo run -- refs diff_impact_for_changed_files --repo . --json`
+  - `cargo test milestone39_diff_impact_exclude_tests_omits_test_targets -- --nocapture`
+  - `cargo test milestone39_diff_impact_default_and_include_tests_keep_test_targets -- --nocapture`
+  - `cargo test milestone39_diff_impact_test_toggle_flag_conflicts_are_explicit -- --nocapture`
+  - `cargo test`
+  - `cargo run -- index --repo .`
+  - `cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --json`
+  - `cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --exclude-tests --json`
+  - `cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --include-tests --json`
+- What helped:
+  - Additive CLI plumbing (`--exclude-tests` with clap conflict handling) enabled symbol-only mode
+    without any schema changes.
+  - JSON echo field `include_tests` made behavior explicit for automation consumers.
+- What failed or felt weak:
+  - Before the change, `--include-tests` produced the same output as default behavior and there was
+    no way to suppress test-target rows.
+- Action taken:
+  - failing test added:
+    - `tests/milestone39_diff_impact_test_toggle.rs`
+  - fix commit:
+    - `Implement Milestone 39 diff-impact test-toggle opt-out via TDD`
+  - docs update:
+    - `agents/repo-scout-phase8-execplan.md`, `docs/dogfood-log.md`.
+- Status: `fixed`
+
+- Date: `2026-02-08`
 - Task: Phase 8 Milestone 38 strict clippy gate recovery.
 - Commands run:
   - `cargo run -- index --repo .`
@@ -41,7 +137,7 @@ This log captures real `repo-scout` usage while building `repo-scout`.
   - failing test added:
     - no new behavior tests; milestone enforced static-analysis gates and full-suite regression pass.
   - fix commit:
-    - pending (to be committed as Milestone 38 quality-gate cleanup commit)
+    - `Implement Milestone 38 strict clippy quality-gate cleanup via TDD`
   - docs update:
     - `agents/repo-scout-phase8-execplan.md`, `docs/dogfood-log.md`.
 - Status: `fixed`

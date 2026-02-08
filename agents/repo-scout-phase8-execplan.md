@@ -34,10 +34,12 @@ checks become CI-safe, and day-to-day CLI usage is less noisy and easier to scan
       `tests/fixtures/phase8/semantic_precision`.
 - [x] (2026-02-08 02:39Z) Completed Milestone 38 strict TDD slices; strict lint gate is green on
       `cargo clippy --all-targets --all-features -- -D warnings` with full `cargo test` passing.
-- [ ] Run Milestone 39 strict TDD slices for explicit `diff-impact` test-target toggles.
-- [ ] Run Milestone 40 strict TDD slices for actionable deterministic `diff-impact` terminal
-      output rows.
-- [ ] Run Milestone 41 documentation/evidence/performance refresh and final post-refresh dogfood.
+- [x] (2026-02-08 02:42Z) Completed Milestone 39 strict TDD slices for explicit `diff-impact`
+      test-target toggles (`--exclude-tests`) with default behavior preserved.
+- [x] (2026-02-08 02:44Z) Completed Milestone 40 strict TDD slices for deterministic row-level
+      terminal `diff-impact` output and verified repeated command output is byte-identical.
+- [x] (2026-02-08 02:46Z) Completed Milestone 41 documentation/evidence/performance refresh and
+      final post-refresh dogfood plus quality gates.
 
 ## Surprises & Discoveries
 
@@ -72,6 +74,16 @@ checks become CI-safe, and day-to-day CLI usage is less noisy and easier to scan
 
 - Observation: terminal-mode `diff-impact` is summary-only and does not print per-result rows.
   Evidence: `src/output.rs::print_diff_impact` currently prints command metadata and count only.
+
+- Observation: `--exclude-tests` can reduce large terminal `diff-impact` scans substantially in
+  this repository when changed files have broad downstream coverage.
+  Evidence: `src/query/mod.rs` sample changed from 93 rows (`include_tests=true`) to 70 rows
+  (`include_tests=false`) in Milestone 39 dogfood checks.
+
+- Observation: row-oriented terminal output can stay deterministic without extra sorting logic by
+  reusing already-sorted `DiffImpactMatch` query results.
+  Evidence: repeated Milestone 40 terminal runs for the same command produced byte-identical output
+  via `cmp -s`.
 
 ## Decision Log
 
@@ -137,6 +149,17 @@ preserving legacy import-symbol impact behavior used by existing tests.
 
 Milestone 38 outcome (interim): strict clippy quality gates are green for test and bin targets and
 across all targets/features, with no behavior regressions in the full integration suite.
+
+Milestone 39 outcome (interim): `diff-impact` now supports explicit symbol-only mode via
+`--exclude-tests`, preserves default test-target inclusion, and rejects incompatible
+`--include-tests --exclude-tests` combinations.
+
+Milestone 40 outcome (interim): terminal `diff-impact` output now prints deterministic row-level
+`impacted_symbol` and `test_target` lines with confidence/provenance/score fields.
+
+Milestone 41 outcome (final): docs, dogfood evidence, and performance baseline references are
+aligned to shipped Phase 8 behavior; required verification commands, strict lint gates, tests, and
+format checks all pass.
 
 ## Context and Orientation
 
@@ -474,6 +497,135 @@ Milestone 38 strict lint evidence:
     $ cargo test
     ok (full suite)
 
+Milestone 39 strict TDD evidence:
+
+    # Slice 39A (red observed before toggle plumbing)
+    $ cargo test milestone39_diff_impact_exclude_tests_omits_test_targets -- --nocapture
+    FAILED (pre-fix): expected test_target rows to be absent and include_tests=false
+
+    # Slice 39A green
+    $ cargo test milestone39_diff_impact_exclude_tests_omits_test_targets -- --nocapture
+    ok
+
+    # Slice 39B (red observed before default/compat assertions)
+    $ cargo test milestone39_diff_impact_default_and_include_tests_keep_test_targets -- --nocapture
+    FAILED (pre-fix): expected default and explicit include behavior to match with test_target rows
+
+    # Slice 39B green
+    $ cargo test milestone39_diff_impact_default_and_include_tests_keep_test_targets -- --nocapture
+    ok
+
+    # Slice 39C (red observed before clap conflicts)
+    $ cargo test milestone39_diff_impact_test_toggle_flag_conflicts_are_explicit -- --nocapture
+    FAILED (pre-fix): expected clap conflict error for --include-tests + --exclude-tests
+
+    # Slice 39C green
+    $ cargo test milestone39_diff_impact_test_toggle_flag_conflicts_are_explicit -- --nocapture
+    ok
+
+    # Slice refactor gate
+    $ cargo test
+    ok (full suite)
+
+Milestone 39 toggle behavior evidence:
+
+    $ cargo run -- index --repo .
+    indexed_files: 0
+    skipped_files: 101
+
+    $ cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --json
+    include_tests=true, results=93, test_targets=23
+
+    $ cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --exclude-tests --json
+    include_tests=false, results=70, test_targets=0
+
+    $ cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --include-tests --json
+    include_tests=true, results=93, test_targets=23
+
+Milestone 40 strict TDD evidence:
+
+    # Slice 40A red
+    $ cargo test milestone40_diff_impact_terminal_lists_impacted_symbol_rows -- --nocapture
+    FAILED: terminal output should include a changed_entry impacted_symbol row
+
+    # Slice 40A green
+    $ cargo test milestone40_diff_impact_terminal_lists_impacted_symbol_rows -- --nocapture
+    ok
+
+    # Slice 40B red
+    $ cargo test milestone40_diff_impact_terminal_lists_test_target_rows_conditionally -- --nocapture
+    FAILED: terminal output should include test_target rows by default
+
+    # Slice 40B green
+    $ cargo test milestone40_diff_impact_terminal_lists_test_target_rows_conditionally -- --nocapture
+    ok
+
+    # Slice 40C red
+    $ cargo test milestone40_diff_impact_terminal_output_is_deterministic -- --nocapture
+    FAILED: determinism check requires row-oriented impacted_symbol output
+
+    # Slice 40C green
+    $ cargo test milestone40_diff_impact_terminal_output_is_deterministic -- --nocapture
+    ok
+
+    # Slice refactor gate
+    $ cargo test
+    ok (full suite)
+
+Milestone 40 terminal-output evidence:
+
+    $ cargo run -- index --repo .
+    indexed_files: 2
+    skipped_files: 100
+
+    $ cargo run -- diff-impact --changed-file src/query/mod.rs --repo .
+    includes row-level lines:
+      impacted_symbol src/query/mod.rs:... relationship=changed_symbol ... confidence=... score=...
+      test_target tests/... confidence=... score=...
+
+    $ cargo run -- diff-impact --changed-file src/query/mod.rs --repo .
+    identical to previous run (verified by cmp -s)
+
+Milestone 41 verification evidence:
+
+    $ cargo run -- index --repo .
+    indexed_files: 7
+    skipped_files: 95
+
+    $ cargo run -- diff-impact --changed-file src/query/mod.rs --repo .
+    row-oriented terminal output present; include_tests=true
+
+    $ cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --exclude-tests --json
+    include_tests=false; test_target rows absent
+
+    $ cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --include-tests --json
+    include_tests=true; test_target rows present
+
+    $ cargo run -- explain diff_impact_for_changed_files --repo . --json
+    schema_version=3, command=explain, deterministic payload
+
+    $ cargo run -- index --repo tests/fixtures/phase8/semantic_precision
+    indexed_files: 0
+    skipped_files: 7
+
+    $ cargo run -- diff-impact --changed-file src/util_a.ts --repo tests/fixtures/phase8/semantic_precision --json
+    includes run_namespace_a/run_alias_a called_by; excludes *_b callers
+
+    $ cargo run -- diff-impact --changed-file src/pkg_a/util.py --repo tests/fixtures/phase8/semantic_precision --json
+    includes run_module_a/run_alias_a called_by; excludes *_b callers
+
+    $ cargo run -- impact helper --repo tests/fixtures/phase8/semantic_precision --json
+    includes deterministic TypeScript/Python caller rows
+
+    $ cargo clippy --all-targets --all-features -- -D warnings
+    Finished ... target(s)
+
+    $ cargo test
+    ok (full suite)
+
+    $ cargo fmt
+    formatting clean
+
 ## Interfaces and Dependencies
 
 Phase 8 should continue using existing dependencies (`tree-sitter` language grammars, `rusqlite`,
@@ -508,7 +660,7 @@ Expected interface-level touch points:
 
 - `tests/`
   - add milestone suites for Phase 8 (`tests/milestone37_semantic_precision.rs`,
-    `tests/milestone38_quality_gate.rs`, `tests/milestone39_diff_impact_test_toggle.rs`,
+    `tests/milestone39_diff_impact_test_toggle.rs`,
     `tests/milestone40_diff_impact_terminal_output.rs`),
   - add fixtures under `tests/fixtures/phase8/semantic_precision/`.
 
@@ -526,3 +678,6 @@ Expected interface-level touch points:
 ship production hardening based on full-app validation evidence in
 `agents/phase7-validation-report.md`, aligned to `agents/PLANS.md` strict TDD and living-plan
 requirements.
+
+2026-02-08: Updated after implementation completion for Milestones 37-41 with strict TDD evidence,
+dogfood transcripts, documentation refresh scope, and final verification command outcomes.

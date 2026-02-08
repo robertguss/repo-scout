@@ -117,7 +117,9 @@ fn milestone40_diff_impact_terminal_output_is_deterministic() {
 
     assert_eq!(out_a, out_b);
     assert!(
-        out_a.lines().any(|line| line.starts_with("impacted_symbol ")),
+        out_a
+            .lines()
+            .any(|line| line.starts_with("impacted_symbol ")),
         "determinism check requires row-oriented impacted_symbol output"
     );
 }

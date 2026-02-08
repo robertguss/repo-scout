@@ -128,7 +128,7 @@ Ranking notes:
 
 - Semantic edge rows are deterministically calibrated by relationship/provenance.
 - `called_by` rows from resolved call edges are ranked in a high-confidence band (for example
-  `score ≈ 0.97` in Phase 7 fixture scenarios).
+  `score ≈ 0.97` in Phase 8 fixture scenarios).
 - Deterministic tie-breaks remain `file_path`, `line`, `column`, `symbol`, `relationship`.
 
 Example:
@@ -215,7 +215,7 @@ cargo run -- verify-plan --changed-file src/main.rs --repo . --max-targeted 6 --
 cargo run -- verify-plan --changed-file src/query/mod.rs --changed-line src/query/mod.rs:1094:1165 --changed-symbol verify_plan_for_changed_files --repo . --json
 ```
 
-### `diff-impact --changed-file <PATH> [--changed-file <PATH> ...] --repo <PATH> [--max-distance <N>] [--include-tests] [--include-imports] [--changed-line <path:start[:end]>] [--changed-symbol <symbol> ...] [--exclude-changed] [--max-results <N>] [--json]`
+### `diff-impact --changed-file <PATH> [--changed-file <PATH> ...] --repo <PATH> [--max-distance <N>] [--exclude-tests|--include-tests] [--include-imports] [--changed-line <path:start[:end]>] [--changed-symbol <symbol> ...] [--exclude-changed] [--max-results <N>] [--json]`
 
 Generate deterministic changed-file impact results.
 
@@ -235,11 +235,15 @@ Behavior:
 - `--exclude-changed` removes changed-symbol (`distance=0`) rows from final output while traversal
   still uses those seeds.
 - `--max-results <N>` truncates results deterministically after ranking.
-- Emits test targets (`result_kind = test_target`) when available; this is currently default-on
-  behavior (`include_tests = true`).
+- Emits test targets (`result_kind = test_target`) when available; default behavior remains
+  `include_tests = true`.
+- `--exclude-tests` suppresses test-target rows and flips schema-3 `include_tests` to `false`.
+- `--include-tests` keeps explicit default behavior and conflicts with `--exclude-tests`.
 - Semantic impacted-symbol rows use deterministic calibrated scoring (for example
-  `call_resolution` `called_by` rows in Phase 7 fixtures score `0.97`) and rank ahead of
+  `call_resolution` `called_by` rows in Phase 8 fixtures score `0.97`) and rank ahead of
   fallback test-target rows.
+- Terminal output is row-oriented: one deterministic `impacted_symbol ...` or `test_target ...`
+  line per result with confidence/provenance/score fields.
 
 `--changed-line` parsing rules:
 
@@ -253,6 +257,7 @@ Examples:
 ```bash
 cargo run -- diff-impact --changed-file src/query/mod.rs --repo .
 cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --json
+cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --exclude-tests --json
 cargo run -- diff-impact --changed-file src/query/mod.rs --changed-symbol verify_plan_for_changed_files --exclude-changed --max-results 12 --repo . --json
 ```
 
