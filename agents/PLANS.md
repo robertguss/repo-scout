@@ -12,6 +12,20 @@ When discussing an executable specification (ExecPlan), record decisions in a lo
 
 When researching a design with challenging requirements or significant unknowns, use milestones to implement proof of concepts, "toy implementations", etc., that allow validating whether the user's proposal is feasible. Read the source code of libraries by finding or acquiring them, research deeply, and include prototypes to guide a fuller implementation.
 
+## Contract System v2 integration
+
+When this repository (or the target repository) contains Contract System v2 assets, every ExecPlan must explicitly integrate them. The core files are `contracts/core/`, the language contracts in `contracts/languages/`, delivery templates in `templates/`, review checklists in `checklists/`, and CI enforcement in `scripts/` plus `.github/workflows/contract-gates.yml`.
+
+An ExecPlan must map plan content to these assets. The plan must include task framing fields aligned with `templates/TASK_PACKET_TEMPLATE.md`, define test intent aligned with `templates/TEST_PLAN_TEMPLATE.md`, and define evidence collection aligned with `templates/EVIDENCE_PACKET_TEMPLATE.md`. The plan must declare a risk tier using `contracts/core/RISK_TIER_POLICY.md` and list the required controls for that tier. For Tier 2 and Tier 3 work, the plan must include adversarial review activities aligned with `checklists/ADVERSARIAL_REVIEW_CHECKLIST.md`.
+
+Before implementation starts, the plan must list the exact contract validation commands to run in the target repository, including `scripts/validate_tdd_cycle.sh` and `scripts/validate_evidence_packet.sh` when present.
+
+## AGENTS.md integration
+
+ExecPlans must integrate repository-specific agent instructions from `AGENTS.md` files. At plan start, discover and read applicable `AGENTS.md` files in the target repository scope, then summarize the effective instructions in a dedicated `AGENTS.md Constraints` section inside the ExecPlan.
+
+That section must include the `AGENTS.md` path(s) consulted, the concrete coding/testing/review rules that affect this change, and any required workflow tools (for example repository-specific dogfooding commands). If `AGENTS.md` and contracts both apply, the stricter rule wins. If a conflict remains ambiguous, record the decision in the `Decision Log` with rationale before coding.
+
 ## Requirements
 
 NON-NEGOTIABLE REQUIREMENTS:
@@ -25,6 +39,8 @@ NON-NEGOTIABLE REQUIREMENTS:
 - Every ExecPlan must require strict TDD at the feature-slice level, not only at milestone level. A feature slice is the smallest user-visible behavior unit.
 - Every ExecPlan must forbid writing production code for a feature slice before a failing automated test exists for that exact slice.
 - Every ExecPlan must require evidence artifacts for each feature slice: one red transcript, one green transcript, and one refactor full-suite transcript.
+- Every ExecPlan must declare a risk tier with rationale and list the required controls from `contracts/core/RISK_TIER_POLICY.md` when that file exists in the target repository.
+- Every ExecPlan must include an `AGENTS.md Constraints` section that captures active repository instructions and how they are enforced in this plan.
 
 Purpose and intent come first. Begin by explaining, in a few sentences, why the work matters from a user's perspective: what someone can do after this change that they could not do before, and how to see it working. Then guide the reader through the exact steps to achieve that outcome, including what to edit, what to run, and what they should observe.
 
@@ -47,6 +63,8 @@ Avoid common failure modes. Do not rely on undefined jargon. Do not describe "th
 Anchor the plan with observable outcomes. State what the user can do after implementation, the commands to run, and the outputs they should see. Acceptance should be phrased as behavior a human can verify ("after starting the server, navigating to [http://localhost:8080/health](http://localhost:8080/health) returns HTTP 200 with body OK") rather than internal attributes ("added a HealthCheck struct"). If a change is internal, explain how its impact can still be demonstrated (for example, by running tests that fail before and pass after, and by showing a scenario that uses the new behavior).
 
 Specify repository context explicitly. Name files with full repository-relative paths, name functions and modules precisely, and describe where new files should be created. If touching multiple areas, include a short orientation paragraph that explains how those parts fit together so a novice can navigate confidently. When running commands, show the working directory and exact command line. When outcomes depend on environment, state the assumptions and provide alternatives when reasonable.
+
+When contracts and templates exist in the target repository, reference the exact file paths in the plan and state how each one is consumed. At minimum, map the plan narrative to `templates/TASK_PACKET_TEMPLATE.md`, `templates/TEST_PLAN_TEMPLATE.md`, and `templates/EVIDENCE_PACKET_TEMPLATE.md`, and map enforcement to `scripts/validate_tdd_cycle.sh` and `scripts/validate_evidence_packet.sh`.
 
 Be idempotent and safe. Write the steps so they can be run multiple times without causing damage or drift. If a step can fail halfway, include how to retry or adapt. If a migration or destructive operation is necessary, spell out backups or safe fallbacks. Prefer additive, testable changes that can be validated as you go.
 
@@ -123,6 +141,18 @@ Prefer additive code changes followed by subtractions that keep tests passing. P
 
     Describe the current state relevant to this task as if the reader knows nothing. Name the key files and modules by full path. Define any non-obvious term you will use. Do not refer to prior plans.
 
+    ## Contract Inputs
+
+    List the exact contract and template files this plan uses. At minimum, include the relevant files from `contracts/core/`, one language contract from `contracts/languages/`, and the delivery templates in `templates/`.
+
+    ## AGENTS.md Constraints
+
+    List every `AGENTS.md` file consulted for this plan, summarize the effective rules, and explain how those rules are enforced in milestones and commands.
+
+    ## Risk Tier and Required Controls
+
+    Declare the tier (`0 | 1 | 2 | 3`) with rationale, then enumerate the controls required by `contracts/core/RISK_TIER_POLICY.md` for that tier.
+
     ## Strict TDD Contract
 
     Define how strict red-green-refactor will be enforced for this plan. State that no production code is allowed before a failing test exists for each feature slice. Define what counts as a feature slice in this plan and where red/green/refactor evidence will be recorded.
@@ -143,12 +173,18 @@ Prefer additive code changes followed by subtractions that keep tests passing. P
         # green: confirm pass after minimum implementation
         cargo test
         # refactor gate: full suite must pass
+        scripts/validate_tdd_cycle.sh --base <base-ref>
+        scripts/validate_evidence_packet.sh --file .evidence/EVIDENCE_PACKET.md
 
     ## Validation and Acceptance
 
     Describe how to start or exercise the system and what to observe. Phrase acceptance as behavior, with specific inputs and outputs. If tests are involved, say "run <project’s test command> and expect <N> passed; the new test <name> fails before the change and passes after>".
 
     Require explicit strict-TDD acceptance evidence: every feature slice must have a recorded red failure, green pass, and refactor full-suite pass.
+
+    ## Review and CI Gates
+
+    State the checklist and CI gates required before merge. Reference `checklists/PR_CONTRACT_CHECKLIST.md`, and when Tier 2/Tier 3 applies, reference `checklists/ADVERSARIAL_REVIEW_CHECKLIST.md`. Include the expected contract gate workflow outcome from `.github/workflows/contract-gates.yml`.
 
     ## Idempotence and Recovery
 
