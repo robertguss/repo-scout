@@ -21,6 +21,59 @@ This log captures real `repo-scout` usage while building `repo-scout`.
 ## Entries
 
 - Date: `2026-02-08`
+- Task: Phase 7 Milestones 32-36 cross-language semantic precision and quality benchmark guardrails.
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find resolve_symbol_id_in_tx --repo . --json`
+  - `cargo run -- refs resolve_symbol_id_in_tx --repo . --json`
+  - `cargo test milestone32_typescript_namespace_alias_call_contract -- --nocapture`
+  - `cargo test milestone32_python_module_alias_call_contract -- --nocapture`
+  - `cargo test milestone32_schema_contracts_stay_stable -- --nocapture`
+  - `cargo test milestone33_typescript_namespace_alias_resolves_changed_callee -- --nocapture`
+  - `cargo test milestone33_typescript_member_call_prefers_import_context -- --nocapture`
+  - `cargo test milestone33_typescript_semantics_preserve_existing_m15_behavior -- --nocapture`
+  - `cargo test milestone34_python_module_alias_resolves_changed_callee -- --nocapture`
+  - `cargo test milestone34_python_attribute_call_prefers_import_context -- --nocapture`
+  - `cargo test milestone34_python_semantics_preserve_existing_m16_behavior -- --nocapture`
+  - `cargo test milestone35_diff_impact_semantic_confidence_ranking -- --nocapture`
+  - `cargo test milestone35_impact_semantic_rows_rank_deterministically -- --nocapture`
+  - `cargo test milestone35_fixture_quality_benchmark_is_stable -- --nocapture`
+  - `cargo run -- index --repo tests/fixtures/phase7/semantic_precision`
+  - `cargo run -- diff-impact --changed-file src/util_a.ts --repo tests/fixtures/phase7/semantic_precision --json`
+  - `cargo run -- diff-impact --changed-file src/pkg_a/util.py --repo tests/fixtures/phase7/semantic_precision --json`
+  - `cargo run -- impact helper --repo tests/fixtures/phase7/semantic_precision --json`
+  - `cargo run -- diff-impact --changed-file src/indexer/languages/typescript.rs --repo . --json`
+  - `cargo run -- diff-impact --changed-file src/indexer/languages/python.rs --repo . --json`
+  - `cargo run -- refs helper --repo . --code-only --exclude-tests --max-results 10 --json`
+  - `cargo test`
+  - `cargo fmt`
+- What helped:
+  - Module-aware alias hints in TypeScript/Python adapters eliminated duplicate-name callee
+    ambiguity for namespace/member and module-alias attribute calls.
+  - Query-time semantic calibration made `impact`/`diff-impact` ranking deterministic with
+    high-confidence caller rows (`score: 0.97`) above fallback rows.
+  - Shared Phase 7 fixture corpus made behavior-check packs reproducible across milestones.
+- What failed or felt weak:
+  - Fixture index state can go stale across extractor-code changes when file hashes are unchanged;
+    verification requires at least one fixture-content refresh or fresh fixture copy.
+- Action taken:
+  - failing test added:
+    - `tests/milestone32_semantic_contracts.rs`
+    - `tests/milestone33_typescript_semantics.rs`
+    - `tests/milestone34_python_semantics.rs`
+    - `tests/milestone35_quality_benchmark.rs`
+  - fix commit:
+    - `Add Milestone 32 semantic contract tests via TDD`
+    - `Implement Milestone 33 TypeScript semantic resolution via TDD`
+    - `Implement Milestone 34 Python semantic resolution via TDD`
+    - `Implement Milestone 35 semantic ranking calibration via TDD`
+  - docs update:
+    - `README.md`, `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`,
+      `docs/dogfood-log.md`, `docs/performance-baseline.md`,
+      `agents/repo-scout-phase7-execplan.md`.
+- Status: `fixed`
+
+- Date: `2026-02-08`
 - Task: Phase 6 documentation/coverage audit against current implementation.
 - Commands run:
   - `cargo run -- index --repo .`
