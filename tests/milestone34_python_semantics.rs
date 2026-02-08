@@ -104,6 +104,36 @@ fn milestone34_python_attribute_call_prefers_import_context() {
 }
 
 #[test]
+fn milestone34_python_from_import_module_alias_resolves_changed_callee() {
+    let repo = common::temp_repo();
+    common::write_file(
+        repo.path(),
+        "src/pkg_a/util.py",
+        "def helper():\n    return 1\n",
+    );
+    common::write_file(
+        repo.path(),
+        "src/pkg_b/util.py",
+        "def helper():\n    return 2\n",
+    );
+    common::write_file(
+        repo.path(),
+        "src/py_app.py",
+        "from pkg_a import util as util_a\nfrom pkg_b import util as util_b\n\n\ndef run_py():\n    return util_a.helper() + util_b.helper()\n",
+    );
+
+    run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
+    let util_a_payload = diff_impact_payload(repo.path(), "src/pkg_a/util.py");
+    let util_a_results = util_a_payload["results"]
+        .as_array()
+        .expect("diff-impact results should be an array");
+    assert!(
+        has_called_by_row(util_a_results, "run_py", "src/py_app.py"),
+        "expected from-import module alias call to resolve src/pkg_a/util.py::helper"
+    );
+}
+
+#[test]
 fn milestone34_python_semantics_preserve_existing_m16_behavior() {
     let repo = common::temp_repo();
     common::write_file(repo.path(), "src/package/module.py", "VALUE = 1\n");

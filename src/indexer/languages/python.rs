@@ -594,10 +594,6 @@ fn import_target_hints(file_path: &str, source: &str) -> HashMap<String, String>
         } else if let Some(rest) = trimmed.strip_prefix("from ")
             && let Some((module_name, imports_part)) = rest.split_once(" import ")
         {
-            let Some(import_path) = resolve_python_import_path(file_path, module_name.trim())
-            else {
-                continue;
-            };
             for specifier in imports_part.split(',') {
                 let specifier = specifier.trim();
                 if specifier.is_empty() || specifier == "*" {
@@ -616,6 +612,14 @@ fn import_target_hints(file_path: &str, source: &str) -> HashMap<String, String>
                 if local_symbol.is_empty() {
                     continue;
                 }
+                let import_path = resolve_python_import_path(
+                    file_path,
+                    &format!("{}.{}", module_name.trim(), imported_name.trim()),
+                )
+                .or_else(|| resolve_python_import_path(file_path, module_name.trim()));
+                let Some(import_path) = import_path else {
+                    continue;
+                };
                 hints.insert(local_symbol, import_path.clone());
             }
         }

@@ -200,6 +200,28 @@ This log captures real `repo-scout` usage while building `repo-scout`.
   - `cargo run -- refs helper --repo . --code-only --exclude-tests --max-results 10 --json`
   - `cargo test`
   - `cargo fmt`
+- Transcript artifact (from `cargo run -- diff-impact --changed-file src/util_a.ts --repo tests/fixtures/phase7/semantic_precision --json`):
+```json
+{
+  "changed_files": ["src/util_a.ts"],
+  "results": [
+    {
+      "symbol": "helper",
+      "file_path": "src/util_a.ts",
+      "relationship": "changed_symbol",
+      "distance": 0
+    },
+    {
+      "symbol": "run",
+      "file_path": "src/app.ts",
+      "relationship": "called_by",
+      "distance": 1,
+      "provenance": "call_resolution",
+      "score": 0.97
+    }
+  ]
+}
+```
 - What helped:
   - Module-aware alias hints in TypeScript/Python adapters eliminated duplicate-name callee
     ambiguity for namespace/member and module-alias attribute calls.

@@ -42,9 +42,9 @@ quantifies recommendation quality under known noisy scenarios.
       `cargo run -- index --repo .`,
       `cargo run -- find resolve_symbol_id_in_tx --repo . --json`,
       `cargo run -- refs resolve_symbol_id_in_tx --repo . --json`.
-- [ ] Milestone 32 strict TDD contract-lock slices
-      (completed: red failures for `tests/milestone32_semantic_contracts.rs`;
-      remaining: green/refactor completion tracked in Milestones 33-34 as semantic behavior lands).
+- [x] Milestone 32 strict TDD contract-lock slices
+      (red failures established in `tests/milestone32_semantic_contracts.rs`; green/refactor
+      completion landed in Milestones 33-34 and is now closed).
 - [x] (2026-02-08 01:43Z) Ran required pre-milestone baseline dogfood for Milestone 33:
       `cargo run -- index --repo .`,
       `cargo run -- find resolve_symbol_id_in_tx --repo . --json`,
@@ -388,7 +388,7 @@ verify behavior/docs alignment remains stable.
 
 ## Concrete Steps
 
-Run all commands from `/Users/robertguss/Projects/experiments/repo-scout`.
+Run all commands from `<repo-root>` (the repository root directory).
 
 Before each milestone, run baseline dogfood:
 
@@ -764,4 +764,4 @@ TypeScript and Python caller rows.
 calibration design decisions, benchmark-guardrail outcomes, and fixture behavior-check evidence.
 
 2026-02-08: Updated live plan with Milestone 36 documentation/evidence refresh completion,
-post-refresh verification transcripts, formatter closeout notes, and final outcomes.
+post-refresh verification transcripts, formatter closeout notes, and outcomes.
