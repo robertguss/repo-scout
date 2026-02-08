@@ -36,8 +36,16 @@ fn has_called_by_row(results: &[Value], symbol: &str, file_path: &str) -> bool {
 #[test]
 fn milestone34_python_module_alias_resolves_changed_callee() {
     let repo = common::temp_repo();
-    common::write_file(repo.path(), "src/pkg_a/util.py", "def helper():\n    return 1\n");
-    common::write_file(repo.path(), "src/pkg_b/util.py", "def helper():\n    return 2\n");
+    common::write_file(
+        repo.path(),
+        "src/pkg_a/util.py",
+        "def helper():\n    return 1\n",
+    );
+    common::write_file(
+        repo.path(),
+        "src/pkg_b/util.py",
+        "def helper():\n    return 2\n",
+    );
     common::write_file(
         repo.path(),
         "src/py_app.py",
@@ -59,8 +67,16 @@ fn milestone34_python_module_alias_resolves_changed_callee() {
 #[test]
 fn milestone34_python_attribute_call_prefers_import_context() {
     let repo = common::temp_repo();
-    common::write_file(repo.path(), "src/pkg_a/util.py", "def helper():\n    return 1\n");
-    common::write_file(repo.path(), "src/pkg_b/util.py", "def helper():\n    return 2\n");
+    common::write_file(
+        repo.path(),
+        "src/pkg_a/util.py",
+        "def helper():\n    return 1\n",
+    );
+    common::write_file(
+        repo.path(),
+        "src/pkg_b/util.py",
+        "def helper():\n    return 2\n",
+    );
     common::write_file(
         repo.path(),
         "src/py_app.py",

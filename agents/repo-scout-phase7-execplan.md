@@ -68,7 +68,16 @@ quantifies recommendation quality under known noisy scenarios.
 - [x] (2026-02-08 01:50Z) Completed Milestone 35 strict TDD slices for semantic-confidence
       ranking/benchmark guardrails, including calibrated scoring in `impact`/`diff-impact`,
       benchmark fixture assertions, and full-suite refactor gate (`cargo test`) green.
-- [ ] Run Milestone 36 documentation/evidence refresh and post-refresh full dogfood checks.
+- [x] (2026-02-08 02:12Z) Completed Milestone 36 documentation/evidence refresh across
+      `README.md`, `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`,
+      `docs/dogfood-log.md`, and `docs/performance-baseline.md`.
+- [x] (2026-02-08 02:13Z) Ran Milestone 36 post-refresh verification pack:
+      `cargo run -- index --repo .`,
+      `cargo run -- diff-impact --changed-file src/indexer/languages/typescript.rs --repo . --json`,
+      `cargo run -- diff-impact --changed-file src/indexer/languages/python.rs --repo . --json`,
+      `cargo run -- refs helper --repo . --code-only --exclude-tests --max-results 10 --json`,
+      `cargo test`,
+      `cargo fmt`.
 
 ## Surprises & Discoveries
 
@@ -133,6 +142,12 @@ quantifies recommendation quality under known noisy scenarios.
   Evidence: Milestone 35 fixture behavior-check pack reported calibrated `score: 0.97` for both
   TypeScript and Python `called_by` rows even with `indexed_files: 0` on fixture reindex.
 
+- Observation: Final closeout `cargo fmt` touched only formatting in already-green Phase 7
+  production/test files; behavior stayed unchanged.
+  Evidence: `git diff` after Milestone 36 verification showed line-wrap-only edits in
+  `src/indexer/languages/typescript.rs`, `src/indexer/languages/python.rs`, and milestone test
+  files with no semantic logic deltas.
+
 ## Decision Log
 
 - Decision: Keep schema envelopes stable (`schema_version` 1/2/3) through Phase 7 and implement
@@ -193,6 +208,12 @@ quantifies recommendation quality under known noisy scenarios.
   downstream label contract changes.
   Date/Author: 2026-02-08 / Codex
 
+- Decision: Keep rustfmt-only edits produced during Milestone 36 closeout in the milestone commit
+  instead of attempting selective rollback.
+  Rationale: Final acceptance requires `cargo fmt` clean state; retaining deterministic formatter
+  output is the smallest plan-aligned path and avoids risky manual reformat divergence.
+  Date/Author: 2026-02-08 / Codex
+
 ## Outcomes & Retrospective
 
 Planning outcome: Phase 7 is constrained to high-value semantic precision and benchmark guardrails
@@ -218,6 +239,10 @@ Milestone 35 outcome (2026-02-08): `impact`/`diff-impact` now apply deterministi
 calibration by relationship/provenance/distance, benchmark fixture checks lock high-confidence
 caller ranking (`score >= 0.96` for semantic caller rows), and ordering remains deterministic
 without schema contract changes.
+
+Milestone 36 outcome (2026-02-08): documentation and evidence now reflect shipped Phase 7 behavior
+(module-aware TypeScript/Python semantic resolution, calibrated ranking, and benchmark command
+packs), post-refresh dogfood checks passed, full test suite passed, and formatter state is clean.
 
 ## Context and Orientation
 
@@ -662,6 +687,21 @@ Milestone 35 behavior-check pack evidence:
     # - semantic rows still outrank fallback rows deterministically
     # - schema envelopes remain unchanged (1/2/3)
 
+Milestone 36 verification evidence:
+
+    cargo run -- index --repo .
+    cargo run -- diff-impact --changed-file src/indexer/languages/typescript.rs --repo . --json
+    cargo run -- diff-impact --changed-file src/indexer/languages/python.rs --repo . --json
+    cargo run -- refs helper --repo . --code-only --exclude-tests --max-results 10 --json
+    cargo test
+    cargo fmt
+
+    # observed after Milestone 36:
+    # - docs reflect implemented behavior, not planned-only language.
+    # - repo dogfood queries continue to return deterministic JSON envelopes and ranked rows.
+    # - full suite remains green after docs refresh.
+    # - rustfmt produced only deterministic formatting deltas.
+
 ## Interfaces and Dependencies
 
 Phase 7 should continue using current dependencies (`tree-sitter`, language grammars, `rusqlite`,
@@ -722,3 +762,6 @@ TypeScript and Python caller rows.
 
 2026-02-08: Updated live plan with Milestone 35 ranking-calibration transcripts, query-time
 calibration design decisions, benchmark-guardrail outcomes, and fixture behavior-check evidence.
+
+2026-02-08: Updated live plan with Milestone 36 documentation/evidence refresh completion,
+post-refresh verification transcripts, formatter closeout notes, and final outcomes.

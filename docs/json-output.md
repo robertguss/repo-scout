@@ -98,7 +98,7 @@ Observed `confidence` vocabulary:
       "distance": 1,
       "relationship": "called_by",
       "confidence": "graph_likely",
-      "score": 0.95
+      "score": 0.97
     }
   ]
 }
@@ -115,6 +115,10 @@ Per-result fields:
 - `relationship` (`called_by | contained_by | imported_by | implemented_by | <edge_kind>`)
 - `confidence` (`graph_likely`)
 - `score` (`number`)
+
+Phase 7 keeps schema 2 unchanged and applies deterministic semantic score calibration by
+relationship/provenance so stronger semantic rows (for example resolved `called_by`) stay in a
+high-confidence ranking band.
 
 ## `context --json` (Schema 2)
 
@@ -272,7 +276,7 @@ These contracts are intentionally additive and do not change schema 1 or schema 
       "why_included": "references impacted symbol 'impact_matches'",
       "confidence": "graph_likely",
       "provenance": "text_fallback",
-      "score": 0.86
+      "score": 0.84
     }
   ]
 }
@@ -304,6 +308,9 @@ Phase 4/5/6 option effects (schema unchanged):
 - `--max-results` applies deterministic post-sort truncation.
 - `--include-tests` is currently a compatibility flag; schema 3 continues to report
   `include_tests = true` by default.
+- Phase 7 calibrates semantic impacted-symbol row scores deterministically by
+  relationship/provenance/distance (for example resolved `called_by` rows score `0.97` at
+  `distance = 1` in the Phase 7 benchmark fixture).
 - Neither option requires new mandatory top-level fields in schema 3.
 
 `DiffImpactResult` union discriminator:

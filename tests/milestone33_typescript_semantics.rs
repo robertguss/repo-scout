@@ -36,8 +36,16 @@ fn has_called_by_row(results: &[Value], symbol: &str, file_path: &str) -> bool {
 #[test]
 fn milestone33_typescript_namespace_alias_resolves_changed_callee() {
     let repo = common::temp_repo();
-    common::write_file(repo.path(), "src/util_a.ts", "export function helper(): number {\n  return 1;\n}\n");
-    common::write_file(repo.path(), "src/util_b.ts", "export function helper(): number {\n  return 2;\n}\n");
+    common::write_file(
+        repo.path(),
+        "src/util_a.ts",
+        "export function helper(): number {\n  return 1;\n}\n",
+    );
+    common::write_file(
+        repo.path(),
+        "src/util_b.ts",
+        "export function helper(): number {\n  return 2;\n}\n",
+    );
     common::write_file(
         repo.path(),
         "src/app.ts",
@@ -59,8 +67,16 @@ fn milestone33_typescript_namespace_alias_resolves_changed_callee() {
 #[test]
 fn milestone33_typescript_member_call_prefers_import_context() {
     let repo = common::temp_repo();
-    common::write_file(repo.path(), "src/util_a.ts", "export function helper(): number {\n  return 1;\n}\n");
-    common::write_file(repo.path(), "src/util_b.ts", "export function helper(): number {\n  return 2;\n}\n");
+    common::write_file(
+        repo.path(),
+        "src/util_a.ts",
+        "export function helper(): number {\n  return 1;\n}\n",
+    );
+    common::write_file(
+        repo.path(),
+        "src/util_b.ts",
+        "export function helper(): number {\n  return 2;\n}\n",
+    );
     common::write_file(
         repo.path(),
         "src/app.ts",

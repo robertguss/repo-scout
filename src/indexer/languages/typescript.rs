@@ -605,10 +605,7 @@ fn import_target_hints(file_path: &str, source: &str) -> HashMap<String, String>
             .split(',')
             .find(|part| part.trim_start().starts_with("* as "))
         {
-            let alias = namespace_clause
-                .trim()
-                .trim_start_matches("* as ")
-                .trim();
+            let alias = namespace_clause.trim().trim_start_matches("* as ").trim();
             if !alias.is_empty() {
                 hints.insert(alias.to_string(), import_path.clone());
             }

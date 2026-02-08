@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the current `repo-scout` architecture after Phase 6.
+This document describes the current `repo-scout` architecture after Phase 7.
 
 ## High-Level Flow
 
@@ -28,6 +28,8 @@ This document describes the current `repo-scout` architecture after Phase 6.
   - Rust AST extraction for definitions/references.
 - `src/indexer/languages/`
   - Language adapters (`rust`, `typescript`, `python`) and normalized extraction contracts.
+  - TypeScript/Python adapters now include module-aware alias hints for namespace/member and
+    module-alias attribute call resolution.
 - `src/indexer/mod.rs`
   - Incremental indexing coordinator, stale-row pruning, adapter dispatch, deferred edge resolution,
     and symbol/edge persistence.
@@ -103,6 +105,7 @@ Lifecycle guarantees covered by integration tests include stale-file pruning, re
 - Resolve all matching symbols in `symbols_v2`.
 - Walk incoming edges in `symbol_edges_v2`.
 - Emit one-hop impacted neighbors with normalized relationship labels.
+- Apply deterministic semantic score calibration by relationship/provenance.
 
 ### `context`
 
@@ -145,10 +148,14 @@ Lifecycle guarantees covered by integration tests include stale-file pruning, re
 - Expand bounded multi-hop incoming neighbors from `symbol_edges_v2` up to `--max-distance`.
 - Use per-seed minimum-distance tracking and changed-seed suppression to avoid cycle-driven
   duplicate growth.
+- Resolve TypeScript namespace/member and Python module-alias attribute calls with module-aware
+  hints so duplicate-name callees do not cross-link ambiguously.
 - Optionally remove changed-symbol output rows with `--exclude-changed`.
 - Optionally cap results deterministically with `--max-results`.
 - Attach ranked test targets (`include_tests = true`; `--include-tests` retained for CLI
   compatibility).
+- Apply deterministic semantic score calibration so resolved semantic caller rows rank above
+  fallback test-target rows.
 - Sort mixed result kinds deterministically.
 
 ### `explain`

@@ -2,8 +2,8 @@
 
 `repo-scout` is a local, deterministic CLI for indexing a repository and answering code-navigation questions fast.
 
-Phase 6 is fully implemented and adds change-scope precision and output-focus controls on top of
-the Phase 5 recommendation-quality and multi-hop impact-fidelity workflows.
+Phase 7 is fully implemented and adds cross-language semantic precision and deterministic
+quality-benchmark guardrails on top of the Phase 6 change-scope/output-focus workflow controls.
 
 ## What It Does
 
@@ -52,7 +52,7 @@ cargo run -- verify-plan --changed-file src/lib.rs --repo /path/to/repo
 cargo run -- diff-impact --changed-file src/lib.rs --repo /path/to/repo
 cargo run -- explain impact_matches --repo /path/to/repo
 
-# Phase 5/6 controls
+# Phase 5/6/7 controls
 cargo run -- refs launch --repo /path/to/repo --code-only --exclude-tests
 cargo run -- refs launch --repo /path/to/repo --code-only --exclude-tests --max-results 10
 cargo run -- find launch --repo /path/to/repo --max-results 10
@@ -62,6 +62,9 @@ cargo run -- verify-plan --changed-file src/lib.rs --changed-line src/lib.rs:20:
 cargo run -- diff-impact --changed-file src/lib.rs --changed-line src/lib.rs:20:80 --changed-symbol launch --exclude-changed --max-results 12 --repo /path/to/repo
 cargo run -- diff-impact --changed-file src/lib.rs --include-imports --repo /path/to/repo
 cargo run -- diff-impact --changed-file src/lib.rs --repo /path/to/repo --max-distance 3
+# semantic-precision examples (TypeScript/Python module aliases)
+cargo run -- diff-impact --changed-file src/util_a.ts --repo tests/fixtures/phase7/semantic_precision --json
+cargo run -- diff-impact --changed-file src/pkg_a/util.py --repo tests/fixtures/phase7/semantic_precision --json
 ```
 
 JSON output is supported by query commands:
@@ -89,6 +92,8 @@ cargo run -- explain impact_matches --repo /path/to/repo --json
   - Scope flags apply to text fallback only; AST-priority behavior is unchanged.
 - `impact <SYMBOL> --repo <PATH> [--json]`
   - Returns one-hop incoming graph neighbors (`called_by`, `contained_by`, `imported_by`, `implemented_by`).
+  - Applies deterministic semantic score calibration so stronger edge evidence stays in a
+    high-confidence ranking band.
 - `context --task <TEXT> --repo <PATH> [--budget <N>] [--json] [--exclude-tests] [--code-only]`
   - Uses deterministic token-overlap relevance to rank direct symbol definitions plus graph
     neighbors, truncated by budget.
@@ -102,12 +107,15 @@ cargo run -- explain impact_matches --repo /path/to/repo --json
     `--max-targeted=0`.
 - `diff-impact --changed-file <PATH> --repo <PATH> [--max-distance <N>] [--include-tests] [--include-imports] [--changed-line <path:start[:end]>] [--changed-symbol <symbol> ...] [--exclude-changed] [--max-results <N>] [--json]`
   - Emits changed-symbol rows plus deterministic bounded multi-hop impacted symbols/test targets.
+  - TypeScript namespace/member calls and Python module-alias attribute calls now resolve with
+    module-aware context to avoid duplicate-name cross-link ambiguity.
   - Test-target emission is currently enabled by default (`include_tests = true` in schema 3);
     `--include-tests` is retained as a compatibility flag.
   - By default, changed-symbol seeds exclude import definitions unless `--include-imports` is set.
   - `--changed-line` and repeatable `--changed-symbol` narrow changed-symbol seeds.
   - `--exclude-changed` omits `distance=0` changed-symbol rows from output.
   - `--max-results` applies deterministic post-sort truncation.
+  - Semantic caller rows use calibrated scoring that ranks above text-fallback test-target rows.
 - `explain <SYMBOL> --repo <PATH> [--include-snippets] [--json]`
   - Produces a deterministic symbol dossier with spans, signature, and relationship counts.
 

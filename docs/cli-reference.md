@@ -124,6 +124,13 @@ Relationship labels are normalized to:
 - `imported_by`
 - `implemented_by`
 
+Ranking notes:
+
+- Semantic edge rows are deterministically calibrated by relationship/provenance.
+- `called_by` rows from resolved call edges are ranked in a high-confidence band (for example
+  `score ≈ 0.97` in Phase 7 fixture scenarios).
+- Deterministic tie-breaks remain `file_path`, `line`, `column`, `symbol`, `relationship`.
+
 Example:
 
 ```bash
@@ -221,6 +228,8 @@ Behavior:
 - Applies repeatable `--changed-symbol` filters to changed-symbol seeds.
 - Emits bounded multi-hop incoming neighbors (`called_by`, `contained_by`, `imported_by`,
   `implemented_by`) up to `--max-distance`.
+- Uses module-aware TypeScript/Python call resolution so namespace/member and module-alias
+  attribute calls resolve to the intended module under duplicate symbol names.
 - Uses cycle-safe, deterministic dedupe to prevent duplicate growth and changed-symbol echo rows at
   non-zero distances.
 - `--exclude-changed` removes changed-symbol (`distance=0`) rows from final output while traversal
@@ -228,6 +237,9 @@ Behavior:
 - `--max-results <N>` truncates results deterministically after ranking.
 - Emits test targets (`result_kind = test_target`) when available; this is currently default-on
   behavior (`include_tests = true`).
+- Semantic impacted-symbol rows use deterministic calibrated scoring (for example
+  `call_resolution` `called_by` rows in Phase 7 fixtures score `0.97`) and rank ahead of
+  fallback test-target rows.
 
 `--changed-line` parsing rules:
 

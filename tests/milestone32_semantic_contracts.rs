@@ -11,24 +11,24 @@ fn run_stdout(args: &[&str]) -> String {
 }
 
 fn write_phase7_semantic_fixture(repo: &Path) {
-    common::write_file(repo, "src/util_a.ts", "export function helper(): number {\n  return 1;\n}\n");
-    common::write_file(repo, "src/util_b.ts", "export function helper(): number {\n  return 2;\n}\n");
+    common::write_file(
+        repo,
+        "src/util_a.ts",
+        "export function helper(): number {\n  return 1;\n}\n",
+    );
+    common::write_file(
+        repo,
+        "src/util_b.ts",
+        "export function helper(): number {\n  return 2;\n}\n",
+    );
     common::write_file(
         repo,
         "src/app.ts",
         "import * as utilA from \"./util_a\";\nimport * as utilB from \"./util_b\";\n\nexport function run(): number {\n  return utilA.helper() + utilB.helper();\n}\n",
     );
 
-    common::write_file(
-        repo,
-        "src/pkg_a/util.py",
-        "def helper():\n    return 1\n",
-    );
-    common::write_file(
-        repo,
-        "src/pkg_b/util.py",
-        "def helper():\n    return 2\n",
-    );
+    common::write_file(repo, "src/pkg_a/util.py", "def helper():\n    return 1\n");
+    common::write_file(repo, "src/pkg_b/util.py", "def helper():\n    return 2\n");
     common::write_file(
         repo,
         "src/py_app.py",
@@ -111,13 +111,26 @@ fn milestone32_schema_contracts_stay_stable() {
 
     run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
 
-    let find_out = run_stdout(&["find", "helper", "--repo", repo.path().to_str().unwrap(), "--json"]);
+    let find_out = run_stdout(&[
+        "find",
+        "helper",
+        "--repo",
+        repo.path().to_str().unwrap(),
+        "--json",
+    ]);
     let find_payload: Value = serde_json::from_str(&find_out).expect("find json should parse");
     assert_eq!(find_payload["schema_version"], 1);
     assert_eq!(find_payload["command"], "find");
 
-    let impact_out = run_stdout(&["impact", "helper", "--repo", repo.path().to_str().unwrap(), "--json"]);
-    let impact_payload: Value = serde_json::from_str(&impact_out).expect("impact json should parse");
+    let impact_out = run_stdout(&[
+        "impact",
+        "helper",
+        "--repo",
+        repo.path().to_str().unwrap(),
+        "--json",
+    ]);
+    let impact_payload: Value =
+        serde_json::from_str(&impact_out).expect("impact json should parse");
     assert_eq!(impact_payload["schema_version"], 2);
     assert_eq!(impact_payload["command"], "impact");
 

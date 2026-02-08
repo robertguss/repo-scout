@@ -125,14 +125,15 @@ fn milestone35_impact_semantic_rows_rank_deterministically() {
     let results = payload_a["results"]
         .as_array()
         .expect("impact results should be array");
-    assert!(results.len() >= 2, "expected TypeScript and Python caller rows");
+    assert!(
+        results.len() >= 2,
+        "expected TypeScript and Python caller rows"
+    );
     assert!(results.iter().any(|item| item["symbol"] == "run"));
     assert!(results.iter().any(|item| item["symbol"] == "run_py"));
     assert!(results.iter().all(|item| {
         item["relationship"] == "called_by"
-            && item["score"]
-                .as_f64()
-                .is_some_and(|score| score >= 0.96)
+            && item["score"].as_f64().is_some_and(|score| score >= 0.96)
     }));
 }
 
