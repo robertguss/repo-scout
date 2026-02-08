@@ -9,8 +9,8 @@ use clap::Parser;
 use crate::cli::{Cli, Command};
 use crate::indexer::index_repository;
 use crate::query::{
-    ChangedLineRange, DiffImpactOptions, QueryScope, context_matches, context_matches_scoped,
-    diff_impact_for_changed_files,
+    ChangedLineRange, DiffImpactOptions, QueryScope, VerifyPlanOptions, context_matches,
+    context_matches_scoped, diff_impact_for_changed_files,
     explain_symbol, find_matches_scoped, impact_matches, refs_matches_scoped, tests_for_symbol,
     verify_plan_for_changed_files,
 };
@@ -262,6 +262,9 @@ fn run_tests_for(args: crate::cli::TestsForArgs) -> anyhow::Result<()> {
 /// let args = VerifyPlanArgs {
 ///     repo: ".".into(),
 ///     changed_files: vec!["src/lib.rs".into()],
+///     changed_lines: vec![],
+///     changed_symbols: vec![],
+///     max_targeted: None,
 ///     json: false,
 /// };
 /// let _ = run_verify_plan(args);
@@ -281,7 +284,32 @@ fn run_verify_plan(args: crate::cli::VerifyPlanArgs) -> anyhow::Result<()> {
     changed_files.sort();
     changed_files.dedup();
 
-    let steps = verify_plan_for_changed_files(&store.db_path, &changed_files, args.max_targeted)?;
+    let mut changed_lines = args
+        .changed_lines
+        .iter()
+        .map(|spec| parse_changed_line_spec(&args.repo, spec))
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    changed_lines.sort_by(|left, right| {
+        left.file_path
+            .cmp(&right.file_path)
+            .then(left.start_line.cmp(&right.start_line))
+            .then(left.end_line.cmp(&right.end_line))
+    });
+    changed_lines.dedup_by(|left, right| {
+        left.file_path == right.file_path
+            && left.start_line == right.start_line
+            && left.end_line == right.end_line
+    });
+    let mut changed_symbols = args.changed_symbols.clone();
+    changed_symbols.sort();
+    changed_symbols.dedup();
+
+    let options = VerifyPlanOptions {
+        max_targeted: args.max_targeted,
+        changed_lines,
+        changed_symbols,
+    };
+    let steps = verify_plan_for_changed_files(&store.db_path, &changed_files, &options)?;
     if args.json {
         output::print_verify_plan_json(&changed_files, &steps)?;
     } else {

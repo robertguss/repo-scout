@@ -39,9 +39,11 @@ non-code paths, and faster conversion from “what changed” to “what do I ru
       `verify-plan --changed-symbol`, `diff-impact --changed-symbol`, `diff-impact --exclude-changed`,
       `diff-impact --max-results`, and `refs --max-results` correctly fail as unsupported prior to
       Milestones 28–30.
-- [ ] Run required pre-milestone dogfood baseline for Milestone 28.
-- [ ] Complete Milestone 28 strict TDD slices for verify-plan change-scope controls.
-- [ ] Run Milestone 28 post-dogfood checks.
+- [x] (2026-02-07 23:59Z) Ran required pre-milestone dogfood baseline for Milestone 28.
+- [x] (2026-02-08 00:03Z) Completed Milestone 28 strict TDD slices for verify-plan change-scope
+      controls (`--changed-line`, repeatable `--changed-symbol`, scope safety preservation).
+- [x] (2026-02-08 00:04Z) Ran Milestone 28 post-dogfood checks; verify-plan scoped dogfood command
+      now succeeds while future Milestone 29/30 flags remain expected clap failures.
 - [ ] Run required pre-milestone dogfood baseline for Milestone 29.
 - [ ] Complete Milestone 29 strict TDD slices for diff-impact focused output controls.
 - [ ] Run Milestone 29 post-dogfood checks.
@@ -83,6 +85,11 @@ non-code paths, and faster conversion from “what changed” to “what do I ru
   `milestone27_context_scope_flags_preserve_deterministic_json` only returned `kind=function`
   until dedupe/sort keys were made kind-aware.
 
+- Observation: `verify-plan` scoped safety behavior from Phase 5 remained intact under new
+  line/symbol scope controls (changed test target + full-suite gate survived restrictive filters).
+  Evidence: `milestone28_verify_plan_scope_filters_preserve_changed_test_and_full_suite_gate`
+  passed immediately on first run and again on the green re-run after scope feature work landed.
+
 ## Decision Log
 
 - Decision: prioritize option-driven narrowing controls over adding new command families.
@@ -119,6 +126,13 @@ non-code paths, and faster conversion from “what changed” to “what do I ru
   ordering in same-symbol/same-location scenarios.
   Date/Author: 2026-02-07 / Codex
 
+- Decision: keep the Phase 5 changed-test/full-suite safety semantics unchanged while adding
+  `verify-plan --changed-line` and `--changed-symbol` filters, and treat slice 28C as a strict
+  regression guard.
+  Rationale: scope narrowing must not regress safety guarantees; preserving existing behavior is
+  the intended outcome for this slice.
+  Date/Author: 2026-02-08 / Codex
+
 ## Outcomes & Retrospective
 
 Planning outcome: Phase 6 scope is constrained to high-impact precision controls for existing
@@ -134,6 +148,10 @@ resolution and broader benchmark corpora for recommendation-quality scoring.
 Milestone 27 outcome (2026-02-07): `context` now supports `--exclude-tests` and `--code-only`,
 and combined scoped JSON output is deterministic with kind-aware dedupe/sort behavior. Full-suite
 tests stayed green through each slice refactor gate.
+
+Milestone 28 outcome (2026-02-08): `verify-plan` now supports additive `--changed-line` and
+repeatable `--changed-symbol` scope controls with deterministic normalization, while preserving
+changed runnable test targets and the mandatory `cargo test` gate.
 
 ## Context and Orientation
 
@@ -516,6 +534,69 @@ Milestone 27 post-dogfood evidence:
     # - verify-plan/diff-impact/refs new-flag commands fail with "unexpected argument"
     # - full cargo test suite passes
 
+Milestone 28 strict TDD evidence:
+
+    # 28A red
+    cargo test milestone28_verify_plan_changed_line_limits_targeted_symbol_set -- --nocapture
+    ...
+    error: unexpected argument '--changed-line' found
+
+    # 28A green
+    cargo test milestone28_verify_plan_changed_line_limits_targeted_symbol_set -- --nocapture
+    ...
+    test milestone28_verify_plan_changed_line_limits_targeted_symbol_set ... ok
+
+    # 28A refactor
+    cargo test
+    ...
+    test result: ok. (full suite)
+
+    # 28B red
+    cargo test milestone28_verify_plan_changed_symbol_filters_targeted_recommendations -- --nocapture
+    ...
+    error: unexpected argument '--changed-symbol' found
+
+    # 28B green
+    cargo test milestone28_verify_plan_changed_symbol_filters_targeted_recommendations -- --nocapture
+    ...
+    test milestone28_verify_plan_changed_symbol_filters_targeted_recommendations ... ok
+
+    # 28B refactor
+    cargo test
+    ...
+    test result: ok. (full suite)
+
+    # 28C red check (regression guard already satisfied)
+    cargo test milestone28_verify_plan_scope_filters_preserve_changed_test_and_full_suite_gate -- --nocapture
+    ...
+    test milestone28_verify_plan_scope_filters_preserve_changed_test_and_full_suite_gate ... ok
+
+    # 28C green re-run
+    cargo test milestone28_verify_plan_scope_filters_preserve_changed_test_and_full_suite_gate -- --nocapture
+    ...
+    test milestone28_verify_plan_scope_filters_preserve_changed_test_and_full_suite_gate ... ok
+
+    # 28C refactor
+    cargo test
+    ...
+    test result: ok. (full suite)
+
+Milestone 28 post-dogfood evidence:
+
+    cargo run -- index --repo .
+    cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --json
+    cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --exclude-tests --json
+    cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --code-only --exclude-tests --json
+    cargo run -- verify-plan --changed-file src/query/mod.rs --changed-line src/query/mod.rs:1094:1165 --changed-symbol verify_plan_for_changed_files --repo . --json
+    cargo run -- diff-impact --changed-file src/query/mod.rs --changed-symbol verify_plan_for_changed_files --exclude-changed --max-results 12 --repo . --json
+    cargo run -- refs helper --repo . --max-results 10 --json
+    cargo test
+
+    # expected at Milestone 28:
+    # - verify-plan scoped command now succeeds
+    # - diff-impact and refs future flags still fail with "unexpected argument"
+    # - full cargo test suite passes
+
 ## Interfaces and Dependencies
 
 Phase 6 should not require new external crates by default. Continue using the current dependency
@@ -562,3 +643,7 @@ part of this planning step.
 Revision Note (2026-02-07): Updated live plan during Milestone 27 implementation with strict TDD
 transcripts, post-dogfood command evidence, milestone outcomes, and explicit rationale for running
 future-flag dogfood commands before their owning milestones.
+
+Revision Note (2026-02-08): Updated live plan during Milestone 28 implementation with verify-plan
+scope transcripts (`--changed-line`, `--changed-symbol`, safety regression guard), post-dogfood
+evidence, and updated decision/progress/outcome logs.

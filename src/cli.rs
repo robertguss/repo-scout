@@ -96,6 +96,10 @@ pub struct TestsForArgs {
 pub struct VerifyPlanArgs {
     #[arg(long = "changed-file", required = true)]
     pub changed_files: Vec<String>,
+    #[arg(long = "changed-line")]
+    pub changed_lines: Vec<String>,
+    #[arg(long = "changed-symbol")]
+    pub changed_symbols: Vec<String>,
     #[arg(long = "max-targeted")]
     pub max_targeted: Option<usize>,
     #[arg(long)]

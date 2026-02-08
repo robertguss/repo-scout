@@ -150,6 +150,13 @@ pub struct DiffImpactOptions {
     pub changed_lines: Vec<ChangedLineRange>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct VerifyPlanOptions {
+    pub max_targeted: Option<usize>,
+    pub changed_lines: Vec<ChangedLineRange>,
+    pub changed_symbols: Vec<String>,
+}
+
 pub const DEFAULT_VERIFY_PLAN_MAX_TARGETED: usize = 8;
 
 pub fn diff_impact_for_changed_files(
@@ -1104,16 +1111,22 @@ pub fn tests_for_symbol(
 /// use std::path::Path;
 /// let db = Path::new("code_index.sqlite");
 /// let changed = vec!["src/lib.rs".to_string(), "tests/my_test.rs".to_string()];
-/// let steps = verify_plan_for_changed_files(db, &changed, None).unwrap();
+/// let steps = verify_plan_for_changed_files(db, &changed, &VerifyPlanOptions::default()).unwrap();
 /// // `steps` is a Vec<VerificationStep> describing targeted test commands and a final
 /// // "cargo test" full-suite step.
 /// ```
 pub fn verify_plan_for_changed_files(
     db_path: &Path,
     changed_files: &[String],
-    max_targeted: Option<usize>,
+    options: &VerifyPlanOptions,
 ) -> anyhow::Result<Vec<VerificationStep>> {
     let connection = Connection::open(db_path)?;
+    let changed_lines_by_file = changed_lines_by_file(&options.changed_lines);
+    let changed_symbol_filter = options
+        .changed_symbols
+        .iter()
+        .cloned()
+        .collect::<HashSet<_>>();
 
     let mut steps_by_command: HashMap<String, VerificationStep> = HashMap::new();
 
@@ -1132,16 +1145,31 @@ pub fn verify_plan_for_changed_files(
         }
 
         let mut symbols_statement = connection.prepare(
-            "SELECT DISTINCT symbol
+            "SELECT DISTINCT symbol, start_line, end_line
              FROM symbols_v2
              WHERE file_path = ?1
-             ORDER BY symbol ASC",
+             ORDER BY symbol ASC, start_line ASC, end_line ASC",
         )?;
-        let symbol_rows =
-            symbols_statement.query_map(params![changed_file], |row| row.get::<_, String>(0))?;
+        let symbol_rows = symbols_statement.query_map(params![changed_file], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i64>(1)? as u32,
+                row.get::<_, i64>(2)? as u32,
+            ))
+        })?;
 
         for symbol_row in symbol_rows {
-            let symbol = symbol_row?;
+            let (symbol, start_line, end_line) = symbol_row?;
+            if !changed_symbol_filter.is_empty() && !changed_symbol_filter.contains(&symbol) {
+                continue;
+            }
+            if let Some(ranges) = changed_lines_by_file.get(changed_file)
+                && !ranges.iter().any(|range| {
+                    line_range_overlaps(start_line, end_line, range.start_line, range.end_line)
+                })
+            {
+                continue;
+            }
             if is_generic_changed_symbol(&symbol) {
                 continue;
             }
@@ -1193,7 +1221,9 @@ pub fn verify_plan_for_changed_files(
             .then(left.why_included.cmp(&right.why_included))
     });
 
-    let targeted_cap = max_targeted.unwrap_or(DEFAULT_VERIFY_PLAN_MAX_TARGETED);
+    let targeted_cap = options
+        .max_targeted
+        .unwrap_or(DEFAULT_VERIFY_PLAN_MAX_TARGETED);
     let mut capped = Vec::new();
     let mut capped_count = 0usize;
     for step in steps {
