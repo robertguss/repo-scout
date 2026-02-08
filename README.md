@@ -102,6 +102,8 @@ cargo run -- explain impact_matches --repo /path/to/repo --json
     `--max-targeted=0`.
 - `diff-impact --changed-file <PATH> --repo <PATH> [--max-distance <N>] [--include-tests] [--include-imports] [--changed-line <path:start[:end]>] [--changed-symbol <symbol> ...] [--exclude-changed] [--max-results <N>] [--json]`
   - Emits changed-symbol rows plus deterministic bounded multi-hop impacted symbols/test targets.
+  - Test-target emission is currently enabled by default (`include_tests = true` in schema 3);
+    `--include-tests` is retained as a compatibility flag.
   - By default, changed-symbol seeds exclude import definitions unless `--include-imports` is set.
   - `--changed-line` and repeatable `--changed-symbol` narrow changed-symbol seeds.
   - `--exclude-changed` omits `distance=0` changed-symbol rows from output.

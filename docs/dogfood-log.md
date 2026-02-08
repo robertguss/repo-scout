@@ -21,6 +21,31 @@ This log captures real `repo-scout` usage while building `repo-scout`.
 ## Entries
 
 - Date: `2026-02-08`
+- Task: Phase 6 documentation/coverage audit against current implementation.
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find explain_symbol --repo . --json`
+  - `cargo run -- refs explain_symbol --repo . --json`
+  - `rustup run stable cargo llvm-cov --workspace --all-targets --summary-only`
+  - `cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --json`
+  - `cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --include-tests --json`
+- What helped:
+  - Coverage output gave concrete line/function/region percentages to validate ">=85%" expectations.
+  - Direct command checks exposed docs drift for `diff-impact` test-target wording and schema enum notes.
+- What failed or felt weak:
+  - `--include-tests` is currently a compatibility flag; behavior remains default-on in practice.
+- Action taken:
+  - failing test added:
+    - unit tests in `src/store/mod.rs` for store bootstrap/corruption hint helpers.
+    - unit tests in `src/main.rs` for changed-line parsing/normalization edge cases.
+  - fix commit:
+    - not yet committed (working tree update).
+  - docs update:
+    - `README.md`, `docs/architecture.md`, `docs/cli-reference.md`, `docs/json-output.md`,
+      `docs/performance-baseline.md`.
+- Status: `fixed`
+
+- Date: `2026-02-08`
 - Task: Phase 6 Milestones 27-30 change-scope precision and output-focus controls.
 - Commands run:
   - `cargo run -- index --repo .`

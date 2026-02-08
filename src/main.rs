@@ -537,4 +537,36 @@ mod tests {
         assert_eq!(parsed.start_line, 12);
         assert_eq!(parsed.end_line, 24);
     }
+
+    #[test]
+    fn parse_changed_line_spec_rejects_non_positive_or_descending_ranges() {
+        let zero_start = parse_changed_line_spec(Path::new("."), "src/lib.rs:0:1")
+            .expect_err("zero start line should fail");
+        assert!(
+            zero_start
+                .to_string()
+                .contains("start <= end and both >= 1")
+        );
+
+        let descending = parse_changed_line_spec(Path::new("."), "src/lib.rs:8:2")
+            .expect_err("descending range should fail");
+        assert!(
+            descending
+                .to_string()
+                .contains("start <= end and both >= 1")
+        );
+    }
+
+    #[test]
+    fn parse_changed_line_spec_rejects_empty_path() {
+        let error =
+            parse_changed_line_spec(Path::new("."), ":12:24").expect_err("empty path should fail");
+        assert!(error.to_string().contains("non-empty path"));
+    }
+
+    #[test]
+    fn normalize_changed_file_trims_prefix_and_normalizes_separators() {
+        let normalized = normalize_changed_file(Path::new("."), "./src\\main.rs");
+        assert_eq!(normalized, "src/main.rs");
+    }
 }

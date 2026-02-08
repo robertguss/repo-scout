@@ -51,6 +51,20 @@ Equivalent manual commands:
 /usr/bin/time -p cargo run --release -- refs verify_plan_for_changed_files --repo . --code-only --exclude-tests --json
 ```
 
+## Coverage Check
+
+Use `cargo-llvm-cov` for repeatable coverage summaries:
+
+```bash
+rustup run stable cargo llvm-cov --workspace --all-targets --summary-only
+```
+
+Latest local baseline (`2026-02-08`):
+
+- regions: `85.32%`
+- lines: `90.30%`
+- functions: `86.82%`
+
 ## Recording
 
 Capture results in `docs/dogfood-log.md` when:

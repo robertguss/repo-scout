@@ -286,7 +286,7 @@ Top-level fields:
 | `command` | `string` | yes | Always `"diff-impact"`. |
 | `changed_files` | `array<string>` | yes | Repo-relative, normalized, sorted, deduplicated. |
 | `max_distance` | `number` | yes | Echoes resolved traversal distance. |
-| `include_tests` | `boolean` | yes | Echoes resolved test-target behavior. |
+| `include_tests` | `boolean` | yes | Echoes resolved test-target behavior (currently `true` by default). |
 | `results` | `array<DiffImpactResult>` | yes | Deterministically ordered (see rules below). |
 
 Phase 4/5/6 option effects (schema unchanged):
@@ -302,6 +302,8 @@ Phase 4/5/6 option effects (schema unchanged):
 - `--exclude-changed` removes `relationship = changed_symbol` rows from final output while keeping
   traversal rooted at those seeds.
 - `--max-results` applies deterministic post-sort truncation.
+- `--include-tests` is currently a compatibility flag; schema 3 continues to report
+  `include_tests = true` by default.
 - Neither option requires new mandatory top-level fields in schema 3.
 
 `DiffImpactResult` union discriminator:
@@ -332,7 +334,7 @@ Phase 4/5/6 option effects (schema unchanged):
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `target` | `string` | yes | Test command or test file path. |
+| `target` | `string` | yes | Repo-relative test file path. |
 | `target_kind` | `string` | yes | Currently `"integration_test_file"`. |
 | `language` | `string` | yes | Language enum for the target file. |
 | `why_included` | `string` | yes | Human-readable deterministic rationale. |
@@ -469,7 +471,6 @@ Deterministic ordering rules for `results`:
 - `contained_by`
 - `imported_by`
 - `implemented_by`
-- `tests`
 
 `confidence` values:
 

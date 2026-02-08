@@ -226,7 +226,8 @@ Behavior:
 - `--exclude-changed` removes changed-symbol (`distance=0`) rows from final output while traversal
   still uses those seeds.
 - `--max-results <N>` truncates results deterministically after ranking.
-- Optionally emits test targets (`result_kind = test_target`).
+- Emits test targets (`result_kind = test_target`) when available; this is currently default-on
+  behavior (`include_tests = true`).
 
 `--changed-line` parsing rules:
 

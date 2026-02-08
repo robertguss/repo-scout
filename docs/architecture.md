@@ -147,7 +147,8 @@ Lifecycle guarantees covered by integration tests include stale-file pruning, re
   duplicate growth.
 - Optionally remove changed-symbol output rows with `--exclude-changed`.
 - Optionally cap results deterministically with `--max-results`.
-- Optionally attach ranked test targets.
+- Attach ranked test targets (`include_tests = true`; `--include-tests` retained for CLI
+  compatibility).
 - Sort mixed result kinds deterministically.
 
 ### `explain`
