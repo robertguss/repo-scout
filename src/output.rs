@@ -31,7 +31,7 @@ struct JsonContextOutput<'a> {
     schema_version: u32,
     command: &'a str,
     task: &'a str,
-    budget: usize,
+    budget: u32,
     results: &'a [ContextMatch],
 }
 
@@ -210,7 +210,7 @@ pub fn print_impact_json(symbol: &str, matches: &[ImpactMatch]) -> anyhow::Resul
 /// let matches: &[ContextMatch] = &[];
 /// print_context("build", 5, matches);
 /// ```
-pub fn print_context(task: &str, budget: usize, matches: &[ContextMatch]) {
+pub fn print_context(task: &str, budget: u32, matches: &[ContextMatch]) {
     println!("command: context");
     println!("task: {task}");
     println!("budget: {budget}");
@@ -243,7 +243,7 @@ pub fn print_context(task: &str, budget: usize, matches: &[ContextMatch]) {
 /// ```
 pub fn print_context_json(
     task: &str,
-    budget: usize,
+    budget: u32,
     matches: &[ContextMatch],
 ) -> anyhow::Result<()> {
     let payload = JsonContextOutput {

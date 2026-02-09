@@ -16,10 +16,99 @@ pub struct QueryMatch {
     pub score: f64,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum QueryPathMode {
+    #[default]
+    AllFiles,
+    CodeOnly,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum QueryTestMode {
+    #[default]
+    IncludeTests,
+    ExcludeTests,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct QueryScope {
-    pub code_only: bool,
-    pub exclude_tests: bool,
+    pub path_mode: QueryPathMode,
+    pub test_mode: QueryTestMode,
+}
+
+impl QueryScope {
+    #[must_use]
+    pub fn from_flags(code_only: bool, exclude_tests: bool) -> Self {
+        let path_mode = if code_only {
+            QueryPathMode::CodeOnly
+        } else {
+            QueryPathMode::AllFiles
+        };
+        let test_mode = if exclude_tests {
+            QueryTestMode::ExcludeTests
+        } else {
+            QueryTestMode::IncludeTests
+        };
+        Self {
+            path_mode,
+            test_mode,
+        }
+    }
+
+    #[must_use]
+    fn includes_path(self, file_path: &str) -> bool {
+        let path_allowed = match self.path_mode {
+            QueryPathMode::AllFiles => true,
+            QueryPathMode::CodeOnly => is_code_file_path(file_path),
+        };
+        let tests_allowed = match self.test_mode {
+            QueryTestMode::IncludeTests => true,
+            QueryTestMode::ExcludeTests => !is_test_like_path(file_path),
+        };
+        path_allowed && tests_allowed
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum DiffImpactTestMode {
+    #[default]
+    IncludeTests,
+    ExcludeTests,
+}
+
+impl DiffImpactTestMode {
+    #[must_use]
+    pub fn include_tests(self) -> bool {
+        matches!(self, Self::IncludeTests)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum DiffImpactImportMode {
+    #[default]
+    ExcludeImports,
+    IncludeImports,
+}
+
+impl DiffImpactImportMode {
+    #[must_use]
+    pub fn include_imports(self) -> bool {
+        matches!(self, Self::IncludeImports)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum DiffImpactChangedMode {
+    #[default]
+    IncludeChanged,
+    ExcludeChanged,
+}
+
+impl DiffImpactChangedMode {
+    #[must_use]
+    pub fn exclude_changed(self) -> bool {
+        matches!(self, Self::ExcludeChanged)
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -145,22 +234,27 @@ pub struct ChangedLineRange {
 #[derive(Debug, Clone)]
 pub struct DiffImpactOptions {
     pub max_distance: u32,
-    pub include_tests: bool,
-    pub include_imports: bool,
+    pub test_mode: DiffImpactTestMode,
+    pub import_mode: DiffImpactImportMode,
     pub changed_lines: Vec<ChangedLineRange>,
     pub changed_symbols: Vec<String>,
-    pub exclude_changed: bool,
-    pub max_results: Option<usize>,
+    pub changed_mode: DiffImpactChangedMode,
+    pub max_results: Option<u32>,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct VerifyPlanOptions {
-    pub max_targeted: Option<usize>,
+    pub max_targeted: Option<u32>,
     pub changed_lines: Vec<ChangedLineRange>,
     pub changed_symbols: Vec<String>,
 }
 
-pub const DEFAULT_VERIFY_PLAN_MAX_TARGETED: usize = 8;
+pub const DEFAULT_VERIFY_PLAN_MAX_TARGETED: u32 = 8;
+
+#[must_use]
+fn bounded_usize(value: u32) -> usize {
+    usize::try_from(value).unwrap_or(usize::MAX)
+}
 
 pub fn diff_impact_for_changed_files(
     db_path: &Path,
@@ -184,10 +278,10 @@ pub fn diff_impact_for_changed_files(
         &mut state,
     )?;
     expand_changed_symbol_neighbors(&connection, options.max_distance, &mut state)?;
-    if options.include_tests {
+    if options.test_mode.include_tests() {
         append_diff_impact_test_targets(&connection, &mut state.results)?;
     }
-    if options.exclude_changed {
+    if options.changed_mode.exclude_changed() {
         remove_changed_symbol_rows(&mut state.results);
     }
     sort_and_cap_diff_impact_results(&mut state.results, options.max_results);
@@ -238,7 +332,11 @@ fn collect_changed_symbol_matches(
     state: &mut DiffImpactState,
 ) -> anyhow::Result<()> {
     for changed_file in changed_files {
-        for seed in changed_symbol_seeds(connection, changed_file, options.include_imports)? {
+        for seed in changed_symbol_seeds(
+            connection,
+            changed_file,
+            options.import_mode.include_imports(),
+        )? {
             if !matches_changed_symbol_filters(
                 &seed,
                 changed_file,
@@ -539,11 +637,11 @@ fn remove_changed_symbol_rows(results: &mut Vec<DiffImpactMatch>) {
 
 fn sort_and_cap_diff_impact_results(
     results: &mut Vec<DiffImpactMatch>,
-    max_results: Option<usize>,
+    max_results: Option<u32>,
 ) {
     results.sort_by(diff_impact_sort_key);
     if let Some(max_results) = max_results {
-        results.truncate(max_results);
+        results.truncate(bounded_usize(max_results));
     }
 }
 
@@ -1081,7 +1179,7 @@ pub fn impact_matches(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<Impact
 pub fn context_matches(
     db_path: &Path,
     task: &str,
-    budget: usize,
+    budget: u32,
 ) -> anyhow::Result<Vec<ContextMatch>> {
     context_matches_scoped(db_path, task, budget, &QueryScope::default())
 }
@@ -1089,7 +1187,7 @@ pub fn context_matches(
 pub fn context_matches_scoped(
     db_path: &Path,
     task: &str,
-    budget: usize,
+    budget: u32,
     scope: &QueryScope,
 ) -> anyhow::Result<Vec<ContextMatch>> {
     let connection = Connection::open(db_path)?;
@@ -1257,10 +1355,7 @@ fn push_neighbor_context_matches(
 }
 
 fn filter_context_matches_by_scope(matches: &mut Vec<ContextMatch>, scope: &QueryScope) {
-    matches.retain(|item| {
-        (!scope.code_only || is_code_file_path(&item.file_path))
-            && (!scope.exclude_tests || !is_test_like_path(&item.file_path))
-    });
+    matches.retain(|item| scope.includes_path(&item.file_path));
 }
 
 fn sort_context_matches(matches: &mut [ContextMatch]) {
@@ -1278,9 +1373,9 @@ fn sort_context_matches(matches: &mut [ContextMatch]) {
     });
 }
 
-fn truncate_context_matches_by_budget(matches: &mut Vec<ContextMatch>, budget: usize) {
+fn truncate_context_matches_by_budget(matches: &mut Vec<ContextMatch>, budget: u32) {
     let max_results = std::cmp::max(1, budget / 200);
-    matches.truncate(max_results);
+    matches.truncate(bounded_usize(max_results));
 }
 
 /// Finds test files that reference `symbol` and returns them as prioritized test targets.
@@ -1526,7 +1621,7 @@ fn include_changed_file_symbol(
 
 fn finalize_targeted_verification_steps(
     steps_by_command: HashMap<String, VerificationStep>,
-    targeted_cap: usize,
+    targeted_cap: u32,
 ) -> Vec<VerificationStep> {
     let mut steps = steps_by_command
         .into_values()
@@ -1549,7 +1644,7 @@ fn finalize_targeted_verification_steps(
             .cmp(&right.step)
             .then(left.why_included.cmp(&right.why_included))
     });
-    prioritized.extend(non_prioritized.into_iter().take(targeted_cap));
+    prioritized.extend(non_prioritized.into_iter().take(bounded_usize(targeted_cap)));
     prioritized
 }
 
@@ -1716,8 +1811,7 @@ fn text_substring_matches(
 fn apply_scope_filters(matches: Vec<QueryMatch>, scope: &QueryScope) -> Vec<QueryMatch> {
     matches
         .into_iter()
-        .filter(|item| !scope.code_only || is_code_file_path(&item.file_path))
-        .filter(|item| !scope.exclude_tests || !is_test_like_path(&item.file_path))
+        .filter(|item| scope.includes_path(&item.file_path))
         .collect()
 }
 

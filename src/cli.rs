@@ -51,7 +51,7 @@ pub struct FindArgs {
     #[arg(long, default_value_t = false)]
     pub exclude_tests: bool,
     #[arg(long = "max-results")]
-    pub max_results: Option<usize>,
+    pub max_results: Option<u32>,
 }
 
 #[derive(Debug, Args)]
@@ -66,7 +66,7 @@ pub struct RefsArgs {
     #[arg(long, default_value_t = false)]
     pub exclude_tests: bool,
     #[arg(long = "max-results")]
-    pub max_results: Option<usize>,
+    pub max_results: Option<u32>,
 }
 
 #[derive(Debug, Args)]
@@ -78,7 +78,7 @@ pub struct ContextArgs {
     #[arg(long)]
     pub json: bool,
     #[arg(long, default_value_t = 1200)]
-    pub budget: usize,
+    pub budget: u32,
     #[arg(long, default_value_t = false)]
     pub code_only: bool,
     #[arg(long, default_value_t = false)]
@@ -105,7 +105,7 @@ pub struct VerifyPlanArgs {
     #[arg(long = "changed-symbol")]
     pub changed_symbols: Vec<String>,
     #[arg(long = "max-targeted")]
-    pub max_targeted: Option<usize>,
+    pub max_targeted: Option<u32>,
     #[arg(long)]
     pub repo: PathBuf,
     #[arg(long)]
@@ -123,7 +123,7 @@ pub struct DiffImpactArgs {
     #[arg(long, default_value_t = 2)]
     pub max_distance: u32,
     #[arg(long = "max-results")]
-    pub max_results: Option<usize>,
+    pub max_results: Option<u32>,
     #[arg(long, default_value_t = false, conflicts_with = "exclude_tests")]
     pub include_tests: bool,
     #[arg(long, default_value_t = false, conflicts_with = "include_tests")]
