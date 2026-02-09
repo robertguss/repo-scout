@@ -43,21 +43,13 @@ fn milestone48_documents_language_contract_installation_posture() {
     let agents = read_repo_file("AGENTS.md");
     let policy_doc = read_repo_file("docs/contract-artifact-policy.md");
 
-    assert_contains(
-        &agents,
+    for expected in [
         "Contract installation scope in this repository is intentionally Rust-only",
-        "AGENTS.md",
-    );
-    assert_contains(
-        &agents,
         "contracts/languages/PYTHON_CODING_CONTRACT.md is intentionally not installed",
-        "AGENTS.md",
-    );
-    assert_contains(
-        &agents,
         "contracts/languages/TYPESCRIPT_CODING_CONTRACT.md is intentionally not installed",
-        "AGENTS.md",
-    );
+    ] {
+        assert_contains(&agents, expected, "AGENTS.md");
+    }
     assert_contains(
         &policy_doc,
         "Rust-only language contract scope is the canonical local posture",
