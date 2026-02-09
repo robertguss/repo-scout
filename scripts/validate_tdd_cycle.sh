@@ -10,7 +10,7 @@ Validates commit history from <base>..HEAD for Red -> Green -> Refactor sequenci
 Options:
   --base <commit-ish>   Base revision for commit range (default: origin/main or repo root commit)
   --strict-doc-only     Enforce TDD commit prefixes even for docs-only changes
-  --allow-empty-range   Allow empty commit ranges (default in local runs, opt-in in CI)
+  --allow-empty-range   Allow empty commit ranges (default is fail)
 USAGE
 }
 
@@ -82,18 +82,19 @@ is_non_executable_path() {
 }
 
 RANGE="${BASE_REF}..HEAD"
+# Validation intentionally scopes to BASE..HEAD so pre-Tiger history is excluded from prefix enforcement.
 COMMITS=()
 while IFS= read -r commit; do
   COMMITS+=("$commit")
 done < <(git rev-list --reverse "$RANGE")
 
 if [[ ${#COMMITS[@]} -eq 0 ]]; then
-  if [[ "$ALLOW_EMPTY_RANGE" -eq 1 || -z "${CI:-}" ]]; then
+  if [[ "$ALLOW_EMPTY_RANGE" -eq 1 ]]; then
     echo "No commits in range $RANGE. Nothing to validate."
     exit 0
   fi
 
-  echo "No commits in range $RANGE and empty ranges are blocked in CI without --allow-empty-range." >&2
+  echo "No commits in range $RANGE. Empty ranges require --allow-empty-range." >&2
   exit 1
 fi
 

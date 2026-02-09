@@ -124,7 +124,7 @@ require_field() {
   local field_display="$4"
 
   local line
-  line="$(grep -Eim1 "^[[:space:]]*[-*][[:space:]]*${field_regex}[[:space:]]*:" <<<"$section_body" || true)"
+  line="$(grep -Eim1 "^[[:space:]]*[-*][[:space:]]*(${field_regex})[[:space:]]*:" <<<"$section_body" || true)"
 
   if [[ -z "$line" ]]; then
     echo "$section_name section must include $field_display." >&2
@@ -147,7 +147,7 @@ validate_section_fields() {
 
   local spec
   for spec in "$@"; do
-    local field_regex="${spec%%|*}"
+    local field_regex="${spec%|*}"
     local field_display="${spec##*|}"
     require_field "$section_name" "$section_body" "$field_regex" "$field_display"
   done
@@ -181,8 +181,8 @@ if [[ -n "$RED_SECTION" ]]; then
   validate_section_fields "Red" "$RED_SECTION" \
     "Failing[[:space:]]+test\\(s\\)|Failing test(s)" \
     "Command\\(s\\)|Command(s)" \
-    "Failure[[:space:]]+summary|Failure summary" \
-    "Expected[[:space:]]+failure[[:space:]]+rationale|Expected failure rationale"
+    "(Expected[[:space:]]+)?Failure[[:space:]]+summary|Failure summary" \
+    "Expected[[:space:]]+failure[[:space:]]+rationale|Why[[:space:]]+this[[:space:]]+failure[[:space:]]+is[[:space:]]+expected|Expected failure rationale"
 fi
 
 if [[ -n "$GREEN_SECTION" ]]; then

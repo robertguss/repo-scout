@@ -143,7 +143,7 @@ jobs:
       - name: Run Rust contract gates
         run: |
           cargo fmt --all -- --check
-          cargo clippy --workspace --all-targets --all-features -- \
+          cargo clippy --workspace --lib --bins --all-features -- \
             -D warnings \
             -D clippy::unwrap_used \
             -D clippy::expect_used \

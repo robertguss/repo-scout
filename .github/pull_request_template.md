@@ -70,6 +70,20 @@ bash scripts/validate_tdd_cycle.sh --base <base-ref>
 bash scripts/validate_evidence_packet.sh --pr-body <path-to-pr-body>
 ```
 
+## Dogfooding Evidence (repo-scout required)
+
+- Pre-implementation:
+  `cargo run -- index --repo .`; `cargo run -- find <target_symbol> --repo . --json`; `cargo run -- refs <target_symbol> --repo . --json`
+- Post-implementation:
+  `cargo run -- index --repo .`; `cargo run -- find <target_symbol> --repo .`; `cargo run -- refs <target_symbol> --repo .`; `cargo test`
+- Transcript/artifact location: Link to notes in PR description or planning artifact.
+
+## Docs and Plans
+
+- Docs updated: List changed docs or `none`.
+- Plans updated: List changed plan artifacts or `none`.
+- Contract deltas: List any changes in `contracts/`, `templates/`, `checklists/`, or `scripts/`.
+
 ## Exceptions
 
 - Any contract rule waived: `no` (set to `yes` only with explicit approval)
