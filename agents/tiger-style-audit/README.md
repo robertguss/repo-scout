@@ -28,6 +28,8 @@ This audit does not implement code changes. It documents gaps and an implementat
 5. `agents/tiger-style-audit/05-process-ci-docs-compliance-report-and-plan.md`
 6. `agents/tiger-style-audit/06-tiger-style-framework-feedback.md`
 7. `agents/tiger-style-audit/07-appendix-evidence-snapshots.md`
+8. `agents/tiger-style-audit/08-implementation-session-prompt.md`
+9. `agents/tiger-style-audit/09-upstream-tiger-style-v1.1-patch-list.md`
 
 ## Baseline Validation Snapshot
 
