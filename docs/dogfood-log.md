@@ -20,6 +20,65 @@ This log captures real `repo-scout` usage while building `repo-scout`.
 
 ## Entries
 
+- Date: `2026-02-09`
+- Task: Phase 10 Milestones 51/52 Go `find` MVP (adapter wiring + deterministic JSON behavior).
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find test_command_for_target --repo . --json`
+  - `cargo run -- refs test_command_for_target --repo . --json`
+  - `cargo test milestone50_go_find_definitions_are_ast_backed -- --nocapture`
+  - `cargo test milestone50_go_find_persists_language_metadata -- --nocapture`
+  - `cargo test milestone50_go_find_json_is_deterministic -- --nocapture`
+  - `cargo test milestone50_go_find_scope_flags_do_not_regress_existing_languages -- --nocapture`
+  - `cargo test milestone50_go_find -- --nocapture`
+  - `cargo run -- index --repo tests/fixtures/phase10/go_find`
+  - `cargo run -- find SayHello --repo tests/fixtures/phase10/go_find --json`
+  - `cargo run -- find Greeter --repo tests/fixtures/phase10/go_find --json`
+  - `cargo test`
+- What helped:
+  - Keeping Go scope definition-only allowed minimal adapter integration with no schema changes.
+  - Fixture-backed tests locked AST-first `find` behavior and `symbols_v2.language = "go"` data
+    persistence.
+- What failed or felt weak:
+  - `refs` for Go symbols remains text fallback in this phase by design (Go AST references deferred).
+- Action taken:
+  - failing test added:
+    - `tests/milestone50_go_find.rs`
+  - fix commit:
+    - pending (Phase 10 branch in progress)
+  - docs update:
+    - `README.md`, `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`,
+      `docs/performance-baseline.md`, `agents/plans/repo-scout-phase10-execplan.md`.
+- Status: `fixed`
+
+- Date: `2026-02-09`
+- Task: Phase 10 Milestones 49/50 Rust hardening (`refs` dedupe + test-target/scope classifier).
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find test_command_for_target --repo . --json`
+  - `cargo run -- refs test_command_for_target --repo . --json`
+  - `cargo test milestone49_refs_deduplicates_ast_rows -- --nocapture`
+  - `cargo test milestone49_verify_plan_targets_remain_deterministic -- --nocapture`
+  - `cargo test milestone49_scope_filtering_preserves_contract -- --nocapture`
+  - `cargo test`
+- What helped:
+  - A minimal chained-call fixture (`helper().is_some()`) reproduced duplicate AST reference rows
+    reliably for strict Red evidence.
+  - Narrowing runnable-target synthesis to direct `tests/<file>.rs` removed invalid cargo commands
+    for non-Rust test files.
+- What failed or felt weak:
+  - Test-like filtering was too Rust-centric before this slice and leaked common TS/Python test
+    paths under `--exclude-tests`.
+- Action taken:
+  - failing test added:
+    - `tests/milestone49_rust_hardening.rs`
+  - fix commit:
+    - pending (Phase 10 branch in progress)
+  - docs update:
+    - `README.md`, `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`,
+      `agents/plans/repo-scout-phase10-execplan.md`.
+- Status: `fixed`
+
 - Date: `2026-02-08`
 - Task: Phase 8 Milestone 41 docs/evidence/performance refresh plus final verification.
 - Commands run:

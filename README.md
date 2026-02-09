@@ -3,15 +3,15 @@
 `repo-scout` is a local, deterministic CLI for indexing a repository and answering code-navigation
 questions fast.
 
-Phase 8 is fully implemented and adds semantic-precision closure, strict lint hardening
-(`cargo clippy --all-targets --all-features -- -D warnings`), explicit `diff-impact` test-target
-opt-out (`--exclude-tests`), and deterministic row-level terminal output.
+Phase 10 is fully implemented and adds Rust production-readiness hardening plus Go `find` MVP
+(AST-backed Go symbol definitions), while preserving deterministic output and schema stability.
 
 ## What It Does
 
 - Incrementally indexes repositories into `<repo>/.repo-scout/index.db`.
 - Extracts language-agnostic token occurrences from all files.
-- Extracts Rust, TypeScript, and Python symbol/graph metadata through language adapters.
+- Extracts Rust, TypeScript, Python, and Go symbol metadata through language adapters
+  (Go is definition-focused in this phase).
 - Supports deterministic terminal and JSON output for automation.
 
 Available commands:
@@ -87,6 +87,7 @@ cargo run -- explain impact_matches --repo /path/to/repo --json
   - Prints index path and schema version.
 - `find <SYMBOL> --repo <PATH> [--json] [--code-only] [--exclude-tests] [--max-results <N>]`
   - Prefers AST definitions (`ast_definition`), then falls back to text ranking.
+  - Includes Go AST definitions in addition to Rust/TypeScript/Python definitions.
 - `refs <SYMBOL> --repo <PATH> [--json] [--code-only] [--exclude-tests] [--max-results <N>]`
   - Prefers AST references (`ast_reference`), then falls back to text ranking.
   - Fallback ties now prefer code paths over test/docs paths at equal score tiers.
@@ -210,6 +211,10 @@ cargo test
 
 If dogfooding exposes a defect, add a failing integration test first, implement the minimum fix,
 then refactor with the full suite green.
+
+Phase 10 note: `--exclude-tests` now recognizes common TypeScript/Python naming patterns in
+addition to Rust test conventions (`*.test.ts`, `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`,
+`test_*.py`, `*_test.py`, plus `tests/` and `/tests/` paths).
 
 ## Error Recovery
 
