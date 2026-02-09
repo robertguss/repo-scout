@@ -138,3 +138,11 @@ perf-baseline-full symbol="run" changed_file="src/query/mod.rs" task="update run
     /usr/bin/time -p cargo run --release -- context --task "{{task}}" --repo "{{repo}}" --budget "{{budget}}" --json
     /usr/bin/time -p cargo run --release -- tests-for "{{symbol}}" --repo "{{repo}}" --json
     /usr/bin/time -p cargo run --release -- verify-plan --changed-file "{{changed_file}}" --repo "{{repo}}" --json
+
+# Usage: just perf-rust-guardrails [repo] [fixture]
+perf-rust-guardrails repo="." fixture="tests/fixtures/phase11/rust_production/corpus":
+    bash scripts/check_rust_perf_guardrails.sh --repo "{{repo}}" --fixture "{{fixture}}"
+
+# Usage: just perf-rust-record [repo] [fixture]
+perf-rust-record repo="." fixture="tests/fixtures/phase11/rust_production/corpus":
+    bash scripts/check_rust_perf_guardrails.sh --repo "{{repo}}" --fixture "{{fixture}}" --record
