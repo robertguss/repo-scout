@@ -18,18 +18,21 @@ fn assert_agents_contains(haystack: &str, needle: &str) {
 #[test]
 fn milestone46_agents_documents_unwrap_expect_policy_for_tests() {
     let agents = read_agents_text_lowercase();
-    assert_agents_contains(&agents, "test error-handling policy");
-    assert_agents_contains(&agents, "tests/");
-    assert_agents_contains(&agents, "unwrap");
-    assert_agents_contains(&agents, "expect");
-    assert_agents_contains(&agents, "allowed");
+    for expected in [
+        "test error-handling policy",
+        "tests/",
+        "unwrap",
+        "expect",
+        "allowed",
+    ] {
+        assert_agents_contains(&agents, expected);
+    }
 }
 
 #[test]
 fn milestone46_agents_documents_panic_policy_and_src_boundary() {
     let agents = read_agents_text_lowercase();
-    assert_agents_contains(&agents, "tests/common");
-    assert_agents_contains(&agents, "panic!");
-    assert_agents_contains(&agents, "src/");
-    assert_agents_contains(&agents, "must not");
+    for expected in ["tests/common", "panic!", "src/", "must not"] {
+        assert_agents_contains(&agents, expected);
+    }
 }
