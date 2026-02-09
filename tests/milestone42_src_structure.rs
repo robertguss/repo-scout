@@ -150,27 +150,29 @@ fn assert_no_self_call(path: &str, function_name: &str) {
 #[test]
 fn milestone42_hotspot_functions_fit_size_limit() {
     let max_lines = 70;
-    assert_function_length("src/indexer/mod.rs", "index_repository", max_lines);
-    assert_function_length("src/indexer/mod.rs", "resolve_symbol_id_in_tx", max_lines);
-    assert_function_length("src/query/mod.rs", "context_matches_scoped", max_lines);
-    assert_function_length(
-        "src/query/mod.rs",
-        "diff_impact_for_changed_files",
-        max_lines,
-    );
-    assert_function_length(
-        "src/query/mod.rs",
-        "verify_plan_for_changed_files",
-        max_lines,
-    );
+    let bounded_functions = [
+        ("src/indexer/mod.rs", "index_repository"),
+        ("src/indexer/mod.rs", "resolve_symbol_id_in_tx"),
+        ("src/query/mod.rs", "context_matches_scoped"),
+        ("src/query/mod.rs", "diff_impact_for_changed_files"),
+        ("src/query/mod.rs", "verify_plan_for_changed_files"),
+    ];
+    for (path, function_name) in bounded_functions {
+        assert_function_length(path, function_name, max_lines);
+    }
 }
 
 #[test]
 fn milestone42_unapproved_recursive_helpers_are_removed() {
-    assert_no_self_call("src/indexer/rust_ast.rs", "collect_call_identifiers");
-    assert_no_self_call("src/indexer/rust_ast.rs", "last_identifier_text");
-    assert_no_self_call(
-        "src/indexer/languages/typescript.rs",
-        "collect_type_identifiers",
-    );
+    let approved_non_recursive_helpers = [
+        ("src/indexer/rust_ast.rs", "collect_call_identifiers"),
+        ("src/indexer/rust_ast.rs", "last_identifier_text"),
+        (
+            "src/indexer/languages/typescript.rs",
+            "collect_type_identifiers",
+        ),
+    ];
+    for (path, function_name) in approved_non_recursive_helpers {
+        assert_no_self_call(path, function_name);
+    }
 }
