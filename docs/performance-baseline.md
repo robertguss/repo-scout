@@ -23,6 +23,8 @@ Track wall-clock timings for:
   calibrated `impact`/`diff-impact` semantic ranking, explicit `diff-impact --exclude-tests`,
   deterministic row-level terminal output checks, fixture benchmark pack under
   `tests/fixtures/phase8/semantic_precision`)
+- Phase 10 Go `find` MVP checks (Go AST-backed definition indexing and deterministic `find` JSON
+  on fixture corpus under `tests/fixtures/phase10/go_find`)
 
 ## Commands
 
@@ -64,6 +66,9 @@ Equivalent manual commands:
 /usr/bin/time -p cargo run --release -- diff-impact --changed-file src/indexer/languages/typescript.rs --repo . --json
 /usr/bin/time -p cargo run --release -- diff-impact --changed-file src/indexer/languages/python.rs --repo . --json
 /usr/bin/time -p cargo run --release -- refs helper --repo . --code-only --exclude-tests --max-results 10 --json
+/usr/bin/time -p cargo run --release -- index --repo tests/fixtures/phase10/go_find
+/usr/bin/time -p cargo run --release -- find SayHello --repo tests/fixtures/phase10/go_find --json
+/usr/bin/time -p cargo run --release -- find Greeter --repo tests/fixtures/phase10/go_find --code-only --exclude-tests --json
 ```
 
 ## Coverage Check

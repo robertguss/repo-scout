@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the current `repo-scout` architecture after Phase 8.
+This document describes the current `repo-scout` architecture after Phase 10.
 
 ## High-Level Flow
 
@@ -28,9 +28,11 @@ This document describes the current `repo-scout` architecture after Phase 8.
 - `src/indexer/rust_ast.rs`
   - Rust AST extraction for definitions/references.
 - `src/indexer/languages/`
-  - Language adapters (`rust`, `typescript`, `python`) and normalized extraction contracts.
+  - Language adapters (`rust`, `typescript`, `python`, `go`) and normalized extraction contracts.
   - TypeScript/Python adapters now include module-aware alias hints for namespace/member and
     module-alias attribute call resolution.
+  - Go adapter currently provides definition extraction only (no Go AST reference/edge extraction
+    in this phase).
 - `src/indexer/mod.rs`
   - Incremental indexing coordinator, stale-row pruning, adapter dispatch, deferred edge resolution,
     and symbol/edge persistence.
@@ -91,8 +93,9 @@ schema migration safety.
 - Prefer exact AST definitions.
 - Fall back to text exact token, then text substring.
 - Optional fallback-only scope controls:
-  - `--code-only` keeps `.rs`, `.ts`, `.tsx`, `.py` paths.
-  - `--exclude-tests` drops test-like paths (`tests/`, `/tests/`, `*_test.rs`).
+  - `--code-only` keeps `.rs`, `.ts`, `.tsx`, `.py`, `.go` paths.
+  - `--exclude-tests` drops test-like paths (`tests/`, `/tests/`, `*_test.rs`, `*.test.ts`,
+    `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`, `test_*.py`, `*_test.py`).
 - Fallback ties are path-class ranked (`code`, then `test-like`, then `docs/other`).
 - Optional deterministic output cap: `--max-results <N>`.
 

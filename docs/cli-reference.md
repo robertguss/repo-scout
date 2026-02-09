@@ -71,10 +71,14 @@ Ranking strategy:
 4. At equal fallback score tiers, tie-break by path class (`code` before `test-like` before
    `docs/other`), then by file/position/symbol.
 
+Phase 10 note: Go definitions are now indexed into AST definitions, so `find` returns Go symbols
+with `why_matched=ast_definition` when available.
+
 Scope controls for fallback rows:
 
-- `--code-only`: restricts fallback matches to `.rs`, `.ts`, `.tsx`, `.py` paths.
-- `--exclude-tests`: omits fallback matches in test-like paths (`tests/`, `/tests/`, `*_test.rs`).
+- `--code-only`: restricts fallback matches to `.rs`, `.ts`, `.tsx`, `.py`, `.go` paths.
+- `--exclude-tests`: omits fallback matches in test-like paths (`tests/`, `/tests/`,
+  `*_test.rs`, `*.test.ts`, `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`, `test_*.py`, `*_test.py`).
 - `--max-results <N>`: deterministic truncation after ranking (`0` yields empty results).
 
 AST definition matches remain highest priority and are returned unchanged when present.
@@ -99,8 +103,9 @@ Ranking strategy:
 
 Scope controls for fallback rows:
 
-- `--code-only`: restricts fallback matches to `.rs`, `.ts`, `.tsx`, `.py` paths.
-- `--exclude-tests`: omits fallback matches in test-like paths (`tests/`, `/tests/`, `*_test.rs`).
+- `--code-only`: restricts fallback matches to `.rs`, `.ts`, `.tsx`, `.py`, `.go` paths.
+- `--exclude-tests`: omits fallback matches in test-like paths (`tests/`, `/tests/`,
+  `*_test.rs`, `*.test.ts`, `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`, `test_*.py`, `*_test.py`).
 - `--max-results <N>`: deterministic truncation after ranking (`0` yields empty results).
 
 AST reference matches remain highest priority and are returned unchanged when present.
@@ -148,8 +153,9 @@ Behavior:
 - Uses deterministic token-overlap relevance between task keywords and symbol tokens.
 - Prioritizes direct symbol definition hits (typically `context_high`, score up to `0.98`).
 - Adds one-hop graph neighbors (`context_medium`, score derived from direct match score).
-- `--code-only` keeps only `.rs`, `.ts`, `.tsx`, `.py` paths.
-- `--exclude-tests` removes test-like paths (`tests/`, `/tests/`, `*_test.rs`).
+- `--code-only` keeps only `.rs`, `.ts`, `.tsx`, `.py`, `.go` paths.
+- `--exclude-tests` removes test-like paths (`tests/`, `/tests/`, `*_test.rs`, `*.test.ts`,
+  `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`, `test_*.py`, `*_test.py`).
 - Truncates to `max(1, budget / 200)` results.
 
 Example:
@@ -169,6 +175,8 @@ Current target discovery:
 - file path under `tests/`
 - file path containing `/tests/`
 - file name matching `*_test.rs`
+- file name matching `*.test.ts`, `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`
+- file name matching `test_*.py` or `*_test.py`
 
 Output rows include:
 

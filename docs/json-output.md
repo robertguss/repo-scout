@@ -64,7 +64,9 @@ Top-level fields:
 Schema 1 remains unchanged when using Phase 4/6 controls (`--code-only`, `--exclude-tests`,
 `--max-results`). These options only affect result selection/ranking order:
 
-- scope flags filter text fallback rows only,
+- scope flags filter text fallback rows only (`--code-only` includes `.rs`, `.ts`, `.tsx`, `.py`,
+  `.go`; `--exclude-tests` excludes `tests/`, `/tests/`, `*_test.rs`, `*.test.ts`, `*.test.tsx`,
+  `*.spec.ts`, `*.spec.tsx`, `test_*.py`, `*_test.py`),
 - fallback ties prefer code paths over test/docs at equal fallback score tiers,
 - `--max-results` applies deterministic truncation after ranking, while AST-priority rows and JSON
   envelope shape stay stable.
@@ -158,7 +160,7 @@ Per-result fields:
 Phase 5/6 keeps schema 2 stable and upgrades matching/ranking only: context rows now use
 token-overlap rationale text (for example `token-overlap relevance`) and deterministic
 definition-first scoring, with optional additive scope controls (`--code-only`, `--exclude-tests`)
-that filter rows without changing the schema envelope.
+that filter rows without changing the schema envelope (`--code-only` includes `.go` in Phase 10).
 
 ## `tests-for --json` (Schema 2)
 
@@ -460,6 +462,7 @@ Deterministic ordering rules for `results`:
 - `rust`
 - `typescript`
 - `python`
+- `go`
 - `unknown`
 
 `kind` values:
