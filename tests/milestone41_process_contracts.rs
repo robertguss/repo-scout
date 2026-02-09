@@ -98,7 +98,10 @@ fn run_evidence_validator(repo: &Path, args: &[&str]) -> Output {
 fn run_evidence_validator_on_file(repo: &Path, evidence_path: &Path) -> Output {
     run_evidence_validator(
         repo,
-        &["--file", evidence_path.to_str().expect("path should be utf-8")],
+        &[
+            "--file",
+            evidence_path.to_str().expect("path should be utf-8"),
+        ],
     )
 }
 
