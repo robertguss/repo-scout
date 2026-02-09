@@ -95,6 +95,13 @@ fn run_evidence_validator(repo: &Path, args: &[&str]) -> Output {
     run_command(repo, "bash", &refs)
 }
 
+fn run_evidence_validator_on_file(repo: &Path, evidence_path: &Path) -> Output {
+    run_evidence_validator(
+        repo,
+        &["--file", evidence_path.to_str().expect("path should be utf-8")],
+    )
+}
+
 #[test]
 fn milestone41_ci_workflow_enforces_rust_contract_gates() {
     let workflow = read_repo_file(".github/workflows/contract-gates.yml");
@@ -220,13 +227,7 @@ cargo test
 "#;
 
     fs::write(&evidence_path, evidence).expect("evidence should be written");
-    let output = run_evidence_validator(
-        repo.path(),
-        &[
-            "--file",
-            evidence_path.to_str().expect("path should be utf-8"),
-        ],
-    );
+    let output = run_evidence_validator_on_file(repo.path(), &evidence_path);
 
     assert!(
         !output.status.success(),
@@ -300,13 +301,7 @@ cargo test milestone41_evidence_validator -- --nocapture
 "#;
 
     fs::write(&evidence_path, evidence).expect("evidence should be written");
-    let output = run_evidence_validator(
-        repo.path(),
-        &[
-            "--file",
-            evidence_path.to_str().expect("path should be utf-8"),
-        ],
-    );
+    let output = run_evidence_validator_on_file(repo.path(), &evidence_path);
 
     assert!(
         output.status.success(),
