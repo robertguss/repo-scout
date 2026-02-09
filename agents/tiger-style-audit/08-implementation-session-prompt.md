@@ -1,6 +1,7 @@
 # Implementation Prompt For New Session
 
-You are implementing Tiger-style compliance remediation for `repo-scout` using the completed audit artifacts.
+You are implementing Tiger-style compliance remediation for `repo-scout` using the completed audit
+artifacts.
 
 ## Objective
 
@@ -11,7 +12,8 @@ Implement the Tiger-style conformance fixes identified in:
 - `/Users/robertguss/Projects/experiments/repo-scout/agents/tiger-style-audit/03-src-compliance-report-and-plan.md`
 - `/Users/robertguss/Projects/experiments/repo-scout/agents/tiger-style-audit/04-tests-compliance-report-and-plan.md`
 - `/Users/robertguss/Projects/experiments/repo-scout/agents/tiger-style-audit/05-process-ci-docs-compliance-report-and-plan.md`
-- `/Users/robertguss/Projects/experiments/repo-scout/agents/tiger-style-audit/06-tiger-style-framework-feedback.md` (use only for local notes and upstream issue extraction, not local contract downgrades)
+- `/Users/robertguss/Projects/experiments/repo-scout/agents/tiger-style-audit/06-tiger-style-framework-feedback.md`
+  (use only for local notes and upstream issue extraction, not local contract downgrades)
 
 ## Constraints (must follow)
 
@@ -32,7 +34,8 @@ Implement the Tiger-style conformance fixes identified in:
 Implement the P1 process/CI gaps first:
 
 - F-PROC-01: enforce Rust contract required gates in CI (`fmt`, strict `clippy`, `test`).
-- F-PROC-02: strengthen `scripts/validate_tdd_cycle.sh` so it does more than minimal prefix presence.
+- F-PROC-02: strengthen `scripts/validate_tdd_cycle.sh` so it does more than minimal prefix
+  presence.
 - F-PROC-03: strengthen `scripts/validate_evidence_packet.sh` with content-quality checks.
 - F-PROC-07: merge PR template checklist + dogfooding expectations.
 
@@ -113,4 +116,3 @@ If a Tiger rule appears contradictory or impractical during implementation:
 - keep local repo compliant with current installed rules,
 - add an upstream follow-up note referencing:
   `/Users/robertguss/Projects/experiments/repo-scout/agents/tiger-style-audit/06-tiger-style-framework-feedback.md`.
-
