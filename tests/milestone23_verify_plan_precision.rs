@@ -21,7 +21,7 @@ fn verify_plan_json(repo_root: &Path, max_targeted: Option<&str>) -> Value {
     serde_json::from_str(&out).expect("verify-plan json should parse")
 }
 
-fn verify_plan_results<'a>(payload: &'a Value) -> &'a [Value] {
+fn verify_plan_results(payload: &Value) -> &[Value] {
     payload["results"]
         .as_array()
         .expect("results should be array")

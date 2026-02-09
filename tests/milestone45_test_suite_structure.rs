@@ -154,10 +154,7 @@ fn milestone45_hotspot_test_functions_fit_size_limit() {
             "tests/milestone30_query_focus.rs",
             "milestone30_find_and_refs_max_results_cap_deterministically",
         ),
-        (
-            "tests/milestone14_adapter.rs",
-            "build_v2_index",
-        ),
+        ("tests/milestone14_adapter.rs", "build_v2_index"),
         (
             "tests/milestone30_query_focus.rs",
             "milestone30_query_caps_compose_with_code_only_and_exclude_tests",

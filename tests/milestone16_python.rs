@@ -27,7 +27,7 @@ fn run_repo_json_deterministic(repo_root: &Path, args: &[&str]) -> Value {
     first
 }
 
-fn payload_results<'a>(payload: &'a Value) -> &'a [Value] {
+fn payload_results(payload: &Value) -> &[Value] {
     payload["results"]
         .as_array()
         .expect("results should be an array")
@@ -224,21 +224,11 @@ fn milestone16_python_edges_and_queries() {
 
     let diff_payload = run_repo_json_deterministic(
         repo.path(),
-        &[
-            "diff-impact",
-            "--changed-file",
-            "src/util.py",
-        ],
+        &["diff-impact", "--changed-file", "src/util.py"],
     );
     assert_diff_impact_reports_imported_by(&diff_payload);
 
-    let explain_payload = run_repo_json_deterministic(
-        repo.path(),
-        &[
-            "explain",
-            "Runner",
-        ],
-    );
+    let explain_payload = run_repo_json_deterministic(repo.path(), &["explain", "Runner"]);
     assert_explain_reports_python(&explain_payload);
 }
 

@@ -94,11 +94,11 @@ fn write_scope_fixture(repo_root: &Path) {
 }
 
 fn assert_scope_results_are_code_only(results: &[Value]) {
-    assert!(results.iter().all(|row| {
-        row["file_path"]
-            .as_str()
-            .is_some_and(is_code_path)
-    }));
+    assert!(
+        results
+            .iter()
+            .all(|row| { row["file_path"].as_str().is_some_and(is_code_path) })
+    );
 }
 
 #[test]
@@ -134,7 +134,11 @@ fn milestone27_context_exclude_tests_omits_test_paths() {
 #[test]
 fn milestone27_context_code_only_restricts_to_code_extensions() {
     let repo = common::temp_repo();
-    common::write_file(repo.path(), "src/lib.rs", "pub fn verify_plan_for_changed_files() {}\n");
+    common::write_file(
+        repo.path(),
+        "src/lib.rs",
+        "pub fn verify_plan_for_changed_files() {}\n",
+    );
 
     run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
 

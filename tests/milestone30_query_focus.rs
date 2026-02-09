@@ -20,7 +20,7 @@ fn run_query_json_deterministic(repo_root: &Path, args: &[&str]) -> Value {
     first
 }
 
-fn query_results<'a>(payload: &'a Value) -> &'a [Value] {
+fn query_results(payload: &Value) -> &[Value] {
     payload["results"]
         .as_array()
         .expect("results should be array")

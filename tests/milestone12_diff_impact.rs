@@ -19,7 +19,7 @@ fn diff_impact_json(repo_root: &Path, changed_file: &str, extra_flags: &[&str]) 
     serde_json::from_str(&out).expect("diff-impact --json should produce valid json")
 }
 
-fn diff_results<'a>(payload: &'a Value) -> &'a [Value] {
+fn diff_results(payload: &Value) -> &[Value] {
     payload["results"]
         .as_array()
         .expect("results should be array")
