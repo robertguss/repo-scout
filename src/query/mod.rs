@@ -253,14 +253,15 @@ pub const DEFAULT_VERIFY_PLAN_MAX_TARGETED: u32 = 8;
 
 #[must_use]
 fn bounded_usize(value: u32) -> usize {
+    let supports_u32_boundary = usize::BITS >= 32;
     debug_assert!(
-        usize::BITS >= 32,
+        supports_u32_boundary,
         "repo-scout requires usize to represent u32 boundary values"
     );
     usize::try_from(value).unwrap_or(usize::MAX)
 }
 
-#[must_use]
+#[must_use = "diff-impact results should be consumed by callers"]
 pub fn diff_impact_for_changed_files(
     db_path: &Path,
     changed_files: &[String],
@@ -642,10 +643,7 @@ fn remove_changed_symbol_rows(results: &mut Vec<DiffImpactMatch>) {
     });
 }
 
-fn sort_and_cap_diff_impact_results(
-    results: &mut Vec<DiffImpactMatch>,
-    max_results: Option<u32>,
-) {
+fn sort_and_cap_diff_impact_results(results: &mut Vec<DiffImpactMatch>, max_results: Option<u32>) {
     results.sort_by(diff_impact_sort_key);
     if let Some(max_results) = max_results {
         results.truncate(bounded_usize(max_results));
@@ -1026,7 +1024,7 @@ pub fn find_matches(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<QueryMat
     find_matches_scoped(db_path, symbol, &QueryScope::default())
 }
 
-#[must_use]
+#[must_use = "query results should be consumed by callers"]
 pub fn find_matches_scoped(
     db_path: &Path,
     symbol: &str,
@@ -1064,7 +1062,7 @@ pub fn refs_matches(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<QueryMat
     refs_matches_scoped(db_path, symbol, &QueryScope::default())
 }
 
-#[must_use]
+#[must_use = "reference results should be consumed by callers"]
 pub fn refs_matches_scoped(
     db_path: &Path,
     symbol: &str,
@@ -1207,7 +1205,7 @@ pub fn context_matches(
     context_matches_scoped(db_path, task, budget, &QueryScope::default())
 }
 
-#[must_use]
+#[must_use = "context matches should be consumed by callers"]
 pub fn context_matches_scoped(
     db_path: &Path,
     task: &str,
@@ -1399,7 +1397,10 @@ fn sort_context_matches(matches: &mut [ContextMatch]) {
 
 fn truncate_context_matches_by_budget(matches: &mut Vec<ContextMatch>, budget: u32) {
     let max_results = std::cmp::max(1, budget / 200);
-    debug_assert!(max_results >= 1, "context budget must map to at least one result");
+    debug_assert!(
+        max_results >= 1,
+        "context budget must map to at least one result"
+    );
     matches.truncate(bounded_usize(max_results));
 }
 
@@ -1499,7 +1500,7 @@ pub fn tests_for_symbol(
 /// // `steps` is a Vec<VerificationStep> describing targeted test commands and a final
 /// // "cargo test" full-suite step.
 /// ```
-#[must_use]
+#[must_use = "verification plans should be consumed by callers"]
 pub fn verify_plan_for_changed_files(
     db_path: &Path,
     changed_files: &[String],
@@ -1670,7 +1671,11 @@ fn finalize_targeted_verification_steps(
             .cmp(&right.step)
             .then(left.why_included.cmp(&right.why_included))
     });
-    prioritized.extend(non_prioritized.into_iter().take(bounded_usize(targeted_cap)));
+    prioritized.extend(
+        non_prioritized
+            .into_iter()
+            .take(bounded_usize(targeted_cap)),
+    );
     prioritized
 }
 

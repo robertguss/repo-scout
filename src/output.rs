@@ -248,11 +248,7 @@ pub fn print_context(task: &str, budget: u32, matches: &[ContextMatch]) {
 /// let res = print_context_json("build-docs", 5, &[]);
 /// assert!(res.is_ok());
 /// ```
-pub fn print_context_json(
-    task: &str,
-    budget: u32,
-    matches: &[ContextMatch],
-) -> anyhow::Result<()> {
+pub fn print_context_json(task: &str, budget: u32, matches: &[ContextMatch]) -> anyhow::Result<()> {
     let payload = JsonContextOutput {
         schema_version: JSON_SCHEMA_VERSION_V2,
         command: "context",
@@ -446,12 +442,7 @@ pub fn print_diff_impact(
                         "test_target {} ({}, {}) ",
                         "confidence={} provenance={} score={:.2}"
                     ),
-                    target,
-                    target_kind,
-                    language,
-                    confidence,
-                    provenance,
-                    score
+                    target, target_kind, language, confidence, provenance, score
                 );
             }
         }

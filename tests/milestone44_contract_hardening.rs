@@ -9,9 +9,15 @@ fn read_repo_file(path: &str) -> String {
 }
 
 fn assert_has_must_use_annotation(source: &str, function_name: &str) {
-    let marker = format!("#[must_use]\npub fn {function_name}");
+    let marker = format!("pub fn {function_name}");
+    let offset = source.find(&marker).unwrap_or_else(|| {
+        panic!("missing public function marker: {marker}");
+    });
+    let prefix = &source[..offset];
+    let lookback_start = prefix.len().saturating_sub(200);
+    let lookback = &prefix[lookback_start..];
     assert!(
-        source.contains(&marker),
+        lookback.contains("#[must_use"),
         "expected #[must_use] on public function '{function_name}'"
     );
 }
@@ -42,9 +48,9 @@ fn milestone44_query_boundaries_include_targeted_invariant_assertions() {
     assert_source_contains_markers(
         &query_source,
         &[
-        "usize::BITS >= 32",
-        "debug_assert!(max_results >= 1",
-        "results.len() <= bounded_usize(max_results)",
+            "usize::BITS >= 32",
+            "max_results >= 1",
+            "results.len() <= bounded_usize(max_results)",
         ],
     );
 }
