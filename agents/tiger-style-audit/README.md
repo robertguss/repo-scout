@@ -2,9 +2,11 @@
 
 ## Purpose
 
-This folder contains an audit-only deep-dive of `repo-scout` against the Tiger style contracts and conventions that are now installed in this repository.
+This folder contains the Tiger-style audit artifacts for `repo-scout` and the implementation-tracking
+records used to close the identified findings.
 
-This audit does not implement code changes. It documents gaps and an implementation plan for a follow-up execution session.
+Implementation status: Milestones 1 through 5 are complete.
+Remaining high-priority findings: none.
 
 ## Source of Truth Used
 
@@ -29,18 +31,17 @@ This audit does not implement code changes. It documents gaps and an implementat
 6. `agents/tiger-style-audit/06-tiger-style-framework-feedback.md`
 7. `agents/tiger-style-audit/07-appendix-evidence-snapshots.md`
 8. `agents/tiger-style-audit/08-implementation-session-prompt.md`
-9. `agents/tiger-style-audit/09-upstream-tiger-style-v1.1-patch-list.md`
 
-## Baseline Validation Snapshot
+## Validation Snapshot
 
 - `just check`: pass (fmt/clippy/tests green)
-- `just contract-check`: pass for `origin/main..HEAD` (no commits in range, evidence headings pass)
-- `bash scripts/validate_tdd_cycle.sh --base <root-commit>`: fail (historical commit subject prefix non-compliance)
+- `just contract-check`: pass
+- `bash scripts/validate_tdd_cycle.sh --base origin/main`: pass
 
 ## Top Priority Themes
 
 - Large-function and monolithic-flow violations versus the 70-line Rust contract limit.
 - Recursion usage that is only partially design-approved.
 - Public API option-shape drift from contract guidance (`bool` flags and `usize` at boundaries).
-- Process enforcement gaps: CI gate and validators currently under-enforce Tiger requirements.
-- Planning/documentation artifacts before Tiger adoption are structurally inconsistent with the new contract integration expectations.
+- Process enforcement and policy boundaries are explicitly documented and validator-backed.
+- Planning/documentation artifacts are normalized for Tiger-era conformance.

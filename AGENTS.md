@@ -104,6 +104,14 @@
   `.github/workflows/contract-gates.yml` are part of the required workflow.
 - If `AGENTS.md` guidance and contract assets conflict, the stricter rule wins.
 
+## Contract Installation Policy
+
+- Contract installation scope in this repository is intentionally Rust-only.
+- contracts/languages/PYTHON_CODING_CONTRACT.md is intentionally not installed.
+- contracts/languages/TYPESCRIPT_CODING_CONTRACT.md is intentionally not installed.
+- Python and TypeScript remain supported as indexed/query languages, but Rust is the only active
+  coding contract scope in this repository.
+
 ## Process Artifact Policy
 
 - Canonical strategy: PR-body-first evidence using `.github/pull_request_template.md`.
@@ -112,6 +120,9 @@
   - `bash scripts/validate_evidence_packet.sh --pr-body .github/pull_request_template.md`
 - Committed evidence is optional; use `.evidence/EVIDENCE_PACKET.md` only when extra local transcript
   detail is needed.
+- Historical commit subjects before Tiger adoption are not retroactively enforced.
+- Validation scope for commit-prefix policy is `origin/main..HEAD` unless a different
+  branch-appropriate base is explicitly required.
 
 ## Legacy ExecPlan Policy
 

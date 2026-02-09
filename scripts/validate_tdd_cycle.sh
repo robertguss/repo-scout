@@ -6,6 +6,7 @@ usage() {
 Usage: scripts/validate_tdd_cycle.sh [--base <commit-ish>] [--strict-doc-only]
 
 Validates commit history from <base>..HEAD for Red -> Green -> Refactor sequencing.
+By policy, pre-Tiger history is excluded from prefix enforcement.
 
 Options:
   --base <commit-ish>   Base revision for commit range (default: origin/main or repo root commit)

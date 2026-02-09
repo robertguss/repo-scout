@@ -12,6 +12,12 @@ mapped to:
 - `templates/TEST_PLAN_TEMPLATE.md`
 - `templates/EVIDENCE_PACKET_TEMPLATE.md`
 
+Rust-only language contract scope is the canonical local posture.
+
+This repository intentionally installs only `contracts/languages/RUST_CODING_CONTRACT.md`.
+`contracts/languages/PYTHON_CODING_CONTRACT.md` and
+`contracts/languages/TYPESCRIPT_CODING_CONTRACT.md` are intentionally omitted.
+
 ## Required Validation Commands
 
 Run these commands before opening or updating a PR:
@@ -21,6 +27,9 @@ Run these commands before opening or updating a PR:
 
 These validators are the authoritative enforcement mechanism for TDD sequencing and evidence quality
 under the PR-body-first model.
+
+Validation scope for commit-prefix policy is `origin/main..HEAD`.
+Pre-adoption history is excluded from commit-prefix enforcement.
 
 ## Optional Committed Evidence
 
