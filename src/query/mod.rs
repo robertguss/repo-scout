@@ -952,6 +952,8 @@ fn language_for_file_path(file_path: &str) -> &'static str {
         "typescript"
     } else if file_path.ends_with(".py") {
         "python"
+    } else if file_path.ends_with(".go") {
+        "go"
     } else {
         "unknown"
     }
@@ -962,6 +964,7 @@ fn normalized_language(language: &str, file_path: &str) -> &'static str {
         "rust" => "rust",
         "typescript" => "typescript",
         "python" => "python",
+        "go" => "go",
         "unknown" => "unknown",
         _ => language_for_file_path(file_path),
     }
@@ -1758,7 +1761,14 @@ fn ast_reference_matches(connection: &Connection, symbol: &str) -> anyhow::Resul
         })
     })?;
 
-    collect_rows(rows)
+    let mut matches = collect_rows(rows)?;
+    matches.dedup_by(|left, right| {
+        left.file_path == right.file_path
+            && left.line == right.line
+            && left.column == right.column
+            && left.symbol == right.symbol
+    });
+    Ok(matches)
 }
 
 fn ranked_text_matches(
@@ -1851,12 +1861,26 @@ fn is_code_file_path(file_path: &str) -> bool {
         || file_path.ends_with(".ts")
         || file_path.ends_with(".tsx")
         || file_path.ends_with(".py")
+        || file_path.ends_with(".go")
 }
 
 fn is_test_like_path(file_path: &str) -> bool {
     file_path.starts_with("tests/")
         || file_path.contains("/tests/")
-        || file_path.ends_with("_test.rs")
+        || Path::new(file_path)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(is_test_like_file_name)
+}
+
+fn is_test_like_file_name(file_name: &str) -> bool {
+    file_name.ends_with("_test.rs")
+        || file_name.ends_with("_test.py")
+        || (file_name.starts_with("test_") && file_name.ends_with(".py"))
+        || file_name.ends_with(".test.ts")
+        || file_name.ends_with(".test.tsx")
+        || file_name.ends_with(".spec.ts")
+        || file_name.ends_with(".spec.tsx")
 }
 
 fn fallback_path_class_rank(file_path: &str) -> u8 {
@@ -2030,7 +2054,7 @@ fn context_direct_score(
 /// Finds test files that reference a symbol and how often the symbol appears in each.
 ///
 /// Returns a vector of `(file_path, hit_count)` for files that look like test targets
-/// (paths under `tests/` or files matching `*_test.rs` / `*test.rs`),
+/// (paths under `tests/` or common test naming patterns),
 /// ordered by `hit_count` descending and then by `file_path` ascending.
 ///
 /// # Examples
@@ -2055,6 +2079,13 @@ fn test_targets_for_symbol(
                file_path LIKE 'tests/%'
                OR file_path LIKE '%/tests/%'
                OR file_path GLOB '*_test.rs'
+               OR file_path GLOB '*_test.py'
+               OR file_path LIKE 'test_%.py'
+               OR file_path LIKE '%/test_%.py'
+               OR file_path LIKE '%.test.ts'
+               OR file_path LIKE '%.test.tsx'
+               OR file_path LIKE '%.spec.ts'
+               OR file_path LIKE '%.spec.tsx'
            )
          GROUP BY file_path
          ORDER BY hit_count DESC, file_path ASC",
@@ -2075,7 +2106,7 @@ fn test_targets_for_symbol(
 ///
 /// Returns `Some` with command `cargo test --test {stem}` when `target` is a path
 /// of the form `tests/<file>` (no additional subdirectories) and the file has
-/// a valid stem; returns `None` otherwise.
+/// extension `.rs`; returns `None` otherwise.
 ///
 /// # Examples
 ///
@@ -2099,6 +2130,9 @@ fn test_command_for_target(target: &str) -> Option<String> {
     }
     let test_file = Path::new(components.next()?.as_os_str());
     if components.next().is_some() {
+        return None;
+    }
+    if test_file.extension()?.to_str()? != "rs" {
         return None;
     }
 
