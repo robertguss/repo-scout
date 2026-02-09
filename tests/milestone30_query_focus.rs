@@ -2,6 +2,41 @@ mod common;
 
 use common::run_stdout;
 use serde_json::Value;
+use std::path::Path;
+
+fn run_query_json(repo_root: &Path, args: &[&str]) -> Value {
+    let repo_arg = repo_root.to_str().expect("repo path should be utf-8");
+    let mut full_args = Vec::with_capacity(args.len() + 3);
+    full_args.extend_from_slice(args);
+    full_args.extend_from_slice(&["--repo", repo_arg, "--json"]);
+    let out = run_stdout(&full_args);
+    serde_json::from_str(&out).expect("query json should parse")
+}
+
+fn run_query_json_deterministic(repo_root: &Path, args: &[&str]) -> Value {
+    let first = run_query_json(repo_root, args);
+    let second = run_query_json(repo_root, args);
+    assert_eq!(first, second);
+    first
+}
+
+fn query_results<'a>(payload: &'a Value) -> &'a [Value] {
+    payload["results"]
+        .as_array()
+        .expect("results should be array")
+}
+
+fn assert_results_prioritize_src(results: &[Value], label: &str) {
+    for item in results {
+        let path = item["file_path"]
+            .as_str()
+            .expect("file_path should be string");
+        assert!(
+            path.starts_with("src/"),
+            "expected {label} results to prioritize code paths, got {path}"
+        );
+    }
+}
 
 #[test]
 fn milestone30_refs_fallback_prefers_code_paths_over_docs_and_tests() {
@@ -42,73 +77,21 @@ fn milestone30_find_and_refs_max_results_cap_deterministically() {
 
     run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
 
-    let find_out = run_stdout(&[
-        "find",
-        "phase30captoken",
-        "--repo",
-        repo.path().to_str().unwrap(),
-        "--max-results",
-        "2",
-        "--json",
-    ]);
-    let find_again_out = run_stdout(&[
-        "find",
-        "phase30captoken",
-        "--repo",
-        repo.path().to_str().unwrap(),
-        "--max-results",
-        "2",
-        "--json",
-    ]);
-    assert_eq!(find_out, find_again_out);
-    let find_payload: Value = serde_json::from_str(&find_out).expect("find json should parse");
-    let find_results = find_payload["results"]
-        .as_array()
-        .expect("results should be array");
+    let find_payload = run_query_json_deterministic(
+        repo.path(),
+        &["find", "phase30captoken", "--max-results", "2"],
+    );
+    let find_results = query_results(&find_payload);
     assert_eq!(find_results.len(), 2);
-    for item in find_results {
-        let path = item["file_path"]
-            .as_str()
-            .expect("file_path should be string");
-        assert!(
-            path.starts_with("src/"),
-            "expected capped find results to prioritize code paths, got {path}"
-        );
-    }
+    assert_results_prioritize_src(find_results, "capped find");
 
-    let refs_out = run_stdout(&[
-        "refs",
-        "phase30captoken",
-        "--repo",
-        repo.path().to_str().unwrap(),
-        "--max-results",
-        "2",
-        "--json",
-    ]);
-    let refs_again_out = run_stdout(&[
-        "refs",
-        "phase30captoken",
-        "--repo",
-        repo.path().to_str().unwrap(),
-        "--max-results",
-        "2",
-        "--json",
-    ]);
-    assert_eq!(refs_out, refs_again_out);
-    let refs_payload: Value = serde_json::from_str(&refs_out).expect("refs json should parse");
-    let refs_results = refs_payload["results"]
-        .as_array()
-        .expect("results should be array");
+    let refs_payload = run_query_json_deterministic(
+        repo.path(),
+        &["refs", "phase30captoken", "--max-results", "2"],
+    );
+    let refs_results = query_results(&refs_payload);
     assert_eq!(refs_results.len(), 2);
-    for item in refs_results {
-        let path = item["file_path"]
-            .as_str()
-            .expect("file_path should be string");
-        assert!(
-            path.starts_with("src/"),
-            "expected capped refs results to prioritize code paths, got {path}"
-        );
-    }
+    assert_results_prioritize_src(refs_results, "capped refs");
 }
 
 #[test]
@@ -134,52 +117,34 @@ fn milestone30_query_caps_compose_with_code_only_and_exclude_tests() {
 
     run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
 
-    let find_out = run_stdout(&[
-        "find",
-        "phase30_ast_focus",
-        "--repo",
-        repo.path().to_str().unwrap(),
-        "--code-only",
-        "--exclude-tests",
-        "--max-results",
-        "1",
-        "--json",
-    ]);
-    let find_payload: Value = serde_json::from_str(&find_out).expect("find json should parse");
-    let find_results = find_payload["results"]
-        .as_array()
-        .expect("results should be array");
+    let find_payload = run_query_json(
+        repo.path(),
+        &[
+            "find",
+            "phase30_ast_focus",
+            "--code-only",
+            "--exclude-tests",
+            "--max-results",
+            "1",
+        ],
+    );
+    let find_results = query_results(&find_payload);
     assert_eq!(find_results.len(), 1);
     assert_eq!(find_results[0]["why_matched"], "ast_definition");
     assert_eq!(find_results[0]["file_path"], "src/lib.rs");
 
-    let refs_out = run_stdout(&[
-        "refs",
-        "phase30capscope",
-        "--repo",
-        repo.path().to_str().unwrap(),
-        "--code-only",
-        "--exclude-tests",
-        "--max-results",
-        "1",
-        "--json",
-    ]);
-    let refs_again_out = run_stdout(&[
-        "refs",
-        "phase30capscope",
-        "--repo",
-        repo.path().to_str().unwrap(),
-        "--code-only",
-        "--exclude-tests",
-        "--max-results",
-        "1",
-        "--json",
-    ]);
-    assert_eq!(refs_out, refs_again_out);
-    let refs_payload: Value = serde_json::from_str(&refs_out).expect("refs json should parse");
-    let refs_results = refs_payload["results"]
-        .as_array()
-        .expect("results should be array");
+    let refs_payload = run_query_json_deterministic(
+        repo.path(),
+        &[
+            "refs",
+            "phase30capscope",
+            "--code-only",
+            "--exclude-tests",
+            "--max-results",
+            "1",
+        ],
+    );
+    let refs_results = query_results(&refs_payload);
     assert_eq!(refs_results.len(), 1);
     assert_eq!(refs_results[0]["file_path"], "src/fallback_a.rs");
 }

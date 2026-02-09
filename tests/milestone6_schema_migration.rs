@@ -3,7 +3,7 @@ mod common;
 use rusqlite::Connection;
 use std::fs;
 
-/// Executes the repo-scout command with the provided arguments and returns its stdout as a `String`.
+/// Executes repo-scout with the provided arguments and returns stdout as a `String`.
 ///
 /// The returned string contains the command's standard output decoded as UTF-8.
 ///
@@ -20,11 +20,11 @@ fn run_stdout(args: &[&str]) -> String {
     String::from_utf8(output).expect("stdout should be utf-8")
 }
 
-/// Create a v1-format repository index under the given repository path and return the path to the index database.
+/// Create a v1-format repository index and return the path to its SQLite database.
 ///
-/// This creates a `.repo-scout` directory inside `repo_path`, initializes an `index.db` SQLite database using the
-/// legacy (v1) schema, and inserts seeded test rows (including a `schema_version` of `1`, a sample indexed file,
-/// a text occurrence, an AST definition, and an AST reference).
+/// This creates a `.repo-scout` directory, initializes `index.db` with the v1 schema,
+/// and seeds representative rows (`schema_version`, one indexed file, one text
+/// occurrence, one AST definition, and one AST reference).
 ///
 /// # Examples
 ///

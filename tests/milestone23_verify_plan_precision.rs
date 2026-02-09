@@ -2,6 +2,34 @@ mod common;
 
 use common::run_stdout;
 use serde_json::Value;
+use std::path::Path;
+
+fn verify_plan_json(repo_root: &Path, max_targeted: Option<&str>) -> Value {
+    let repo_arg = repo_root.to_str().expect("repo path should be utf-8");
+    let mut args = vec![
+        "verify-plan",
+        "--changed-file",
+        "src/main.rs",
+        "--repo",
+        repo_arg,
+    ];
+    if let Some(max_targeted) = max_targeted {
+        args.extend_from_slice(&["--max-targeted", max_targeted]);
+    }
+    args.push("--json");
+    let out = run_stdout(&args);
+    serde_json::from_str(&out).expect("verify-plan json should parse")
+}
+
+fn verify_plan_results<'a>(payload: &'a Value) -> &'a [Value] {
+    payload["results"]
+        .as_array()
+        .expect("results should be array")
+}
+
+fn count_scope(results: &[Value], scope: &str) -> usize {
+    results.iter().filter(|row| row["scope"] == scope).count()
+}
 
 #[test]
 fn milestone23_verify_plan_downranks_generic_changed_symbols() {
@@ -90,74 +118,22 @@ fn milestone23_verify_plan_applies_targeted_cap_deterministically() {
 
     run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
 
-    let capped_out = run_stdout(&[
-        "verify-plan",
-        "--changed-file",
-        "src/main.rs",
-        "--repo",
-        repo.path().to_str().unwrap(),
-        "--max-targeted",
-        "2",
-        "--json",
-    ]);
-    let capped_again_out = run_stdout(&[
-        "verify-plan",
-        "--changed-file",
-        "src/main.rs",
-        "--repo",
-        repo.path().to_str().unwrap(),
-        "--max-targeted",
-        "2",
-        "--json",
-    ]);
-    assert_eq!(capped_out, capped_again_out);
+    let capped_payload = verify_plan_json(repo.path(), Some("2"));
+    let capped_again_payload = verify_plan_json(repo.path(), Some("2"));
+    assert_eq!(capped_payload, capped_again_payload);
 
-    let capped_payload: Value =
-        serde_json::from_str(&capped_out).expect("verify-plan json should parse");
-    let capped_results = capped_payload["results"]
-        .as_array()
-        .expect("results should be array");
-    let capped_targeted = capped_results
-        .iter()
-        .filter(|row| row["scope"] == "targeted")
-        .count();
-    assert_eq!(capped_targeted, 2);
+    let capped_results = verify_plan_results(&capped_payload);
+    assert_eq!(count_scope(capped_results, "targeted"), 2);
     assert!(
         capped_results
             .iter()
             .any(|row| row["scope"] == "full_suite" && row["step"] == "cargo test")
     );
 
-    let zero_out = run_stdout(&[
-        "verify-plan",
-        "--changed-file",
-        "src/main.rs",
-        "--repo",
-        repo.path().to_str().unwrap(),
-        "--max-targeted",
-        "0",
-        "--json",
-    ]);
-    let zero_payload: Value =
-        serde_json::from_str(&zero_out).expect("verify-plan json should parse");
-    let zero_results = zero_payload["results"]
-        .as_array()
-        .expect("results should be array");
-
-    assert_eq!(
-        zero_results
-            .iter()
-            .filter(|row| row["scope"] == "targeted")
-            .count(),
-        0
-    );
-    assert_eq!(
-        zero_results
-            .iter()
-            .filter(|row| row["scope"] == "full_suite")
-            .count(),
-        1
-    );
+    let zero_payload = verify_plan_json(repo.path(), Some("0"));
+    let zero_results = verify_plan_results(&zero_payload);
+    assert_eq!(count_scope(zero_results, "targeted"), 0);
+    assert_eq!(count_scope(zero_results, "full_suite"), 1);
 }
 
 #[test]

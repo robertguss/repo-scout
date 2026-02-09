@@ -5,6 +5,67 @@ use std::path::{Path, PathBuf};
 
 use rusqlite::Connection;
 
+const V2_FIXTURE_SCHEMA_SQL: &str = r#"
+    CREATE TABLE meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+    );
+    CREATE TABLE indexed_files (
+        file_path TEXT PRIMARY KEY,
+        content_hash TEXT NOT NULL
+    );
+    CREATE TABLE text_occurrences (
+        id INTEGER PRIMARY KEY,
+        file_path TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        line INTEGER NOT NULL,
+        column INTEGER NOT NULL
+    );
+    CREATE TABLE ast_definitions (
+        id INTEGER PRIMARY KEY,
+        file_path TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        line INTEGER NOT NULL,
+        column INTEGER NOT NULL
+    );
+    CREATE TABLE ast_references (
+        id INTEGER PRIMARY KEY,
+        file_path TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        line INTEGER NOT NULL,
+        column INTEGER NOT NULL
+    );
+    CREATE TABLE symbols_v2 (
+        symbol_id INTEGER PRIMARY KEY,
+        file_path TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        container TEXT,
+        start_line INTEGER NOT NULL,
+        start_column INTEGER NOT NULL,
+        end_line INTEGER NOT NULL,
+        end_column INTEGER NOT NULL,
+        signature TEXT,
+        UNIQUE(file_path, symbol, kind, start_line, start_column)
+    );
+    CREATE TABLE symbol_edges_v2 (
+        edge_id INTEGER PRIMARY KEY,
+        from_symbol_id INTEGER NOT NULL,
+        to_symbol_id INTEGER NOT NULL,
+        edge_kind TEXT NOT NULL,
+        confidence REAL NOT NULL,
+        UNIQUE(from_symbol_id, to_symbol_id, edge_kind)
+    );
+    INSERT INTO meta(key, value) VALUES ('schema_version', '2');
+    INSERT INTO indexed_files(file_path, content_hash) VALUES ('src/lib.rs', 'hash-v2');
+    INSERT INTO symbols_v2(
+        symbol_id, file_path, symbol, kind, container, start_line, start_column, end_line, end_column, signature
+    ) VALUES (1, 'src/lib.rs', 'legacy_symbol', 'function', NULL, 1, 1, 1, 10, 'pub fn legacy_symbol()');
+    INSERT INTO symbol_edges_v2(from_symbol_id, to_symbol_id, edge_kind, confidence)
+        VALUES (1, 1, 'calls', 0.95);
+"#;
+
 fn run_stdout(args: &[&str]) -> String {
     let mut cmd = common::repo_scout_cmd();
     cmd.args(args);
@@ -18,68 +79,7 @@ fn build_v2_index(repo_path: &Path) -> PathBuf {
     let db_path = index_dir.join("index.db");
     let connection = Connection::open(&db_path).expect("v2 db should open");
     connection
-        .execute_batch(
-            r#"
-            CREATE TABLE meta (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL
-            );
-            CREATE TABLE indexed_files (
-                file_path TEXT PRIMARY KEY,
-                content_hash TEXT NOT NULL
-            );
-            CREATE TABLE text_occurrences (
-                id INTEGER PRIMARY KEY,
-                file_path TEXT NOT NULL,
-                symbol TEXT NOT NULL,
-                line INTEGER NOT NULL,
-                column INTEGER NOT NULL
-            );
-            CREATE TABLE ast_definitions (
-                id INTEGER PRIMARY KEY,
-                file_path TEXT NOT NULL,
-                symbol TEXT NOT NULL,
-                kind TEXT NOT NULL,
-                line INTEGER NOT NULL,
-                column INTEGER NOT NULL
-            );
-            CREATE TABLE ast_references (
-                id INTEGER PRIMARY KEY,
-                file_path TEXT NOT NULL,
-                symbol TEXT NOT NULL,
-                line INTEGER NOT NULL,
-                column INTEGER NOT NULL
-            );
-            CREATE TABLE symbols_v2 (
-                symbol_id INTEGER PRIMARY KEY,
-                file_path TEXT NOT NULL,
-                symbol TEXT NOT NULL,
-                kind TEXT NOT NULL,
-                container TEXT,
-                start_line INTEGER NOT NULL,
-                start_column INTEGER NOT NULL,
-                end_line INTEGER NOT NULL,
-                end_column INTEGER NOT NULL,
-                signature TEXT,
-                UNIQUE(file_path, symbol, kind, start_line, start_column)
-            );
-            CREATE TABLE symbol_edges_v2 (
-                edge_id INTEGER PRIMARY KEY,
-                from_symbol_id INTEGER NOT NULL,
-                to_symbol_id INTEGER NOT NULL,
-                edge_kind TEXT NOT NULL,
-                confidence REAL NOT NULL,
-                UNIQUE(from_symbol_id, to_symbol_id, edge_kind)
-            );
-            INSERT INTO meta(key, value) VALUES ('schema_version', '2');
-            INSERT INTO indexed_files(file_path, content_hash) VALUES ('src/lib.rs', 'hash-v2');
-            INSERT INTO symbols_v2(
-                symbol_id, file_path, symbol, kind, container, start_line, start_column, end_line, end_column, signature
-            ) VALUES (1, 'src/lib.rs', 'legacy_symbol', 'function', NULL, 1, 1, 1, 10, 'pub fn legacy_symbol()');
-            INSERT INTO symbol_edges_v2(from_symbol_id, to_symbol_id, edge_kind, confidence)
-                VALUES (1, 1, 'calls', 0.95);
-            "#,
-        )
+        .execute_batch(V2_FIXTURE_SCHEMA_SQL)
         .expect("v2 schema fixture should be created");
     db_path
 }

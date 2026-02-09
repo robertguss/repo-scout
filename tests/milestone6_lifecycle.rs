@@ -2,9 +2,10 @@ mod common;
 
 use std::fs;
 
-/// Executes the repository-scanning command with the provided arguments and returns its standard output.
+/// Executes the repository-scanning command and returns its standard output.
 ///
-/// Returns the command's stdout decoded as a UTF-8 `String`. Panics if the stdout is not valid UTF-8 or if the command fails.
+/// Returns stdout decoded as UTF-8.
+/// Panics if stdout is invalid UTF-8 or if the command fails.
 ///
 /// # Examples
 ///
@@ -104,12 +105,13 @@ fn milestone6_rename_prunes_old_path() {
     assert!(!after.contains("src/rename_from.txt"));
 }
 
-/// Asserts that indexing lifecycle counts are stable and deterministic across runs and after file deletions.
+/// Asserts that lifecycle counts stay deterministic across runs and file deletions.
 ///
 /// This test ensures `indexed_files` and `skipped_files` reflect consistent, deterministic counts:
 /// - First index run reports two indexed files and zero skipped.
 /// - A subsequent index run with no changes reports zero indexed and two skipped.
-/// - After deleting one file and re-indexing, the counts update to zero indexed and one skipped, and remain stable on the next run.
+/// - After deleting one file and re-indexing, counts become zero indexed and one
+///   skipped, and stay stable on the next run.
 ///
 /// # Examples
 ///
