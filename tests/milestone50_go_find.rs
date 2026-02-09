@@ -67,6 +67,32 @@ fn milestone50_go_find_persists_language_metadata() {
 }
 
 #[test]
+fn milestone50_go_method_container_uses_receiver_type() {
+    let repo = common::temp_repo();
+    write_go_fixture(repo.path());
+
+    run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
+
+    let db_path = repo.path().join(".repo-scout").join("index.db");
+    let connection = Connection::open(db_path).expect("index db should open");
+    let container: Option<String> = connection
+        .query_row(
+            "SELECT container
+             FROM symbols_v2
+             WHERE file_path = 'src/main.go' AND symbol = 'SayHello'
+             LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .expect("go method row should exist");
+    assert_eq!(
+        container.as_deref(),
+        Some("Greeter"),
+        "method container should use receiver type, not receiver variable name"
+    );
+}
+
+#[test]
 fn milestone50_go_find_json_is_deterministic() {
     let repo = common::temp_repo();
     write_go_fixture(repo.path());

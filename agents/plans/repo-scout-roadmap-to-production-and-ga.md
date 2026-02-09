@@ -25,11 +25,16 @@ Evidence from local audit and commands:
 - Contract-TDD validator is healthy but requires commits for strict range checks:
   `validate_tdd_cycle.sh --base origin/main` fails on empty ranges unless `--allow-empty-range`.
 - Core architecture is stable with schema `v3`, deterministic query paths, and adapter-based
-  extraction for Rust/TypeScript/Python.
-- Practical gap: test-target command synthesis remains Rust-specific in `src/query/mod.rs`.
-- Practical gap: test-like path classification is narrow (`tests/`, `/tests/`, `*_test.rs`).
-- Practical gap: Go adapter does not exist yet.
-- Planned Phase 9 runner-aware recommendations are still plan-only and not yet implemented.
+  extraction for Rust/TypeScript/Python/Go.
+- Recent Phase 10 updates:
+  - test-target synthesis now avoids emitting non-Rust `cargo test --test` targets and only maps
+    direct `tests/<file>.rs` paths to runnable Rust integration-test commands.
+  - test-like path classification now includes common TS/Python conventions
+    (`*.test.ts`, `*.spec.ts`, `test_*.py`, `*_test.py`) in addition to existing Rust/test-dir
+    patterns (`tests/`, `/tests/`, `*_test.rs`).
+  - Go adapter support exists for AST-backed definition indexing used by `find`.
+- Planned runner-aware recommendation expansion remains a residual hardening thread for later
+  production-readiness phases.
 
 Implication: the project has a strong base and can move quickly, but remaining work is mainly
 language-depth and hardening rather than new architectural foundations.
@@ -57,7 +62,7 @@ The project is `High-Bar/GA` ready when all are true:
 
 ## Phase Roadmap
 
-## Phase 10 (Next): Rust Hardening + Go `find` MVP
+## Phase 10 (Current): Rust Hardening + Go `find` MVP
 
 Purpose:
 Ship immediate Go value while continuing Rust reliability hardening.

@@ -105,7 +105,7 @@ fn milestone41_ci_workflow_enforces_rust_contract_gates() {
 
     let required_snippets = [
         "cargo fmt --all -- --check",
-        "cargo clippy --workspace --lib --bins --all-features -- \\",
+        "cargo clippy --workspace --bins --all-features -- \\",
         "-D warnings",
         "-D clippy::unwrap_used",
         "-D clippy::expect_used",

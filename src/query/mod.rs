@@ -1747,7 +1747,7 @@ fn ast_reference_matches(connection: &Connection, symbol: &str) -> anyhow::Resul
         "SELECT file_path, line, column, symbol
          FROM ast_references
          WHERE symbol = ?1
-         ORDER BY file_path ASC, line ASC, column ASC",
+         ORDER BY file_path ASC, line ASC, column ASC, symbol ASC",
     )?;
     let rows = statement.query_map(params![symbol], |row| {
         Ok(QueryMatch {

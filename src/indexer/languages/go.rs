@@ -199,7 +199,8 @@ fn last_identifier_text(node: Node<'_>, source: &str) -> Option<String> {
             continue;
         }
         let mut cursor = current.walk();
-        for child in current.children(&mut cursor) {
+        let children: Vec<_> = current.children(&mut cursor).collect();
+        for child in children.into_iter().rev() {
             stack.push(child);
         }
     }

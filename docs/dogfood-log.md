@@ -67,7 +67,7 @@ This log captures real `repo-scout` usage while building `repo-scout`.
   - Narrowing runnable-target synthesis to direct `tests/<file>.rs` removed invalid cargo commands
     for non-Rust test files.
 - What failed or felt weak:
-  - Test-like filtering was too Rust-centric prior to this slice and leaked common TS/Python test
+  - Test-like filtering was too Rust-centric before this slice and leaked common TS/Python test
     paths under `--exclude-tests`.
 - Action taken:
   - failing test added:
