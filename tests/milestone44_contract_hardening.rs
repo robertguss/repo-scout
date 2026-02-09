@@ -16,6 +16,12 @@ fn assert_has_must_use_annotation(source: &str, function_name: &str) {
     );
 }
 
+fn assert_source_contains_markers(source: &str, markers: &[&str]) {
+    for marker in markers {
+        assert!(source.contains(marker), "missing required marker: {marker}");
+    }
+}
+
 #[test]
 fn milestone44_public_query_contract_apis_are_must_use() {
     let query_source = read_repo_file("src/query/mod.rs");
@@ -33,16 +39,14 @@ fn milestone44_public_query_contract_apis_are_must_use() {
 #[test]
 fn milestone44_query_boundaries_include_targeted_invariant_assertions() {
     let query_source = read_repo_file("src/query/mod.rs");
-    for marker in [
+    assert_source_contains_markers(
+        &query_source,
+        &[
         "usize::BITS >= 32",
         "debug_assert!(max_results >= 1",
         "results.len() <= bounded_usize(max_results)",
-    ] {
-        assert!(
-            query_source.contains(marker),
-            "missing invariant marker: {marker}"
-        );
-    }
+        ],
+    );
 }
 
 #[test]
