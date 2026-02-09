@@ -237,6 +237,9 @@ Behavior:
 - Applies repeatable `--changed-symbol` filters to changed-symbol seeds.
 - Emits bounded multi-hop incoming neighbors (`called_by`, `contained_by`, `imported_by`,
   `implemented_by`) up to `--max-distance`.
+- Resolves Rust module-qualified call paths (`crate::`, `self::`, `super::`, and unqualified module
+  prefixes) with deterministic candidate targets across both `<module>.rs` and `<module>/mod.rs`
+  layouts.
 - Uses module-aware TypeScript/Python call resolution so namespace/member and module-alias attribute
   calls resolve to the intended module under duplicate symbol names.
 - Uses cycle-safe, deterministic dedupe to prevent duplicate growth and changed-symbol echo rows at

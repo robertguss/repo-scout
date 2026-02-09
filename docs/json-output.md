@@ -300,7 +300,7 @@ Top-level fields:
 | `include_tests`  | `boolean`                 | yes      | Echoes resolved test-target behavior (`true` default, `false` with `--exclude-tests`). |
 | `results`        | `array<DiffImpactResult>` | yes      | Deterministically ordered (see rules below).                                           |
 
-Phase 4/5/6/8 option effects (schema unchanged):
+Phase 4/5/6/8/11 option effects (schema unchanged):
 
 - `--include-imports` changes changed-symbol seed selection by allowing `kind=import` at
   `distance=0`.
@@ -318,6 +318,9 @@ Phase 4/5/6/8 option effects (schema unchanged):
 - Phase 7/8 calibrate semantic impacted-symbol row scores deterministically by
   relationship/provenance/distance (for example resolved `called_by` rows score `0.97` at
   `distance = 1` in the Phase 8 benchmark fixture).
+- Phase 11 improves Rust call-edge endpoint resolution for module-qualified paths (`crate::`,
+  `self::`, `super::`, and module-prefix calls) by considering both `<module>.rs` and
+  `<module>/mod.rs` candidates before broad fallback.
 - Neither option requires new mandatory top-level fields in schema 3.
 
 `DiffImpactResult` union discriminator:

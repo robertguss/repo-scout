@@ -2,6 +2,7 @@ use crate::indexer::languages::{
     ExtractedEdge, ExtractedReference, ExtractedSymbol, ExtractionUnit, LanguageAdapter, SymbolKey,
 };
 use crate::indexer::rust_ast;
+use std::collections::HashSet;
 
 pub struct RustLanguageAdapter;
 
@@ -59,29 +60,23 @@ impl LanguageAdapter for RustLanguageAdapter {
             });
 
             if let Some(caller_symbol) = reference.caller {
-                let to_symbol_key =
-                    qualified_module_for_reference(source, reference.line, reference.column)
-                        .map(|module_symbol| {
-                            qualified_target_symbol_key(
-                                file_path,
-                                &language,
-                                &module_symbol,
-                                &reference.symbol,
-                            )
-                        })
-                        .unwrap_or_else(|| SymbolKey {
-                            symbol: reference.symbol.clone(),
-                            qualified_symbol: None,
-                            file_path: Some(file_path.to_string()),
-                            language: Some(language.clone()),
-                        });
-                edges.push(ExtractedEdge {
-                    from_symbol_key: scoped_symbol_key(file_path, &language, &caller_symbol),
-                    to_symbol_key,
-                    edge_kind: "calls".to_string(),
-                    confidence: 0.95,
-                    provenance: "call_resolution".to_string(),
-                });
+                let from_symbol_key = scoped_symbol_key(file_path, &language, &caller_symbol);
+                for to_symbol_key in qualified_target_symbol_keys(
+                    file_path,
+                    &language,
+                    source,
+                    reference.line,
+                    reference.column,
+                    &reference.symbol,
+                ) {
+                    edges.push(ExtractedEdge {
+                        from_symbol_key: from_symbol_key.clone(),
+                        to_symbol_key,
+                        edge_kind: "calls".to_string(),
+                        confidence: 0.95,
+                        provenance: "call_resolution".to_string(),
+                    });
+                }
             }
         }
 
@@ -104,30 +99,165 @@ fn scoped_symbol_key(file_path: &str, language: &str, symbol: &str) -> SymbolKey
     }
 }
 
-fn qualified_target_symbol_key(
+fn qualified_target_symbol_keys(
     caller_file_path: &str,
     language: &str,
-    module_symbol: &str,
+    source: &str,
+    line: u32,
+    column: u32,
     symbol: &str,
-) -> SymbolKey {
-    let module_path = module_candidate_path(caller_file_path, module_symbol);
-    SymbolKey {
+) -> Vec<SymbolKey> {
+    let mut keys = Vec::new();
+    if let Some(module_segments) = qualified_module_segments_for_reference(source, line, column) {
+        for module_path in qualified_module_candidate_paths(caller_file_path, &module_segments) {
+            keys.push(SymbolKey {
+                symbol: symbol.to_string(),
+                qualified_symbol: Some(format!("{language}:{module_path}::{symbol}")),
+                file_path: Some(module_path),
+                language: Some(language.to_string()),
+            });
+        }
+    }
+    keys.push(SymbolKey {
         symbol: symbol.to_string(),
-        qualified_symbol: Some(format!("{language}:{module_path}::{symbol}")),
-        file_path: Some(module_path),
+        qualified_symbol: None,
+        file_path: Some(caller_file_path.to_string()),
         language: Some(language.to_string()),
+    });
+    dedupe_symbol_keys(keys)
+}
+
+fn dedupe_symbol_keys(keys: Vec<SymbolKey>) -> Vec<SymbolKey> {
+    let mut deduped = Vec::new();
+    let mut seen = HashSet::new();
+    for key in keys {
+        let unique_key = (
+            key.symbol.clone(),
+            key.qualified_symbol.clone(),
+            key.file_path.clone(),
+            key.language.clone(),
+        );
+        if seen.insert(unique_key) {
+            deduped.push(key);
+        }
+    }
+    deduped
+}
+
+fn qualified_module_candidate_paths(caller_file_path: &str, segments: &[String]) -> Vec<String> {
+    let Some(resolved_segments) = resolve_module_segments_for_reference(caller_file_path, segments)
+    else {
+        return Vec::new();
+    };
+
+    let crate_root = crate_root_prefix(caller_file_path);
+    let mut candidates = Vec::new();
+    if resolved_segments.is_empty() {
+        candidates.push(join_module_candidate_path(crate_root, "lib.rs"));
+        candidates.push(join_module_candidate_path(crate_root, "main.rs"));
+    } else {
+        let module_rel = resolved_segments.join("/");
+        candidates.push(join_module_candidate_path(
+            crate_root,
+            &format!("{module_rel}.rs"),
+        ));
+        candidates.push(join_module_candidate_path(
+            crate_root,
+            &format!("{module_rel}/mod.rs"),
+        ));
+    }
+
+    let mut seen = HashSet::new();
+    let mut deduped = Vec::new();
+    for candidate in candidates {
+        if seen.insert(candidate.clone()) {
+            deduped.push(candidate);
+        }
+    }
+    deduped
+}
+
+fn resolve_module_segments_for_reference(
+    caller_file_path: &str,
+    segments: &[String],
+) -> Option<Vec<String>> {
+    if segments.is_empty() {
+        return None;
+    }
+
+    let mut resolved = current_module_segments(caller_file_path);
+    let mut index = 0usize;
+    match segments.first().map(String::as_str) {
+        Some("crate") => {
+            resolved.clear();
+            index = 1;
+        }
+        Some("self") => {
+            index = 1;
+        }
+        Some("super") => {
+            while index < segments.len() && segments[index] == "super" {
+                resolved.pop()?;
+                index += 1;
+            }
+        }
+        _ => {}
+    }
+
+    for segment in &segments[index..] {
+        resolved.push(segment.clone());
+    }
+
+    Some(resolved)
+}
+
+fn current_module_segments(caller_file_path: &str) -> Vec<String> {
+    let path_parts = caller_file_path
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
+    if path_parts.is_empty() {
+        return Vec::new();
+    }
+
+    let Some(file_name) = path_parts.last().copied() else {
+        return Vec::new();
+    };
+    let path_start = usize::from(path_parts.len() > 1);
+    let mut segments = path_parts[path_start..path_parts.len().saturating_sub(1)]
+        .iter()
+        .map(|segment| (*segment).to_string())
+        .collect::<Vec<_>>();
+
+    if !matches!(file_name, "lib.rs" | "main.rs" | "mod.rs")
+        && let Some(stem) = file_name.strip_suffix(".rs")
+        && !stem.is_empty()
+    {
+        segments.push(stem.to_string());
+    }
+
+    segments
+}
+
+fn crate_root_prefix(caller_file_path: &str) -> &str {
+    let mut components = caller_file_path
+        .split('/')
+        .filter(|component| !component.is_empty());
+    let Some(first) = components.next() else {
+        return "";
+    };
+    if components.next().is_some() {
+        first
+    } else {
+        ""
     }
 }
 
-fn module_candidate_path(caller_file_path: &str, module_symbol: &str) -> String {
-    let parent = std::path::Path::new(caller_file_path)
-        .parent()
-        .and_then(|path| path.to_str())
-        .unwrap_or("");
-    if parent.is_empty() {
-        format!("{module_symbol}.rs")
+fn join_module_candidate_path(crate_root: &str, relative: &str) -> String {
+    if crate_root.is_empty() {
+        relative.to_string()
     } else {
-        format!("{parent}/{module_symbol}.rs")
+        format!("{crate_root}/{relative}")
     }
 }
 
@@ -187,7 +317,11 @@ fn relation_hints(file_path: &str, content: &str, language: &str) -> Vec<Extract
     edges
 }
 
-fn qualified_module_for_reference(source: &str, line: u32, column: u32) -> Option<String> {
+fn qualified_module_segments_for_reference(
+    source: &str,
+    line: u32,
+    column: u32,
+) -> Option<Vec<String>> {
     let line_text = source.lines().nth(line.saturating_sub(1) as usize)?;
     let column_index = column.saturating_sub(1) as usize;
     if column_index > line_text.len() {
@@ -196,7 +330,42 @@ fn qualified_module_for_reference(source: &str, line: u32, column: u32) -> Optio
 
     let prefix = line_text[..column_index].trim_end();
     let without_separator = prefix.strip_suffix("::")?;
-    last_rust_identifier(without_separator)
+    path_suffix_segments(without_separator)
+}
+
+fn path_suffix_segments(segment: &str) -> Option<Vec<String>> {
+    let mut parts = Vec::new();
+    let mut end = segment.len();
+
+    loop {
+        let start = identifier_start_index(segment, end)?;
+        parts.push(segment[start..end].to_string());
+
+        if start < 2 || &segment[start - 2..start] != "::" {
+            break;
+        }
+        end = start - 2;
+    }
+
+    if parts.is_empty() {
+        return None;
+    }
+    parts.reverse();
+    Some(parts)
+}
+
+fn identifier_start_index(segment: &str, end: usize) -> Option<usize> {
+    let bytes = segment.as_bytes();
+    let mut start = end;
+    while start > 0 {
+        let byte = bytes[start - 1];
+        if byte.is_ascii_alphanumeric() || byte == b'_' {
+            start -= 1;
+            continue;
+        }
+        break;
+    }
+    (start != end).then_some(start)
 }
 
 fn strip_leading_impl_generics(segment: &str) -> Option<&str> {

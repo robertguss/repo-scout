@@ -52,6 +52,38 @@ This log captures real `repo-scout` usage while building `repo-scout`.
 - Status: `fixed`
 
 - Date: `2026-02-09`
+- Task: Phase 11 Rust production-ready closure (module-qualified call resolution + perf guardrails).
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find test_command_for_target --repo . --json`
+  - `cargo run -- refs test_command_for_target --repo . --json`
+  - `cargo run -- index --repo tests/fixtures/phase11/rust_production/corpus`
+  - `cargo run -- diff-impact --changed-file src/util/mod.rs --repo tests/fixtures/phase11/rust_production/corpus --json`
+  - `cargo run -- impact helper --repo tests/fixtures/phase11/rust_production/corpus --json`
+  - `bash scripts/check_rust_perf_guardrails.sh --repo .`
+  - `just perf-rust-guardrails`
+- What helped:
+  - Rust module-qualified candidate paths now resolve both `<module>.rs` and `<module>/mod.rs`, so
+    fixture `diff-impact` includes expected `run`/`invoke_crate` `called_by` rows for
+    `src/util/mod.rs`.
+  - Guardrail script produced explicit pass/fail timing lines with conservative thresholds and
+    fixture-specific checks.
+- What failed or felt weak:
+  - Initial edge-growth test compared counts across a forced file rewrite and failed despite meeting
+    bounded-growth intent.
+- Action taken:
+  - failing tests added:
+    - `tests/milestone54_rust_production_closure.rs`
+    - `tests/milestone56_rust_production_determinism.rs`
+    - `tests/milestone57_rust_perf_guardrails.rs`
+  - fixes implemented:
+    - deterministic Rust module-path candidate resolver in `src/indexer/languages/rust.rs`
+    - Rust production fixture corpus under `tests/fixtures/phase11/rust_production/corpus/`
+    - performance guardrail script `scripts/check_rust_perf_guardrails.sh` and Justfile targets
+  - docs update: README + CLI/JSON/architecture/perf docs for Phase 11 semantics and thresholds.
+- Status: `fixed`
+
+- Date: `2026-02-09`
 - Task: Phase 10 Milestones 49/50 Rust hardening (`refs` dedupe + test-target/scope classifier).
 - Commands run:
   - `cargo run -- index --repo .`

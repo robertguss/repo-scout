@@ -25,6 +25,9 @@ Track wall-clock timings for:
   `tests/fixtures/phase8/semantic_precision`)
 - Phase 10 Go `find` MVP checks (Go AST-backed definition indexing and deterministic `find` JSON
   on fixture corpus under `tests/fixtures/phase10/go_find`)
+- Phase 11 Rust production-closure guardrails (`scripts/check_rust_perf_guardrails.sh`,
+  `docs/performance-thresholds-rust.md`, and fixture corpus under
+  `tests/fixtures/phase11/rust_production/corpus`)
 
 ## Commands
 
@@ -33,6 +36,8 @@ From repository root:
 ```bash
 just perf-baseline-core run
 just perf-baseline-full run src/query/mod.rs "update run and verify refs behavior"
+just perf-rust-guardrails .
+just perf-rust-record .
 ```
 
 Equivalent manual commands:
@@ -69,6 +74,8 @@ Equivalent manual commands:
 /usr/bin/time -p cargo run --release -- index --repo tests/fixtures/phase10/go_find
 /usr/bin/time -p cargo run --release -- find SayHello --repo tests/fixtures/phase10/go_find --json
 /usr/bin/time -p cargo run --release -- find Greeter --repo tests/fixtures/phase10/go_find --code-only --exclude-tests --json
+bash scripts/check_rust_perf_guardrails.sh --repo . --fixture tests/fixtures/phase11/rust_production/corpus
+bash scripts/check_rust_perf_guardrails.sh --repo . --fixture tests/fixtures/phase11/rust_production/corpus --record
 ```
 
 ## Coverage Check

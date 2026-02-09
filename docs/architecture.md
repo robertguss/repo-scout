@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the current `repo-scout` architecture after Phase 10.
+This document describes the current `repo-scout` architecture after Phase 11.
 
 ## High-Level Flow
 
@@ -29,6 +29,8 @@ This document describes the current `repo-scout` architecture after Phase 10.
   - Rust AST extraction for definitions/references.
 - `src/indexer/languages/`
   - Language adapters (`rust`, `typescript`, `python`, `go`) and normalized extraction contracts.
+  - Rust adapter now performs deterministic module-qualified candidate resolution across
+    `crate::`/`self::`/`super::` prefixes and both `<module>.rs` + `<module>/mod.rs` layouts.
   - TypeScript/Python adapters now include module-aware alias hints for namespace/member and
     module-alias attribute call resolution.
   - Go adapter currently provides definition extraction only (no Go AST reference/edge extraction
@@ -155,6 +157,8 @@ schema migration safety.
 - Expand bounded multi-hop incoming neighbors from `symbol_edges_v2` up to `--max-distance`.
 - Use per-seed minimum-distance tracking and changed-seed suppression to avoid cycle-driven
   duplicate growth.
+- Resolve Rust module-qualified calls (`crate::`, `self::`, `super::`, module prefixes) with
+  deterministic file-path candidates for both `<module>.rs` and `<module>/mod.rs`.
 - Resolve TypeScript namespace/member and Python module-alias attribute calls with module-aware
   hints so duplicate-name callees do not cross-link ambiguously.
 - Optionally remove changed-symbol output rows with `--exclude-changed`.
