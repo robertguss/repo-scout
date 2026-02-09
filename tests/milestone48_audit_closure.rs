@@ -75,7 +75,8 @@ fn milestone48_audit_index_reflects_current_artifacts() {
 
 #[test]
 fn milestone48_implementation_prompt_uses_repository_relative_paths() {
-    let prompt = common::read_repo_file("agents/tiger-style-audit/08-implementation-session-prompt.md");
+    let prompt =
+        common::read_repo_file("agents/tiger-style-audit/08-implementation-session-prompt.md");
     assert!(
         !prompt.contains("/Users/robertguss/Projects/experiments/repo-scout/"),
         "implementation prompt should not hardcode developer-local repository roots"
@@ -87,6 +88,10 @@ fn milestone48_implementation_prompt_uses_repository_relative_paths() {
         "- `contracts/core/*.md`",
         "- `contracts/languages/RUST_CODING_CONTRACT.md`",
     ] {
-        assert_contains(&prompt, expected, "agents/tiger-style-audit/08-implementation-session-prompt.md");
+        assert_contains(
+            &prompt,
+            expected,
+            "agents/tiger-style-audit/08-implementation-session-prompt.md",
+        );
     }
 }
