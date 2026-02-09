@@ -7,20 +7,20 @@ artifacts.
 
 Implement the Tiger-style conformance fixes identified in:
 
-- `/Users/robertguss/Projects/experiments/repo-scout/agents/tiger-style-audit/README.md`
-- `/Users/robertguss/Projects/experiments/repo-scout/agents/tiger-style-audit/02-contract-installation-drift.md`
-- `/Users/robertguss/Projects/experiments/repo-scout/agents/tiger-style-audit/03-src-compliance-report-and-plan.md`
-- `/Users/robertguss/Projects/experiments/repo-scout/agents/tiger-style-audit/04-tests-compliance-report-and-plan.md`
-- `/Users/robertguss/Projects/experiments/repo-scout/agents/tiger-style-audit/05-process-ci-docs-compliance-report-and-plan.md`
-- `/Users/robertguss/Projects/experiments/repo-scout/agents/tiger-style-audit/06-tiger-style-framework-feedback.md`
+- `agents/tiger-style-audit/README.md`
+- `agents/tiger-style-audit/02-contract-installation-drift.md`
+- `agents/tiger-style-audit/03-src-compliance-report-and-plan.md`
+- `agents/tiger-style-audit/04-tests-compliance-report-and-plan.md`
+- `agents/tiger-style-audit/05-process-ci-docs-compliance-report-and-plan.md`
+- `agents/tiger-style-audit/06-tiger-style-framework-feedback.md`
   (use only for local notes and upstream issue extraction, not local contract downgrades)
 
 ## Constraints (must follow)
 
 1. Read and follow:
-   - `/Users/robertguss/Projects/experiments/repo-scout/AGENTS.md`
-   - `/Users/robertguss/Projects/experiments/repo-scout/contracts/core/*.md`
-   - `/Users/robertguss/Projects/experiments/repo-scout/contracts/languages/RUST_CODING_CONTRACT.md`
+   - `AGENTS.md`
+   - `contracts/core/*.md`
+   - `contracts/languages/RUST_CODING_CONTRACT.md`
 2. Strict Red -> Green -> Refactor per feature slice.
 3. Declare risk tier before each implementation milestone.
 4. Do not weaken Tiger requirements to make implementation easier.
@@ -115,4 +115,4 @@ If a Tiger rule appears contradictory or impractical during implementation:
 - document the conflict in local notes,
 - keep local repo compliant with current installed rules,
 - add an upstream follow-up note referencing:
-  `/Users/robertguss/Projects/experiments/repo-scout/agents/tiger-style-audit/06-tiger-style-framework-feedback.md`.
+  `agents/tiger-style-audit/06-tiger-style-framework-feedback.md`.

@@ -19,7 +19,7 @@ Remaining high-priority findings: none.
   - `.github/pull_request_template.md`
   - `AGENTS.md`
 - Upstream reference repository for drift and convention intent:
-  - `/Users/robertguss/Projects/programming_tiger_style`
+  - Upstream Tiger-style reference (external to this repository)
 
 ## Audit Files
 
