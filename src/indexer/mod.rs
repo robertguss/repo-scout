@@ -19,6 +19,28 @@ pub struct IndexSummary {
     pub skipped_files: usize,
 }
 
+type DeferredEdge = (
+    languages::SymbolKey,
+    languages::SymbolKey,
+    String,
+    f64,
+    String,
+);
+
+#[derive(Debug)]
+enum FileIndexOutcome {
+    Indexed,
+    Skipped,
+}
+
+#[derive(Debug)]
+struct PreparedFileData {
+    token_occurrences: Vec<text::TokenOccurrence>,
+    extracted_symbols: Vec<languages::ExtractedSymbol>,
+    extracted_references: Vec<languages::ExtractedReference>,
+    pending_edges: Vec<DeferredEdge>,
+}
+
 /// Builds or refreshes an index of source files from `repo` into the SQLite database at `db_path`.
 ///
 /// This function discovers source files, prunes database rows for files no longer present, and for
@@ -49,255 +71,328 @@ pub fn index_repository(repo: &Path, db_path: &Path) -> anyhow::Result<IndexSumm
         .iter()
         .map(|file| file.relative_path.clone())
         .collect();
-
     prune_stale_file_rows(&mut connection, &live_paths)?;
-
-    let mut indexed_files = 0usize;
-    let mut skipped_files = 0usize;
-    let mut deferred_edges: Vec<(
-        languages::SymbolKey,
-        languages::SymbolKey,
-        String,
-        f64,
-        String,
-    )> = Vec::new();
-
+    let mut summary = IndexSummary {
+        indexed_files: 0,
+        skipped_files: 0,
+    };
+    let mut deferred_edges = Vec::new();
     for file in source_files {
-        let existing_hash: Option<String> = connection
-            .query_row(
-                "SELECT content_hash FROM indexed_files WHERE file_path = ?1",
-                [&file.relative_path],
-                |row| row.get(0),
-            )
-            .optional()?;
+        match index_file(&mut connection, file, &mut deferred_edges)? {
+            FileIndexOutcome::Indexed => summary.indexed_files += 1,
+            FileIndexOutcome::Skipped => summary.skipped_files += 1,
+        }
+    }
+    replay_deferred_edges(&mut connection, deferred_edges)?;
+    Ok(summary)
+}
 
-        if existing_hash.as_deref() == Some(file.content_hash.as_str()) {
-            skipped_files += 1;
+fn index_file(
+    connection: &mut Connection,
+    file: files::SourceFile,
+    deferred_edges: &mut Vec<DeferredEdge>,
+) -> anyhow::Result<FileIndexOutcome> {
+    if file_is_unchanged(connection, &file)? {
+        return Ok(FileIndexOutcome::Skipped);
+    }
+    let prepared = prepare_file_data(&file)?;
+    let mut reusable_symbol_ids = existing_symbol_ids(connection, &file.relative_path)?;
+    let mut next_symbol_id = next_symbol_id_start(connection)?;
+    let tx = connection.transaction()?;
+    clear_file_rows(&tx, &file.relative_path)?;
+    insert_text_occurrences(&tx, &file.relative_path, prepared.token_occurrences)?;
+    insert_symbols(
+        &tx,
+        &file.relative_path,
+        prepared.extracted_symbols,
+        &mut reusable_symbol_ids,
+        &mut next_symbol_id,
+    )?;
+    insert_references(&tx, &file.relative_path, prepared.extracted_references)?;
+    insert_or_defer_edges(&tx, prepared.pending_edges, deferred_edges)?;
+    upsert_indexed_file_row(&tx, &file.relative_path, &file.content_hash)?;
+    tx.commit()?;
+    Ok(FileIndexOutcome::Indexed)
+}
+
+fn file_is_unchanged(connection: &Connection, file: &files::SourceFile) -> anyhow::Result<bool> {
+    let existing_hash: Option<String> = connection
+        .query_row(
+            "SELECT content_hash FROM indexed_files WHERE file_path = ?1",
+            [&file.relative_path],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(existing_hash.as_deref() == Some(file.content_hash.as_str()))
+}
+
+fn prepare_file_data(file: &files::SourceFile) -> anyhow::Result<PreparedFileData> {
+    let text_content = std::str::from_utf8(&file.bytes).ok();
+    let token_occurrences = text_content
+        .map(text::extract_token_occurrences)
+        .unwrap_or_default();
+    let extraction_unit = text_content
+        .map(|source| extract_with_adapter(&file.relative_path, source))
+        .transpose()?
+        .unwrap_or_default();
+    let pending_edges = extraction_unit
+        .edges
+        .into_iter()
+        .map(|edge| {
+            (
+                edge.from_symbol_key,
+                edge.to_symbol_key,
+                edge.edge_kind,
+                edge.confidence,
+                edge.provenance,
+            )
+        })
+        .collect();
+    Ok(PreparedFileData {
+        token_occurrences,
+        extracted_symbols: extraction_unit.symbols,
+        extracted_references: extraction_unit.references,
+        pending_edges,
+    })
+}
+
+fn clear_file_rows(tx: &rusqlite::Transaction<'_>, file_path: &str) -> anyhow::Result<()> {
+    tx.execute(
+        "DELETE FROM text_occurrences WHERE file_path = ?1",
+        [file_path],
+    )?;
+    tx.execute(
+        "DELETE FROM ast_definitions WHERE file_path = ?1",
+        [file_path],
+    )?;
+    tx.execute(
+        "DELETE FROM ast_references WHERE file_path = ?1",
+        [file_path],
+    )?;
+    tx.execute(
+        "DELETE FROM symbol_edges_v2
+         WHERE from_symbol_id IN (SELECT symbol_id FROM symbols_v2 WHERE file_path = ?1)
+            OR to_symbol_id IN (SELECT symbol_id FROM symbols_v2 WHERE file_path = ?1)",
+        [file_path],
+    )?;
+    tx.execute("DELETE FROM symbols_v2 WHERE file_path = ?1", [file_path])?;
+    Ok(())
+}
+
+fn insert_text_occurrences(
+    tx: &rusqlite::Transaction<'_>,
+    file_path: &str,
+    token_occurrences: Vec<text::TokenOccurrence>,
+) -> anyhow::Result<()> {
+    for occurrence in token_occurrences {
+        tx.execute(
+            "INSERT INTO text_occurrences(file_path, symbol, line, column)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![
+                file_path,
+                occurrence.symbol,
+                i64::from(occurrence.line),
+                i64::from(occurrence.column)
+            ],
+        )?;
+    }
+    Ok(())
+}
+
+fn insert_symbols(
+    tx: &rusqlite::Transaction<'_>,
+    file_path: &str,
+    extracted_symbols: Vec<languages::ExtractedSymbol>,
+    reusable_symbol_ids: &mut HashMap<(String, String), Vec<i64>>,
+    next_symbol_id: &mut i64,
+) -> anyhow::Result<()> {
+    for definition in extracted_symbols {
+        let symbol = definition.symbol;
+        let kind = definition.kind;
+        let language = definition.language;
+        let qualified_symbol = definition
+            .qualified_symbol
+            .unwrap_or_else(|| format!("{language}:{file_path}::{symbol}"));
+        let symbol_id = take_reusable_symbol_id(reusable_symbol_ids, &symbol, &kind)
+            .unwrap_or_else(|| {
+                let generated = *next_symbol_id;
+                *next_symbol_id += 1;
+                generated
+            });
+        tx.execute(
+            "INSERT INTO ast_definitions(file_path, symbol, kind, line, column)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                file_path,
+                &symbol,
+                &kind,
+                i64::from(definition.start_line),
+                i64::from(definition.start_column)
+            ],
+        )?;
+        tx.execute(
+            "INSERT INTO symbols_v2(
+                symbol_id, file_path, symbol, kind, language, qualified_symbol, container, start_line, start_column, end_line, end_column, signature
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            params![
+                symbol_id,
+                file_path,
+                &symbol,
+                &kind,
+                &language,
+                &qualified_symbol,
+                definition.container.as_deref(),
+                i64::from(definition.start_line),
+                i64::from(definition.start_column),
+                i64::from(definition.end_line),
+                i64::from(definition.end_column),
+                definition.signature.as_deref()
+            ],
+        )?;
+    }
+    Ok(())
+}
+
+fn insert_references(
+    tx: &rusqlite::Transaction<'_>,
+    file_path: &str,
+    extracted_references: Vec<languages::ExtractedReference>,
+) -> anyhow::Result<()> {
+    for reference in extracted_references {
+        tx.execute(
+            "INSERT INTO ast_references(file_path, symbol, line, column)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![
+                file_path,
+                &reference.symbol,
+                i64::from(reference.line),
+                i64::from(reference.column)
+            ],
+        )?;
+    }
+    Ok(())
+}
+
+fn insert_or_defer_edges(
+    tx: &rusqlite::Transaction<'_>,
+    pending_edges: Vec<DeferredEdge>,
+    deferred_edges: &mut Vec<DeferredEdge>,
+) -> anyhow::Result<()> {
+    for (from_symbol_key, to_symbol_key, edge_kind, confidence, provenance) in pending_edges {
+        let Some(from_symbol_id) = resolve_symbol_id_in_tx(tx, &from_symbol_key)? else {
+            deferred_edges.push((
+                from_symbol_key,
+                to_symbol_key,
+                edge_kind,
+                confidence,
+                provenance,
+            ));
+            continue;
+        };
+        let Some(to_symbol_id) = resolve_symbol_id_in_tx(tx, &to_symbol_key)? else {
+            deferred_edges.push((
+                from_symbol_key,
+                to_symbol_key,
+                edge_kind,
+                confidence,
+                provenance,
+            ));
+            continue;
+        };
+        if should_defer_import_edge(tx, &edge_kind, to_symbol_id)? {
+            deferred_edges.push((
+                from_symbol_key,
+                to_symbol_key,
+                edge_kind,
+                confidence,
+                provenance,
+            ));
             continue;
         }
-
-        let text_content = std::str::from_utf8(&file.bytes).ok();
-        let token_occurrences = text_content
-            .map(text::extract_token_occurrences)
-            .unwrap_or_default();
-        let extraction_unit = text_content
-            .map(|source| extract_with_adapter(&file.relative_path, source))
-            .transpose()?
-            .unwrap_or_default();
-        let languages::ExtractionUnit {
-            symbols: extracted_symbols,
-            references: extracted_references,
-            edges: extracted_edges,
-        } = extraction_unit;
-        let mut reusable_symbol_ids = existing_symbol_ids(&connection, &file.relative_path)?;
-        let mut next_symbol_id = next_symbol_id_start(&connection)?;
-
-        let tx = connection.transaction()?;
-        tx.execute(
-            "DELETE FROM text_occurrences WHERE file_path = ?1",
-            [&file.relative_path],
+        insert_symbol_edge(
+            tx,
+            from_symbol_id,
+            to_symbol_id,
+            &edge_kind,
+            confidence,
+            &provenance,
         )?;
-        tx.execute(
-            "DELETE FROM ast_definitions WHERE file_path = ?1",
-            [&file.relative_path],
-        )?;
-        tx.execute(
-            "DELETE FROM ast_references WHERE file_path = ?1",
-            [&file.relative_path],
-        )?;
-        tx.execute(
-            "DELETE FROM symbol_edges_v2
-             WHERE from_symbol_id IN (SELECT symbol_id FROM symbols_v2 WHERE file_path = ?1)
-                OR to_symbol_id IN (SELECT symbol_id FROM symbols_v2 WHERE file_path = ?1)",
-            [&file.relative_path],
-        )?;
-        tx.execute(
-            "DELETE FROM symbols_v2 WHERE file_path = ?1",
-            [&file.relative_path],
-        )?;
-
-        for occurrence in token_occurrences {
-            tx.execute(
-                "INSERT INTO text_occurrences(file_path, symbol, line, column)
-                 VALUES (?1, ?2, ?3, ?4)",
-                params![
-                    file.relative_path,
-                    occurrence.symbol,
-                    i64::from(occurrence.line),
-                    i64::from(occurrence.column)
-                ],
-            )?;
-        }
-
-        let pending_edges: Vec<(
-            languages::SymbolKey,
-            languages::SymbolKey,
-            String,
-            f64,
-            String,
-        )> = extracted_edges
-            .into_iter()
-            .map(|edge| {
-                (
-                    edge.from_symbol_key,
-                    edge.to_symbol_key,
-                    edge.edge_kind,
-                    edge.confidence,
-                    edge.provenance,
-                )
-            })
-            .collect();
-
-        for definition in extracted_symbols {
-            let symbol = definition.symbol;
-            let kind = definition.kind;
-            let language = definition.language;
-            let qualified_symbol = definition
-                .qualified_symbol
-                .unwrap_or_else(|| format!("{language}:{}::{symbol}", file.relative_path));
-            let container = definition.container;
-            let start_line = i64::from(definition.start_line);
-            let start_column = i64::from(definition.start_column);
-            let end_line = i64::from(definition.end_line);
-            let end_column = i64::from(definition.end_column);
-            let signature = definition.signature;
-            let symbol_id = take_reusable_symbol_id(&mut reusable_symbol_ids, &symbol, &kind)
-                .unwrap_or_else(|| {
-                    let generated = next_symbol_id;
-                    next_symbol_id += 1;
-                    generated
-                });
-
-            tx.execute(
-                "INSERT INTO ast_definitions(file_path, symbol, kind, line, column)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![
-                    &file.relative_path,
-                    &symbol,
-                    &kind,
-                    start_line,
-                    start_column
-                ],
-            )?;
-            tx.execute(
-                "INSERT INTO symbols_v2(
-                    symbol_id, file_path, symbol, kind, language, qualified_symbol, container, start_line, start_column, end_line, end_column, signature
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
-                params![
-                    symbol_id,
-                    &file.relative_path,
-                    &symbol,
-                    &kind,
-                    &language,
-                    &qualified_symbol,
-                    container.as_deref(),
-                    start_line,
-                    start_column,
-                    end_line,
-                    end_column,
-                    signature.as_deref()
-                ],
-            )?;
-        }
-
-        for reference in extracted_references {
-            let symbol = reference.symbol;
-            tx.execute(
-                "INSERT INTO ast_references(file_path, symbol, line, column)
-                 VALUES (?1, ?2, ?3, ?4)",
-                params![
-                    file.relative_path,
-                    &symbol,
-                    i64::from(reference.line),
-                    i64::from(reference.column)
-                ],
-            )?;
-        }
-
-        for (from_symbol_key, to_symbol_key, edge_kind, confidence, provenance) in pending_edges {
-            let Some(from_symbol_id) = resolve_symbol_id_in_tx(&tx, &from_symbol_key)? else {
-                deferred_edges.push((
-                    from_symbol_key,
-                    to_symbol_key,
-                    edge_kind,
-                    confidence,
-                    provenance,
-                ));
-                continue;
-            };
-            let Some(to_symbol_id) = resolve_symbol_id_in_tx(&tx, &to_symbol_key)? else {
-                deferred_edges.push((
-                    from_symbol_key,
-                    to_symbol_key,
-                    edge_kind,
-                    confidence,
-                    provenance,
-                ));
-                continue;
-            };
-            if matches!(edge_kind.as_str(), "imports" | "implements")
-                && symbol_kind_by_id_in_tx(&tx, to_symbol_id)?.as_deref() == Some("import")
-            {
-                deferred_edges.push((
-                    from_symbol_key,
-                    to_symbol_key,
-                    edge_kind,
-                    confidence,
-                    provenance,
-                ));
-                continue;
-            }
-
-            tx.execute(
-                "INSERT INTO symbol_edges_v2(from_symbol_id, to_symbol_id, edge_kind, confidence, provenance)
-                 VALUES (?1, ?2, ?3, ?4, ?5)
-                 ON CONFLICT(from_symbol_id, to_symbol_id, edge_kind)
-                 DO UPDATE SET confidence = excluded.confidence, provenance = excluded.provenance",
-                params![from_symbol_id, to_symbol_id, edge_kind, confidence, provenance],
-            )?;
-        }
-
-        tx.execute(
-            "INSERT INTO indexed_files(file_path, content_hash)
-             VALUES (?1, ?2)
-             ON CONFLICT(file_path) DO UPDATE SET content_hash = excluded.content_hash",
-            params![file.relative_path, file.content_hash],
-        )?;
-        tx.commit()?;
-
-        indexed_files += 1;
     }
+    Ok(())
+}
 
-    if !deferred_edges.is_empty() {
-        let tx = connection.transaction()?;
-        for (from_symbol_key, to_symbol_key, edge_kind, confidence, provenance) in deferred_edges {
-            let Some(from_symbol_id) = resolve_symbol_id_in_tx(&tx, &from_symbol_key)? else {
-                continue;
-            };
-            let Some(to_symbol_id) = resolve_symbol_id_in_tx(&tx, &to_symbol_key)? else {
-                continue;
-            };
-            if matches!(edge_kind.as_str(), "imports" | "implements")
-                && symbol_kind_by_id_in_tx(&tx, to_symbol_id)?.as_deref() == Some("import")
-            {
-                continue;
-            }
+fn upsert_indexed_file_row(
+    tx: &rusqlite::Transaction<'_>,
+    file_path: &str,
+    content_hash: &str,
+) -> anyhow::Result<()> {
+    tx.execute(
+        "INSERT INTO indexed_files(file_path, content_hash)
+         VALUES (?1, ?2)
+         ON CONFLICT(file_path) DO UPDATE SET content_hash = excluded.content_hash",
+        params![file_path, content_hash],
+    )?;
+    Ok(())
+}
 
-            tx.execute(
-                "INSERT INTO symbol_edges_v2(from_symbol_id, to_symbol_id, edge_kind, confidence, provenance)
-                 VALUES (?1, ?2, ?3, ?4, ?5)
-                 ON CONFLICT(from_symbol_id, to_symbol_id, edge_kind)
-                 DO UPDATE SET confidence = excluded.confidence, provenance = excluded.provenance",
-                params![from_symbol_id, to_symbol_id, edge_kind, confidence, provenance],
-            )?;
-        }
-        tx.commit()?;
+fn replay_deferred_edges(
+    connection: &mut Connection,
+    deferred_edges: Vec<DeferredEdge>,
+) -> anyhow::Result<()> {
+    if deferred_edges.is_empty() {
+        return Ok(());
     }
+    let tx = connection.transaction()?;
+    for (from_symbol_key, to_symbol_key, edge_kind, confidence, provenance) in deferred_edges {
+        let Some(from_symbol_id) = resolve_symbol_id_in_tx(&tx, &from_symbol_key)? else {
+            continue;
+        };
+        let Some(to_symbol_id) = resolve_symbol_id_in_tx(&tx, &to_symbol_key)? else {
+            continue;
+        };
+        if should_defer_import_edge(&tx, &edge_kind, to_symbol_id)? {
+            continue;
+        }
+        insert_symbol_edge(
+            &tx,
+            from_symbol_id,
+            to_symbol_id,
+            &edge_kind,
+            confidence,
+            &provenance,
+        )?;
+    }
+    tx.commit()?;
+    Ok(())
+}
 
-    Ok(IndexSummary {
-        indexed_files,
-        skipped_files,
-    })
+fn should_defer_import_edge(
+    tx: &rusqlite::Transaction<'_>,
+    edge_kind: &str,
+    to_symbol_id: i64,
+) -> anyhow::Result<bool> {
+    if !matches!(edge_kind, "imports" | "implements") {
+        return Ok(false);
+    }
+    Ok(symbol_kind_by_id_in_tx(tx, to_symbol_id)?.as_deref() == Some("import"))
+}
+
+fn insert_symbol_edge(
+    tx: &rusqlite::Transaction<'_>,
+    from_symbol_id: i64,
+    to_symbol_id: i64,
+    edge_kind: &str,
+    confidence: f64,
+    provenance: &str,
+) -> anyhow::Result<()> {
+    tx.execute(
+        "INSERT INTO symbol_edges_v2(from_symbol_id, to_symbol_id, edge_kind, confidence, provenance)
+         VALUES (?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT(from_symbol_id, to_symbol_id, edge_kind)
+         DO UPDATE SET confidence = excluded.confidence, provenance = excluded.provenance",
+        params![from_symbol_id, to_symbol_id, edge_kind, confidence, provenance],
+    )?;
+    Ok(())
 }
 
 /// Remove database rows for files that are no longer present in the workspace.
@@ -408,62 +503,79 @@ fn resolve_symbol_id_in_tx(
     tx: &rusqlite::Transaction<'_>,
     key: &languages::SymbolKey,
 ) -> anyhow::Result<Option<i64>> {
-    if let Some(qualified_symbol) = key.qualified_symbol.as_deref() {
-        let qualified_match = tx
-            .query_row(
-                "SELECT symbol_id
-                 FROM symbols_v2
-                 WHERE qualified_symbol = ?1
-                 ORDER BY CASE WHEN kind = 'import' THEN 1 ELSE 0 END ASC,
-                          file_path ASC, start_line ASC, start_column ASC
-                 LIMIT 1",
-                [qualified_symbol],
-                |row| row.get::<_, i64>(0),
-            )
-            .optional()?;
-        if qualified_match.is_some() {
-            return Ok(qualified_match);
-        }
+    if let Some(qualified_match) = resolve_symbol_id_by_qualified(tx, key)? {
+        return Ok(Some(qualified_match));
     }
-
-    if let Some(file_path) = key.file_path.as_deref() {
-        let scoped_match = tx
-            .query_row(
-                "SELECT symbol_id
-                 FROM symbols_v2
-                 WHERE file_path = ?1
-                   AND symbol = ?2
-                 ORDER BY CASE WHEN kind = 'import' THEN 1 ELSE 0 END ASC,
-                          start_line ASC, start_column ASC
-                 LIMIT 1",
-                params![file_path, key.symbol],
-                |row| row.get::<_, i64>(0),
-            )
-            .optional()?;
-        if scoped_match.is_some() {
-            return Ok(scoped_match);
-        }
+    if let Some(scoped_match) = resolve_symbol_id_by_scope(tx, key)? {
+        return Ok(Some(scoped_match));
     }
+    resolve_symbol_id_by_symbol(tx, key)
+}
 
+fn resolve_symbol_id_by_qualified(
+    tx: &rusqlite::Transaction<'_>,
+    key: &languages::SymbolKey,
+) -> anyhow::Result<Option<i64>> {
+    let Some(qualified_symbol) = key.qualified_symbol.as_deref() else {
+        return Ok(None);
+    };
+    tx.query_row(
+        "SELECT symbol_id
+         FROM symbols_v2
+         WHERE qualified_symbol = ?1
+         ORDER BY CASE WHEN kind = 'import' THEN 1 ELSE 0 END ASC,
+                  file_path ASC, start_line ASC, start_column ASC
+         LIMIT 1",
+        [qualified_symbol],
+        |row| row.get::<_, i64>(0),
+    )
+    .optional()
+    .map_err(Into::into)
+}
+
+fn resolve_symbol_id_by_scope(
+    tx: &rusqlite::Transaction<'_>,
+    key: &languages::SymbolKey,
+) -> anyhow::Result<Option<i64>> {
+    let Some(file_path) = key.file_path.as_deref() else {
+        return Ok(None);
+    };
+    tx.query_row(
+        "SELECT symbol_id
+         FROM symbols_v2
+         WHERE file_path = ?1
+           AND symbol = ?2
+         ORDER BY CASE WHEN kind = 'import' THEN 1 ELSE 0 END ASC,
+                  start_line ASC, start_column ASC
+         LIMIT 1",
+        params![file_path, key.symbol],
+        |row| row.get::<_, i64>(0),
+    )
+    .optional()
+    .map_err(Into::into)
+}
+
+fn resolve_symbol_id_by_symbol(
+    tx: &rusqlite::Transaction<'_>,
+    key: &languages::SymbolKey,
+) -> anyhow::Result<Option<i64>> {
+    let query_with_language = "SELECT symbol_id
+         FROM symbols_v2
+         WHERE symbol = ?1
+           AND language = ?2
+         ORDER BY CASE WHEN kind = 'import' THEN 1 ELSE 0 END ASC,
+                  file_path ASC, start_line ASC, start_column ASC
+         LIMIT 2";
+    let query_without_language = "SELECT symbol_id
+         FROM symbols_v2
+         WHERE symbol = ?1
+         ORDER BY CASE WHEN kind = 'import' THEN 1 ELSE 0 END ASC,
+                  file_path ASC, start_line ASC, start_column ASC
+         LIMIT 2";
     let mut statement = if key.language.is_some() {
-        tx.prepare(
-            "SELECT symbol_id
-             FROM symbols_v2
-             WHERE symbol = ?1
-               AND language = ?2
-             ORDER BY CASE WHEN kind = 'import' THEN 1 ELSE 0 END ASC,
-                      file_path ASC, start_line ASC, start_column ASC
-             LIMIT 2",
-        )?
+        tx.prepare(query_with_language)?
     } else {
-        tx.prepare(
-            "SELECT symbol_id
-             FROM symbols_v2
-             WHERE symbol = ?1
-             ORDER BY CASE WHEN kind = 'import' THEN 1 ELSE 0 END ASC,
-                      file_path ASC, start_line ASC, start_column ASC
-             LIMIT 2",
-        )?
+        tx.prepare(query_without_language)?
     };
     let mut rows = if let Some(language) = key.language.as_deref() {
         statement.query(params![key.symbol, language])?

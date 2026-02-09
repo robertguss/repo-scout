@@ -182,22 +182,26 @@ fn collect_call_identifiers(
     caller: Option<&str>,
     output: &mut Vec<AstReference>,
 ) {
-    if node.kind() == "identifier" {
-        if let Some(symbol) = node_text(node, source) {
-            let (line, column) = start_position(node);
-            output.push(AstReference {
-                symbol,
-                line,
-                column,
-                caller: caller.map(str::to_string),
-            });
+    let mut stack = vec![node];
+    while let Some(current) = stack.pop() {
+        if current.kind() == "identifier" {
+            if let Some(symbol) = node_text(current, source) {
+                let (line, column) = start_position(current);
+                output.push(AstReference {
+                    symbol,
+                    line,
+                    column,
+                    caller: caller.map(str::to_string),
+                });
+            }
+            continue;
         }
-        return;
-    }
-
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_call_identifiers(child, source, caller, output);
+        let mut cursor = current.walk();
+        let mut children = current.children(&mut cursor).collect::<Vec<_>>();
+        children.reverse();
+        for child in children {
+            stack.push(child);
+        }
     }
 }
 
@@ -338,15 +342,18 @@ fn enclosing_impl_container(node: Node<'_>, source: &str) -> Option<String> {
 /// }
 /// ```
 fn last_identifier_text(node: Node<'_>, source: &str) -> Option<String> {
-    if matches!(node.kind(), "identifier" | "type_identifier") {
-        return node_text(node, source);
-    }
-
-    let mut cursor = node.walk();
     let mut last = None;
-    for child in node.children(&mut cursor) {
-        if let Some(value) = last_identifier_text(child, source) {
-            last = Some(value);
+    let mut stack = vec![node];
+    while let Some(current) = stack.pop() {
+        if matches!(current.kind(), "identifier" | "type_identifier") {
+            last = node_text(current, source);
+            continue;
+        }
+        let mut cursor = current.walk();
+        let mut children = current.children(&mut cursor).collect::<Vec<_>>();
+        children.reverse();
+        for child in children {
+            stack.push(child);
         }
     }
     last
