@@ -220,7 +220,9 @@ fn current_module_segments(caller_file_path: &str) -> Vec<String> {
         return Vec::new();
     }
 
-    let file_name = *path_parts.last().expect("checked path_parts is non-empty");
+    let Some(file_name) = path_parts.last().copied() else {
+        return Vec::new();
+    };
     let path_start = usize::from(path_parts.len() > 1);
     let mut segments = path_parts[path_start..path_parts.len().saturating_sub(1)]
         .iter()
