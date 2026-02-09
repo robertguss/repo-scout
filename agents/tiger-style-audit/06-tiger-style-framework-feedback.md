@@ -2,7 +2,7 @@
 
 Target upstream repository:
 
-- `/Users/robertguss/Projects/programming_tiger_style`
+- Upstream Tiger-style reference (external to this repository)
 
 These issues were discovered while applying Tiger style to `repo-scout`. They are framework-level concerns, not only local repo issues.
 
@@ -125,4 +125,3 @@ Recommended upstream fix:
 1. Align contract text conflicts (TS-01, TS-02, TS-03).
 2. Publish adoption-mode guidance and explicit language activation model (TS-05, TS-06).
 3. Clarify recursion/test allowances with concrete examples (TS-04, TS-07).
-

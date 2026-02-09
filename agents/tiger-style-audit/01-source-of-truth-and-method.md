@@ -33,7 +33,7 @@ Read and mapped requirements from:
 
 Compared installed Tiger assets in this repo to upstream:
 
-- Upstream: `/Users/robertguss/Projects/programming_tiger_style`
+- Upstream Tiger-style reference (external to this repository)
 - Compared paths: `contracts/`, `templates/`, `checklists/`, `scripts/`, `.github/pull_request_template.md`, `.github/workflows/contract-gates.yml`
 
 ### Evidence Collection Commands
@@ -69,4 +69,3 @@ The report uses the review contract severity levels:
 - `P1`: high-risk defect/process gap likely to cause regressions
 - `P2`: medium-risk maintainability/reliability/process concern
 - `P3`: low-risk improvement or clarification item
-
