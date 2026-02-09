@@ -5,43 +5,12 @@ usage() {
   cat <<'USAGE'
 Usage: scripts/validate_evidence_packet.sh [--file <path> | --pr-body <path>]
 
-Validates evidence packet structure and section quality.
+Validates that required evidence packet sections and semantic fields exist.
 
 Options:
   --file <path>      Path to evidence packet markdown file
   --pr-body <path>   Path to file containing pull request body markdown
 USAGE
-}
-
-section_body() {
-  local heading="$1"
-  awk -v heading="## $heading" '
-    $0 == heading {capture=1; next}
-    /^## / && capture {exit}
-    capture {print}
-  ' "$NORMALIZED_PATH"
-}
-
-section_has_field_with_value() {
-  local heading="$1"
-  local field_pattern="$2"
-  local section
-  section="$(section_body "$heading")"
-
-  grep -Eiq "^[[:space:]-]*(${field_pattern})[[:space:]]*:[[:space:]]*[^[:space:]].*$" <<<"$section"
-}
-
-require_field_with_value() {
-  local heading="$1"
-  local field_pattern="$2"
-  local human_label="$3"
-
-  if ! section_has_field_with_value "$heading" "$field_pattern"; then
-    echo "Missing quality detail in '$heading': $human_label" >&2
-    return 1
-  fi
-
-  return 0
 }
 
 MODE=""
@@ -110,61 +79,127 @@ done <<'EOF_HEADINGS'
 ## Validation Commands
 EOF_HEADINGS
 
-missing=0
+errors=0
+
 for heading in "${REQUIRED_HEADINGS[@]}"; do
   if ! grep -qxF "$heading" "$NORMALIZED_PATH"; then
     echo "Missing required heading: $heading" >&2
-    missing=1
+    errors=1
   fi
 done
 
-if [[ "$missing" -ne 0 ]]; then
-  echo "Evidence packet validation failed." >&2
-  exit 1
-fi
-
 if grep -Eqi '<fill|tbd|todo|replace me>' "$NORMALIZED_PATH"; then
   echo "Evidence packet contains unresolved placeholders (e.g., TBD/TODO/<fill>)." >&2
-  exit 1
+  errors=1
 fi
 
-TEMPLATE_SCAFFOLD_MODE=0
-if [[ "$MODE" == "pr" && "$(basename "$INPUT_PATH")" == "pull_request_template.md" ]]; then
-  TEMPLATE_SCAFFOLD_MODE=1
-fi
+trim_value() {
+  local value="$1"
+  value="${value#${value%%[![:space:]]*}}"
+  value="${value%${value##*[![:space:]]}}"
+  value="${value#\`}"
+  value="${value%\`}"
+  echo "$value"
+}
 
-if [[ "$TEMPLATE_SCAFFOLD_MODE" -eq 0 ]]; then
-  quality_failed=0
+get_section_body() {
+  local heading="$1"
+  awk -v heading="$heading" '
+    $0 == heading {in_section = 1; next}
+    in_section && /^## / {exit}
+    in_section {print}
+  ' "$NORMALIZED_PATH"
+}
 
-  require_field_with_value "Risk Tier" "Tier|Risk Tier" "declared tier" || quality_failed=1
-  require_field_with_value "Risk Tier" "Rationale" "tier rationale" || quality_failed=1
+contains_placeholder_value() {
+  local value
+  value="$(tr '[:upper:]' '[:lower:]' <<<"$1")"
+  [[ "$value" =~ ^(tbd|todo|replace[[:space:]]+me|<fill.*>|none|n/a|na)$ ]]
+}
 
-  require_field_with_value "Red" "Failing test\\(s\\)|Failing tests" "failing test names" \
-    || quality_failed=1
-  require_field_with_value "Red" "Command\\(s\\)( used)?" "red-stage command" \
-    || quality_failed=1
-  require_field_with_value "Red" "Failure summary|Expected failure summary" \
-    "failure summary" || quality_failed=1
-  require_field_with_value "Red" "Why this failure is expected" "expected failure reason" \
-    || quality_failed=1
+require_field() {
+  local section_name="$1"
+  local section_body="$2"
+  local field_regex="$3"
+  local field_display="$4"
 
-  require_field_with_value "Green" "Minimal implementation summary" \
-    "minimal implementation summary" || quality_failed=1
-  require_field_with_value "Green" "Command\\(s\\)( used)?" "green-stage command" \
-    || quality_failed=1
-  require_field_with_value "Green" "Passing summary" "passing summary" || quality_failed=1
+  local line
+  line="$(grep -Eim1 "^[[:space:]]*[-*][[:space:]]*(${field_regex})[[:space:]]*:" <<<"$section_body" || true)"
 
-  require_field_with_value "Refactor" "Structural improvements|Structural improvements made" \
-    "refactor summary" || quality_failed=1
-  require_field_with_value "Refactor" "Why behavior is unchanged" \
-    "behavior-preservation rationale" || quality_failed=1
-  require_field_with_value "Refactor" "Confirmation commands|Command\\(s\\) used" \
-    "post-refactor confirmation command" || quality_failed=1
-
-  if [[ "$quality_failed" -ne 0 ]]; then
-    echo "Evidence packet quality validation failed." >&2
-    exit 1
+  if [[ -z "$line" ]]; then
+    echo "$section_name section must include $field_display." >&2
+    errors=1
+    return
   fi
+
+  local value
+  value="$(trim_value "${line#*:}")"
+  if [[ -z "$value" ]] || contains_placeholder_value "$value"; then
+    echo "$section_name section must include $field_display." >&2
+    errors=1
+  fi
+}
+
+validate_section_fields() {
+  local section_name="$1"
+  local section_body="$2"
+  shift 2
+
+  local spec
+  for spec in "$@"; do
+    local field_regex="${spec%|*}"
+    local field_display="${spec##*|}"
+    require_field "$section_name" "$section_body" "$field_regex" "$field_display"
+  done
+}
+
+RISK_SECTION="$(get_section_body "## Risk Tier")"
+RED_SECTION="$(get_section_body "## Red")"
+GREEN_SECTION="$(get_section_body "## Green")"
+REFACTOR_SECTION="$(get_section_body "## Refactor")"
+
+if [[ -n "$RISK_SECTION" ]]; then
+  validate_section_fields "Risk Tier" "$RISK_SECTION" \
+    "Tier|Tier" \
+    "Rationale|Rationale"
+
+  tier_line="$(grep -Eim1 '^[[:space:]]*[-*][[:space:]]*Tier[[:space:]]*:' <<<"$RISK_SECTION" || true)"
+  if [[ -n "$tier_line" ]]; then
+    tier_value="$(trim_value "${tier_line#*:}")"
+    if [[ -n "$tier_value" ]]; then
+      tier_clean="$(tr -d '[:space:]' <<<"$tier_value")"
+      tier_clean="${tier_clean//\`/}"
+      if ! [[ "$tier_clean" =~ ^[0-3]$ ]]; then
+        echo "Risk Tier section must include Tier as one of 0, 1, 2, or 3." >&2
+        errors=1
+      fi
+    fi
+  fi
+fi
+
+if [[ -n "$RED_SECTION" ]]; then
+  validate_section_fields "Red" "$RED_SECTION" \
+    "Failing[[:space:]]+test\\(s\\)|Failing test(s)" \
+    "Command\\(s\\)|Command(s)" \
+    "(Expected[[:space:]]+)?Failure[[:space:]]+summary|Failure summary" \
+    "Expected[[:space:]]+failure[[:space:]]+rationale|Why[[:space:]]+this[[:space:]]+failure[[:space:]]+is[[:space:]]+expected|Expected failure rationale"
+fi
+
+if [[ -n "$GREEN_SECTION" ]]; then
+  validate_section_fields "Green" "$GREEN_SECTION" \
+    "Command\\(s\\)|Command(s)" \
+    "Passing[[:space:]]+summary|Passing summary"
+fi
+
+if [[ -n "$REFACTOR_SECTION" ]]; then
+  validate_section_fields "Refactor" "$REFACTOR_SECTION" \
+    "Why[[:space:]]+behavior[[:space:]]+is[[:space:]]+unchanged|Why behavior is unchanged" \
+    "Confirmation[[:space:]]+commands|Confirmation commands"
+fi
+
+if [[ "$errors" -ne 0 ]]; then
+  echo "Evidence packet validation failed. Resolve missing headings/fields listed above." >&2
+  exit 1
 fi
 
 if [[ "$MODE" == "pr" ]]; then
