@@ -35,13 +35,24 @@ jobs:
           bash -n scripts/validate_tdd_cycle.sh
           bash -n scripts/validate_evidence_packet.sh
 
+      - name: Rust contract gates
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --workspace --all-targets --all-features -- \
+            -D warnings \
+            -D clippy::unwrap_used \
+            -D clippy::expect_used \
+            -D clippy::undocumented_unsafe_blocks
+          cargo test --workspace --all-features
+
       - name: Validate TDD commit sequence
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE_SHA="$(jq -r '.pull_request.base.sha' "$GITHUB_EVENT_PATH")"
           elif [ "${{ github.event_name }}" = "push" ]; then
             BASE_SHA="$(jq -r '.before // ""' "$GITHUB_EVENT_PATH")"
-            if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            if [ -z "$BASE_SHA" ] \
+              || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
               BASE_SHA="$(git rev-list --max-parents=0 HEAD | tail -n 1)"
             fi
           else

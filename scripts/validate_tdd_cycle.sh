@@ -58,8 +58,8 @@ while IFS= read -r commit; do
 done < <(git rev-list --reverse "$RANGE")
 
 if [[ ${#COMMITS[@]} -eq 0 ]]; then
-  echo "No commits in range $RANGE. Nothing to validate."
-  exit 0
+  echo "No commits in range $RANGE. Cannot validate TDD lifecycle." >&2
+  exit 1
 fi
 
 if [[ "$STRICT_DOC_ONLY" -eq 0 ]]; then
@@ -81,9 +81,8 @@ if [[ "$STRICT_DOC_ONLY" -eq 0 ]]; then
   fi
 fi
 
-SEEN_RED=0
-SEEN_GREEN=0
-SEEN_REFACTOR=0
+CYCLE_STATE="expect_red"
+COMPLETED_CYCLES=0
 
 for commit in "${COMMITS[@]}"; do
   # Ignore merge commits (for example, GitHub synthetic PR merge commits) because
@@ -99,21 +98,26 @@ for commit in "${COMMITS[@]}"; do
 
   case "$prefix" in
     RED)
-      SEEN_RED=1
+      if [[ "$CYCLE_STATE" == "expect_refactor" ]]; then
+        echo "Invalid sequence: RED before REFACTOR in commit $commit ($subject)" >&2
+        exit 1
+      fi
+      CYCLE_STATE="expect_green"
       ;;
     GREEN)
-      if [[ "$SEEN_RED" -eq 0 ]]; then
+      if [[ "$CYCLE_STATE" != "expect_green" ]]; then
         echo "Invalid sequence: GREEN before RED in commit $commit ($subject)" >&2
         exit 1
       fi
-      SEEN_GREEN=1
+      CYCLE_STATE="expect_refactor"
       ;;
     REFACTOR)
-      if [[ "$SEEN_GREEN" -eq 0 ]]; then
+      if [[ "$CYCLE_STATE" != "expect_refactor" ]]; then
         echo "Invalid sequence: REFACTOR before GREEN in commit $commit ($subject)" >&2
         exit 1
       fi
-      SEEN_REFACTOR=1
+      COMPLETED_CYCLES=$((COMPLETED_CYCLES + 1))
+      CYCLE_STATE="expect_red"
       ;;
     DOCS|CHORE|BUILD|TEST)
       ;;
@@ -125,10 +129,14 @@ for commit in "${COMMITS[@]}"; do
   esac
 done
 
-if [[ "$SEEN_RED" -eq 0 || "$SEEN_GREEN" -eq 0 || "$SEEN_REFACTOR" -eq 0 ]]; then
-  echo "Missing required TDD sequence in range $RANGE" >&2
-  echo "Observed: RED=$SEEN_RED GREEN=$SEEN_GREEN REFACTOR=$SEEN_REFACTOR" >&2
+if [[ "$COMPLETED_CYCLES" -eq 0 ]]; then
+  echo "Missing required complete TDD cycle in range $RANGE" >&2
   exit 1
 fi
 
-echo "TDD sequence validation passed for range $RANGE"
+if [[ "$CYCLE_STATE" != "expect_red" ]]; then
+  echo "Incomplete TDD cycle in range $RANGE (ended in state: $CYCLE_STATE)" >&2
+  exit 1
+fi
+
+echo "TDD sequence validation passed for range $RANGE ($COMPLETED_CYCLES cycle(s))"

@@ -18,6 +18,7 @@
 - Failing test(s):
 - Command(s):
 - Expected failure summary:
+- Why this failure is expected:
 
 ## Green
 
@@ -70,6 +71,19 @@
 
 # full validation
 ```
+
+## Contract Attestations
+
+- [ ] Completed `checklists/PR_CONTRACT_CHECKLIST.md`.
+- [ ] Completed `checklists/ADVERSARIAL_REVIEW_CHECKLIST.md` for Tier 2/3 work, or N/A.
+- [ ] If a contract exception is used, it is documented with:
+  - waived rule,
+  - justification,
+  - risk introduced,
+  - compensating controls,
+  - expiration/removal condition,
+  - explicit reviewer approval.
+- [ ] No contract exception was required for this change.
 
 ## Dogfooding Evidence (repo-scout required)
 
