@@ -1,12 +1,4 @@
-use std::fs;
-
-fn read_repo_file(path: &str) -> String {
-    let repo_root = env!("CARGO_MANIFEST_DIR");
-    let full_path = format!("{repo_root}/{path}");
-    fs::read_to_string(&full_path).unwrap_or_else(|err| {
-        panic!("failed to read {full_path}: {err}");
-    })
-}
+mod common;
 
 fn assert_contains(text: &str, expected: &str, context: &str) {
     assert!(
@@ -17,9 +9,9 @@ fn assert_contains(text: &str, expected: &str, context: &str) {
 
 #[test]
 fn milestone48_documents_adoption_boundary_for_commit_prefix_validation() {
-    let agents = read_repo_file("AGENTS.md");
-    let policy_doc = read_repo_file("docs/contract-artifact-policy.md");
-    let tdd_validator = read_repo_file("scripts/validate_tdd_cycle.sh");
+    let agents = common::read_repo_file("AGENTS.md");
+    let policy_doc = common::read_repo_file("docs/contract-artifact-policy.md");
+    let tdd_validator = common::read_repo_file("scripts/validate_tdd_cycle.sh");
 
     assert_contains(
         &agents,
@@ -40,8 +32,8 @@ fn milestone48_documents_adoption_boundary_for_commit_prefix_validation() {
 
 #[test]
 fn milestone48_documents_language_contract_installation_posture() {
-    let agents = read_repo_file("AGENTS.md");
-    let policy_doc = read_repo_file("docs/contract-artifact-policy.md");
+    let agents = common::read_repo_file("AGENTS.md");
+    let policy_doc = common::read_repo_file("docs/contract-artifact-policy.md");
 
     for expected in [
         "Contract installation scope in this repository is intentionally Rust-only",
@@ -59,7 +51,7 @@ fn milestone48_documents_language_contract_installation_posture() {
 
 #[test]
 fn milestone48_audit_index_reflects_current_artifacts() {
-    let readme = read_repo_file("agents/tiger-style-audit/README.md");
+    let readme = common::read_repo_file("agents/tiger-style-audit/README.md");
 
     assert!(
         !readme.contains("09-upstream-tiger-style-v1.1-patch-list.md"),
@@ -75,4 +67,26 @@ fn milestone48_audit_index_reflects_current_artifacts() {
         "Remaining high-priority findings: none",
         "agents/tiger-style-audit/README.md",
     );
+    assert!(
+        !readme.contains("/Users/robertguss/Projects/programming_tiger_style"),
+        "audit README should not contain developer-local filesystem paths"
+    );
+}
+
+#[test]
+fn milestone48_implementation_prompt_uses_repository_relative_paths() {
+    let prompt = common::read_repo_file("agents/tiger-style-audit/08-implementation-session-prompt.md");
+    assert!(
+        !prompt.contains("/Users/robertguss/Projects/experiments/repo-scout/"),
+        "implementation prompt should not hardcode developer-local repository roots"
+    );
+    for expected in [
+        "- `agents/tiger-style-audit/README.md`",
+        "- `agents/tiger-style-audit/02-contract-installation-drift.md`",
+        "- `AGENTS.md`",
+        "- `contracts/core/*.md`",
+        "- `contracts/languages/RUST_CODING_CONTRACT.md`",
+    ] {
+        assert_contains(&prompt, expected, "agents/tiger-style-audit/08-implementation-session-prompt.md");
+    }
 }

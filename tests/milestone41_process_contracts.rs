@@ -1,16 +1,10 @@
+mod common;
+
 use std::fs;
 use std::path::Path;
 use std::process::{Command, Output};
 
 use tempfile::TempDir;
-
-fn read_repo_file(path: &str) -> String {
-    let repo_root = env!("CARGO_MANIFEST_DIR");
-    let full_path = format!("{repo_root}/{path}");
-    fs::read_to_string(&full_path).unwrap_or_else(|err| {
-        panic!("failed to read {full_path}: {err}");
-    })
-}
 
 fn run_command(cwd: &Path, program: &str, args: &[&str]) -> Output {
     Command::new(program)
@@ -107,11 +101,11 @@ fn run_evidence_validator_on_file(repo: &Path, evidence_path: &Path) -> Output {
 
 #[test]
 fn milestone41_ci_workflow_enforces_rust_contract_gates() {
-    let workflow = read_repo_file(".github/workflows/contract-gates.yml");
+    let workflow = common::read_repo_file(".github/workflows/contract-gates.yml");
 
     let required_snippets = [
         "cargo fmt --all -- --check",
-        "cargo clippy --workspace --all-targets --all-features -- \\",
+        "cargo clippy --workspace --lib --bins --all-features -- \\",
         "-D warnings",
         "-D clippy::unwrap_used",
         "-D clippy::expect_used",
@@ -125,6 +119,10 @@ fn milestone41_ci_workflow_enforces_rust_contract_gates() {
             "missing required CI gate snippet: {snippet}"
         );
     }
+    assert!(
+        !workflow.contains("--all-targets"),
+        "workflow clippy gate should not scope strict expect/unwrap checks to test targets"
+    );
 }
 
 #[test]
@@ -316,7 +314,7 @@ cargo test milestone41_evidence_validator -- --nocapture
 
 #[test]
 fn milestone41_pr_template_includes_checklist_and_exception_attestations() {
-    let template = read_repo_file(".github/pull_request_template.md");
+    let template = common::read_repo_file(".github/pull_request_template.md");
 
     let required_snippets = [
         "checklists/PR_CONTRACT_CHECKLIST.md",
