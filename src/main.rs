@@ -418,34 +418,30 @@ fn parse_changed_line_spec(
     let end_line = end_part.parse::<u32>().ok();
     let Some(start_line) = start_line else {
         anyhow::bail!(
-            concat!(
-                "invalid --changed-line '{raw_spec}': expected format ",
-                "path:start[:end] with positive line numbers"
-            )
+            "invalid --changed-line '{}': expected format {}",
+            raw_spec,
+            "path:start[:end] with positive line numbers"
         );
     };
     let Some(end_line) = end_line else {
         anyhow::bail!(
-            concat!(
-                "invalid --changed-line '{raw_spec}': expected format ",
-                "path:start[:end] with positive line numbers"
-            )
+            "invalid --changed-line '{}': expected format {}",
+            raw_spec,
+            "path:start[:end] with positive line numbers"
         );
     };
     if start_line == 0 || end_line == 0 || end_line < start_line {
         anyhow::bail!(
-            concat!(
-                "invalid --changed-line '{raw_spec}': expected format ",
-                "path:start[:end] with start <= end and both >= 1"
-            )
+            "invalid --changed-line '{}': expected format {}",
+            raw_spec,
+            "path:start[:end] with start <= end and both >= 1"
         );
     }
     if path_part.trim().is_empty() {
         anyhow::bail!(
-            concat!(
-                "invalid --changed-line '{raw_spec}': expected format ",
-                "path:start[:end] with a non-empty path"
-            )
+            "invalid --changed-line '{}': expected format {}",
+            raw_spec,
+            "path:start[:end] with a non-empty path"
         );
     }
 
