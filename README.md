@@ -3,8 +3,9 @@
 `repo-scout` is a local, deterministic CLI for indexing a repository and answering code-navigation
 questions fast.
 
-Phase 10 is fully implemented and adds Rust production-readiness hardening plus Go `find` MVP
-(AST-backed Go symbol definitions), while preserving deterministic output and schema stability.
+Phase 11 is fully implemented and closes Rust production-ready behavior for module-qualified impact
+resolution (`crate::`, `self::`, `super::`, and `mod.rs` layouts), while preserving deterministic
+output and schema stability.
 
 ## What It Does
 
@@ -111,6 +112,8 @@ cargo run -- explain impact_matches --repo /path/to/repo --json
     `--max-targeted=0`.
 - `diff-impact --changed-file <PATH> --repo <PATH> [--max-distance <N>] [--exclude-tests|--include-tests] [--include-imports] [--changed-line <path:start[:end]>] [--changed-symbol <symbol> ...] [--exclude-changed] [--max-results <N>] [--json]`
   - Emits changed-symbol rows plus deterministic bounded multi-hop impacted symbols/test targets.
+  - Rust module-qualified calls now resolve deterministic candidate paths for both `<module>.rs` and
+    `<module>/mod.rs`, reducing dropped `called_by` rows in duplicate-name graphs.
   - TypeScript namespace/member calls and Python module-alias attribute calls now resolve with
     module-aware context to avoid duplicate-name cross-link ambiguity.
   - Test-target emission remains default-on (`include_tests = true` in schema 3); use
@@ -146,6 +149,8 @@ just fmt
 just clippy
 just test
 just contract-check
+just perf-rust-guardrails
+just perf-rust-record
 just dogfood-pre launch
 just dogfood-post launch
 
@@ -212,9 +217,9 @@ cargo test
 If dogfooding exposes a defect, add a failing integration test first, implement the minimum fix,
 then refactor with the full suite green.
 
-Phase 10 note: `--exclude-tests` now recognizes common TypeScript/Python naming patterns in
-addition to Rust test conventions (`*.test.ts`, `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`,
-`test_*.py`, `*_test.py`, plus `tests/` and `/tests/` paths).
+Phase 11 note: Rust module-qualified call paths (`crate::`, `self::`, `super::`, and
+module-prefix calls targeting `mod.rs`) now emit stable candidate-target edges for `impact` and
+`diff-impact` traversal.
 
 ## Error Recovery
 
