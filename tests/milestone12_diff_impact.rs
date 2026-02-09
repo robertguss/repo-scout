@@ -1,12 +1,55 @@
 mod common;
 
 use serde_json::Value;
+use std::path::Path;
 
 fn run_stdout(args: &[&str]) -> String {
     let mut cmd = common::repo_scout_cmd();
     cmd.args(args);
     let output = cmd.assert().success().get_output().stdout.clone();
     String::from_utf8(output).expect("stdout should be utf-8")
+}
+
+fn diff_impact_json(repo_root: &Path, changed_file: &str, extra_flags: &[&str]) -> Value {
+    let repo_arg = repo_root.to_str().expect("repo path should be utf-8");
+    let mut args = vec!["diff-impact", "--changed-file", changed_file];
+    args.extend_from_slice(extra_flags);
+    args.extend_from_slice(&["--repo", repo_arg, "--json"]);
+    let out = run_stdout(&args);
+    serde_json::from_str(&out).expect("diff-impact --json should produce valid json")
+}
+
+fn diff_results(payload: &Value) -> &[Value] {
+    payload["results"]
+        .as_array()
+        .expect("results should be array")
+}
+
+fn assert_allowed_confidence_and_provenance(item: &Value) {
+    if let Some(confidence) = item["confidence"].as_str() {
+        assert!(
+            [
+                "graph_exact",
+                "graph_likely",
+                "context_high",
+                "context_medium",
+                "context_low"
+            ]
+            .contains(&confidence)
+        );
+    }
+    if let Some(provenance) = item["provenance"].as_str() {
+        assert!(
+            [
+                "ast_definition",
+                "ast_reference",
+                "import_resolution",
+                "call_resolution",
+                "text_fallback"
+            ]
+            .contains(&provenance)
+        );
+    }
 }
 
 #[test]
@@ -195,71 +238,17 @@ fn milestone12_diff_impact_deterministic_ordering() {
     );
 
     run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
-    let out_a = run_stdout(&[
-        "diff-impact",
-        "--changed-file",
-        "src/lib.rs",
-        "--repo",
-        repo.path().to_str().unwrap(),
-        "--json",
-    ]);
-    let out_b = run_stdout(&[
-        "diff-impact",
-        "--changed-file",
-        "src/lib.rs",
-        "--repo",
-        repo.path().to_str().unwrap(),
-        "--json",
-    ]);
-    assert_eq!(out_a, out_b);
+    let payload_a = diff_impact_json(repo.path(), "src/lib.rs", &[]);
+    let payload_b = diff_impact_json(repo.path(), "src/lib.rs", &[]);
+    assert_eq!(payload_a, payload_b);
 
-    let payload_a: Value =
-        serde_json::from_str(&out_a).expect("diff-impact --json should produce valid json");
-    let results_a = payload_a["results"]
-        .as_array()
-        .expect("results should be array");
+    let results_a = diff_results(&payload_a);
     assert!(results_a.iter().any(|item| item["distance"] == 1));
     for item in results_a {
-        if let Some(confidence) = item["confidence"].as_str() {
-            assert!(
-                [
-                    "graph_exact",
-                    "graph_likely",
-                    "context_high",
-                    "context_medium",
-                    "context_low"
-                ]
-                .contains(&confidence)
-            );
-        }
-        if let Some(provenance) = item["provenance"].as_str() {
-            assert!(
-                [
-                    "ast_definition",
-                    "ast_reference",
-                    "import_resolution",
-                    "call_resolution",
-                    "text_fallback"
-                ]
-                .contains(&provenance)
-            );
-        }
+        assert_allowed_confidence_and_provenance(item);
     }
 
-    let max_zero_out = run_stdout(&[
-        "diff-impact",
-        "--changed-file",
-        "src/lib.rs",
-        "--max-distance",
-        "0",
-        "--repo",
-        repo.path().to_str().unwrap(),
-        "--json",
-    ]);
-    let payload_zero: Value =
-        serde_json::from_str(&max_zero_out).expect("diff-impact --json should produce valid json");
-    let results_zero = payload_zero["results"]
-        .as_array()
-        .expect("results should be array");
+    let payload_zero = diff_impact_json(repo.path(), "src/lib.rs", &["--max-distance", "0"]);
+    let results_zero = diff_results(&payload_zero);
     assert!(!results_zero.iter().any(|item| item["distance"] == 1));
 }

@@ -48,8 +48,18 @@ pub fn run_stdout(args: &[&str]) -> String {
     String::from_utf8(output).expect("stdout should be utf-8")
 }
 
+#[allow(dead_code)]
 pub fn temp_repo() -> TempDir {
     tempfile::tempdir().expect("temporary repo should be created")
+}
+
+#[allow(dead_code)]
+pub fn read_repo_file(path: &str) -> String {
+    let repo_root = env!("CARGO_MANIFEST_DIR");
+    let full_path = PathBuf::from(repo_root).join(path);
+    fs::read_to_string(&full_path).unwrap_or_else(|err| {
+        panic!("failed to read {}: {err}", full_path.display());
+    })
 }
 
 #[allow(dead_code)]

@@ -372,16 +372,20 @@ fn implemented_types(node: Node<'_>, source: &str) -> Vec<String> {
 }
 
 fn collect_type_identifiers(node: Node<'_>, source: &str, output: &mut Vec<String>) {
-    if matches!(node.kind(), "identifier" | "type_identifier")
-        && let Some(symbol) = node_text(node, source)
-    {
-        output.push(symbol);
-        return;
-    }
-
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_type_identifiers(child, source, output);
+    let mut stack = vec![node];
+    while let Some(current) = stack.pop() {
+        if matches!(current.kind(), "identifier" | "type_identifier")
+            && let Some(symbol) = node_text(current, source)
+        {
+            output.push(symbol);
+            continue;
+        }
+        let mut cursor = current.walk();
+        let mut children = current.children(&mut cursor).collect::<Vec<_>>();
+        children.reverse();
+        for child in children {
+            stack.push(child);
+        }
     }
 }
 

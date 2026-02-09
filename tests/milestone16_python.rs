@@ -1,12 +1,53 @@
 mod common;
 
 use rusqlite::Connection;
+use serde_json::Value;
+use std::path::Path;
 
 fn run_stdout(args: &[&str]) -> String {
     let mut cmd = common::repo_scout_cmd();
     cmd.args(args);
     let output = cmd.assert().success().get_output().stdout.clone();
     String::from_utf8(output).expect("stdout should be utf-8")
+}
+
+fn run_repo_json(repo_root: &Path, args: &[&str]) -> Value {
+    let repo_arg = repo_root.to_str().expect("repo path should be utf-8");
+    let mut full_args = Vec::with_capacity(args.len() + 3);
+    full_args.extend_from_slice(args);
+    full_args.extend_from_slice(&["--repo", repo_arg, "--json"]);
+    let out = run_stdout(&full_args);
+    serde_json::from_str(&out).expect("command json should parse")
+}
+
+fn run_repo_json_deterministic(repo_root: &Path, args: &[&str]) -> Value {
+    let first = run_repo_json(repo_root, args);
+    let second = run_repo_json(repo_root, args);
+    assert_eq!(first, second);
+    first
+}
+
+fn payload_results(payload: &Value) -> &[Value] {
+    payload["results"]
+        .as_array()
+        .expect("results should be an array")
+}
+
+fn assert_diff_impact_reports_imported_by(payload: &Value) {
+    let results = payload_results(payload);
+    assert!(results.iter().any(|item| {
+        item["result_kind"] == "impacted_symbol"
+            && item["symbol"] == "call_helper"
+            && item["relationship"] == "imported_by"
+            && item["language"] == "python"
+    }));
+}
+
+fn assert_explain_reports_python(payload: &Value) {
+    let results = payload_results(payload);
+    assert!(!results.is_empty());
+    assert_eq!(results[0]["language"], "python");
+    assert_eq!(results[0]["outbound"]["contains"], 1);
 }
 
 #[test]
@@ -168,95 +209,27 @@ fn milestone16_python_edges_and_queries() {
 
     run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
 
-    let find_out = run_stdout(&[
-        "find",
-        "helper",
-        "--repo",
-        repo.path().to_str().unwrap(),
-        "--json",
-    ]);
-    let find_payload: serde_json::Value =
-        serde_json::from_str(&find_out).expect("find json should parse");
-    let find_results = find_payload["results"]
-        .as_array()
-        .expect("find results should be an array");
+    let find_payload = run_repo_json(repo.path(), &["find", "helper"]);
+    let find_results = payload_results(&find_payload);
     assert!(!find_results.is_empty());
     assert_eq!(find_results[0]["file_path"], "src/util.py");
 
-    let refs_out = run_stdout(&[
-        "refs",
-        "helper",
-        "--repo",
-        repo.path().to_str().unwrap(),
-        "--json",
-    ]);
-    let refs_payload: serde_json::Value =
-        serde_json::from_str(&refs_out).expect("refs json should parse");
-    let refs_results = refs_payload["results"]
-        .as_array()
-        .expect("refs results should be an array");
+    let refs_payload = run_repo_json(repo.path(), &["refs", "helper"]);
+    let refs_results = payload_results(&refs_payload);
     assert!(
         refs_results
             .iter()
             .any(|item| item["why_matched"] == "ast_reference")
     );
 
-    let diff_out_1 = run_stdout(&[
-        "diff-impact",
-        "--changed-file",
-        "src/util.py",
-        "--repo",
-        repo.path().to_str().unwrap(),
-        "--json",
-    ]);
-    let diff_out_2 = run_stdout(&[
-        "diff-impact",
-        "--changed-file",
-        "src/util.py",
-        "--repo",
-        repo.path().to_str().unwrap(),
-        "--json",
-    ]);
-    let diff_payload_1: serde_json::Value =
-        serde_json::from_str(&diff_out_1).expect("diff-impact json should parse");
-    let diff_payload_2: serde_json::Value =
-        serde_json::from_str(&diff_out_2).expect("diff-impact json should parse");
-    assert_eq!(diff_payload_1, diff_payload_2);
-    let diff_results = diff_payload_1["results"]
-        .as_array()
-        .expect("results should be an array");
-    assert!(diff_results.iter().any(|item| {
-        item["result_kind"] == "impacted_symbol"
-            && item["symbol"] == "call_helper"
-            && item["relationship"] == "imported_by"
-            && item["language"] == "python"
-    }));
+    let diff_payload = run_repo_json_deterministic(
+        repo.path(),
+        &["diff-impact", "--changed-file", "src/util.py"],
+    );
+    assert_diff_impact_reports_imported_by(&diff_payload);
 
-    let explain_out_1 = run_stdout(&[
-        "explain",
-        "Runner",
-        "--repo",
-        repo.path().to_str().unwrap(),
-        "--json",
-    ]);
-    let explain_out_2 = run_stdout(&[
-        "explain",
-        "Runner",
-        "--repo",
-        repo.path().to_str().unwrap(),
-        "--json",
-    ]);
-    let explain_payload_1: serde_json::Value =
-        serde_json::from_str(&explain_out_1).expect("explain json should parse");
-    let explain_payload_2: serde_json::Value =
-        serde_json::from_str(&explain_out_2).expect("explain json should parse");
-    assert_eq!(explain_payload_1, explain_payload_2);
-    let explain_results = explain_payload_1["results"]
-        .as_array()
-        .expect("results should be an array");
-    assert!(!explain_results.is_empty());
-    assert_eq!(explain_results[0]["language"], "python");
-    assert_eq!(explain_results[0]["outbound"]["contains"], 1);
+    let explain_payload = run_repo_json_deterministic(repo.path(), &["explain", "Runner"]);
+    assert_explain_reports_python(&explain_payload);
 }
 
 #[test]

@@ -6,6 +6,19 @@ use common::run_stdout;
 use rusqlite::Connection;
 use serde_json::Value;
 
+const CONTEXT_SCOPE_SYMBOL: &str = concat!(
+    "update_verify_plan_recommendation_quality_for_changed_files_",
+    "and_reduce_noisy_test_selection"
+);
+const CONTEXT_SCOPE_TASK: &str = concat!(
+    "update verify plan recommendation quality for changed files ",
+    "and reduce noisy test selection"
+);
+const CONTEXT_SCOPE_TEST_SOURCE: &str = concat!(
+    "pub fn update_verify_plan_recommendation_quality_for_changed_files_",
+    "and_reduce_noisy_test_selection() {}\n"
+);
+
 fn is_test_like_path(path: &str) -> bool {
     path.starts_with("tests/") || path.contains("/tests/") || path.ends_with("_test.rs")
 }
@@ -46,57 +59,65 @@ fn insert_symbol(
         .expect("symbol insert should succeed");
 }
 
-#[test]
-fn milestone27_context_exclude_tests_omits_test_paths() {
-    let repo = common::temp_repo();
+fn context_results<'a>(payload: &'a Value, label: &str) -> &'a [Value] {
+    payload[label].as_array().expect("results should be array")
+}
+
+fn run_context_json(repo_root: &Path, extra_flags: &[&str]) -> Value {
+    let repo_arg = repo_root.to_str().expect("repo path should be utf-8");
+    let mut args = vec![
+        "context",
+        "--task",
+        CONTEXT_SCOPE_TASK,
+        "--repo",
+        repo_arg,
+        "--budget",
+        "1200",
+    ];
+    args.extend_from_slice(extra_flags);
+    args.push("--json");
+    let out = run_stdout(&args);
+    serde_json::from_str(&out).expect("context json should parse")
+}
+
+fn write_scope_fixture(repo_root: &Path) {
     common::write_file(
-        repo.path(),
+        repo_root,
         "src/lib.rs",
         "pub fn verify_plan_for_changed_files() {}\n",
     );
     common::write_file(
-        repo.path(),
+        repo_root,
         "tests/context_scope_test.rs",
-        "pub fn update_verify_plan_recommendation_quality_for_changed_files_and_reduce_noisy_test_selection() {}\n",
+        CONTEXT_SCOPE_TEST_SOURCE,
     );
+}
+
+fn assert_scope_results_are_code_only(results: &[Value]) {
+    assert!(
+        results
+            .iter()
+            .all(|row| { row["file_path"].as_str().is_some_and(is_code_path) })
+    );
+}
+
+#[test]
+fn milestone27_context_exclude_tests_omits_test_paths() {
+    let repo = common::temp_repo();
+    write_scope_fixture(repo.path());
 
     run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
 
-    let baseline_out = run_stdout(&[
-        "context",
-        "--task",
-        "update verify plan recommendation quality for changed files and reduce noisy test selection",
-        "--repo",
-        repo.path().to_str().unwrap(),
-        "--budget",
-        "1200",
-        "--json",
-    ]);
-    let baseline: Value = serde_json::from_str(&baseline_out).expect("context json should parse");
-    let baseline_results = baseline["results"]
-        .as_array()
-        .expect("results should be array");
+    let baseline = run_context_json(repo.path(), &[]);
+    let baseline_results = context_results(&baseline, "results");
     assert!(
         baseline_results
             .iter()
             .any(|row| { row["file_path"].as_str().is_some_and(is_test_like_path) })
     );
 
-    let scoped_out = run_stdout(&[
-        "context",
-        "--task",
-        "update verify plan recommendation quality for changed files and reduce noisy test selection",
-        "--repo",
-        repo.path().to_str().unwrap(),
-        "--budget",
-        "1200",
-        "--exclude-tests",
-        "--json",
-    ]);
-    let scoped: Value = serde_json::from_str(&scoped_out).expect("context json should parse");
-    let scoped_results = scoped["results"]
-        .as_array()
-        .expect("results should be array");
+    let scoped = run_context_json(repo.path(), &["--exclude-tests"]);
+    let scoped_results = context_results(&scoped, "results");
 
     assert!(
         scoped_results
@@ -125,54 +146,25 @@ fn milestone27_context_code_only_restricts_to_code_extensions() {
     insert_symbol(
         &db_path,
         "docs/context_notes.md",
-        "update_verify_plan_recommendation_quality_for_changed_files_and_reduce_noisy_test_selection",
+        CONTEXT_SCOPE_SYMBOL,
         "function",
         "unknown",
         1,
         1,
     );
 
-    let baseline_out = run_stdout(&[
-        "context",
-        "--task",
-        "update verify plan recommendation quality for changed files and reduce noisy test selection",
-        "--repo",
-        repo.path().to_str().unwrap(),
-        "--budget",
-        "1200",
-        "--json",
-    ]);
-    let baseline: Value = serde_json::from_str(&baseline_out).expect("context json should parse");
-    let baseline_results = baseline["results"]
-        .as_array()
-        .expect("results should be array");
+    let baseline = run_context_json(repo.path(), &[]);
+    let baseline_results = context_results(&baseline, "results");
     assert!(
         baseline_results
             .iter()
             .any(|row| row["file_path"] == "docs/context_notes.md")
     );
 
-    let scoped_out = run_stdout(&[
-        "context",
-        "--task",
-        "update verify plan recommendation quality for changed files and reduce noisy test selection",
-        "--repo",
-        repo.path().to_str().unwrap(),
-        "--budget",
-        "1200",
-        "--code-only",
-        "--json",
-    ]);
-    let scoped: Value = serde_json::from_str(&scoped_out).expect("context json should parse");
-    let scoped_results = scoped["results"]
-        .as_array()
-        .expect("results should be array");
+    let scoped = run_context_json(repo.path(), &["--code-only"]);
+    let scoped_results = context_results(&scoped, "results");
 
-    assert!(
-        scoped_results
-            .iter()
-            .all(|row| row["file_path"].as_str().is_some_and(is_code_path))
-    );
+    assert_scope_results_are_code_only(scoped_results);
     assert!(
         scoped_results
             .iter()
@@ -183,16 +175,7 @@ fn milestone27_context_code_only_restricts_to_code_extensions() {
 #[test]
 fn milestone27_context_scope_flags_preserve_deterministic_json() {
     let repo = common::temp_repo();
-    common::write_file(
-        repo.path(),
-        "src/lib.rs",
-        "pub fn verify_plan_for_changed_files() {}\n",
-    );
-    common::write_file(
-        repo.path(),
-        "tests/context_scope_test.rs",
-        "pub fn update_verify_plan_recommendation_quality_for_changed_files_and_reduce_noisy_test_selection() {}\n",
-    );
+    write_scope_fixture(repo.path());
 
     run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
 
@@ -200,7 +183,7 @@ fn milestone27_context_scope_flags_preserve_deterministic_json() {
     insert_symbol(
         &db_path,
         "docs/context_notes.md",
-        "update_verify_plan_recommendation_quality_for_changed_files_and_reduce_noisy_test_selection",
+        CONTEXT_SCOPE_SYMBOL,
         "function",
         "unknown",
         1,
@@ -228,42 +211,15 @@ fn milestone27_context_scope_flags_preserve_deterministic_json() {
         .expect("symbol rows should be queryable");
     assert_eq!(duplicate_rows, 2);
 
-    let first = run_stdout(&[
-        "context",
-        "--task",
-        "update verify plan recommendation quality for changed files and reduce noisy test selection",
-        "--repo",
-        repo.path().to_str().unwrap(),
-        "--budget",
-        "1200",
-        "--code-only",
-        "--exclude-tests",
-        "--json",
-    ]);
-    let second = run_stdout(&[
-        "context",
-        "--task",
-        "update verify plan recommendation quality for changed files and reduce noisy test selection",
-        "--repo",
-        repo.path().to_str().unwrap(),
-        "--budget",
-        "1200",
-        "--code-only",
-        "--exclude-tests",
-        "--json",
-    ]);
+    let scope_flags = ["--code-only", "--exclude-tests"];
+    let first = run_context_json(repo.path(), &scope_flags).to_string();
+    let second = run_context_json(repo.path(), &scope_flags).to_string();
 
     assert_eq!(first, second);
 
     let payload: Value = serde_json::from_str(&first).expect("context json should parse");
-    let results = payload["results"]
-        .as_array()
-        .expect("results should be array");
-    assert!(
-        results
-            .iter()
-            .all(|row| row["file_path"].as_str().is_some_and(is_code_path))
-    );
+    let results = context_results(&payload, "results");
+    assert_scope_results_are_code_only(results);
     assert!(
         results
             .iter()

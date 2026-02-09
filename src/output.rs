@@ -31,7 +31,7 @@ struct JsonContextOutput<'a> {
     schema_version: u32,
     command: &'a str,
     task: &'a str,
-    budget: usize,
+    budget: u32,
     results: &'a [ContextMatch],
 }
 
@@ -72,7 +72,8 @@ struct JsonExplainOutput<'a> {
 
 /// Prints index metadata (path, schema version, and file counts) to stdout.
 ///
-/// This writes four lines showing `index_path`, `schema_version`, `indexed_files`, and `skipped_files`.
+/// This writes four lines showing:
+/// `index_path`, `schema_version`, `indexed_files`, and `skipped_files`.
 ///
 /// # Examples
 ///
@@ -128,7 +129,11 @@ pub fn print_query(command: &str, symbol: &str, matches: &[QueryMatch]) {
 /// ```no_run
 /// // `matches` is a slice of `QueryMatch`; an empty slice can be passed when
 /// // there are no results.
-/// let _ = crate::output::print_query_json("query", "my_symbol", &[] as &[crate::types::QueryMatch]);
+/// let _ = crate::output::print_query_json(
+///     "query",
+///     "my_symbol",
+///     &[] as &[crate::types::QueryMatch],
+/// );
 /// ```
 pub fn print_query_json(command: &str, symbol: &str, matches: &[QueryMatch]) -> anyhow::Result<()> {
     let payload = JsonQueryOutput {
@@ -173,7 +178,8 @@ pub fn print_impact(symbol: &str, matches: &[ImpactMatch]) {
     }
 }
 
-/// Serializes impact matches using the v2 JSON schema and prints the pretty-formatted JSON to stdout.
+/// Serializes impact matches using the v2 JSON schema.
+/// Prints the pretty-formatted JSON payload to stdout.
 ///
 /// # Returns
 ///
@@ -210,7 +216,7 @@ pub fn print_impact_json(symbol: &str, matches: &[ImpactMatch]) -> anyhow::Resul
 /// let matches: &[ContextMatch] = &[];
 /// print_context("build", 5, matches);
 /// ```
-pub fn print_context(task: &str, budget: usize, matches: &[ContextMatch]) {
+pub fn print_context(task: &str, budget: u32, matches: &[ContextMatch]) {
     println!("command: context");
     println!("task: {task}");
     println!("budget: {budget}");
@@ -232,7 +238,8 @@ pub fn print_context(task: &str, budget: usize, matches: &[ContextMatch]) {
 
 /// Serialize the provided context matches into the v2 JSON schema and print the result to stdout.
 ///
-/// The emitted JSON contains the schema version, command ("context"), task, budget, and the `results` array.
+/// The emitted JSON contains schema version, command (`"context"`), task,
+/// budget, and the `results` array.
 ///
 /// # Examples
 ///
@@ -241,11 +248,7 @@ pub fn print_context(task: &str, budget: usize, matches: &[ContextMatch]) {
 /// let res = print_context_json("build-docs", 5, &[]);
 /// assert!(res.is_ok());
 /// ```
-pub fn print_context_json(
-    task: &str,
-    budget: usize,
-    matches: &[ContextMatch],
-) -> anyhow::Result<()> {
+pub fn print_context_json(task: &str, budget: u32, matches: &[ContextMatch]) -> anyhow::Result<()> {
     let payload = JsonContextOutput {
         schema_version: JSON_SCHEMA_VERSION_V2,
         command: "context",
@@ -408,7 +411,21 @@ pub fn print_diff_impact(
                 ..
             } => {
                 println!(
-                    "impacted_symbol {file_path}:{line}:{column} {symbol} ({kind}, {language}) relationship={relationship} distance={distance} confidence={confidence} provenance={provenance} score={score:.2}"
+                    concat!(
+                        "impacted_symbol {}:{}:{} {} ({}, {}) ",
+                        "relationship={} distance={} confidence={} provenance={} score={:.2}"
+                    ),
+                    file_path,
+                    line,
+                    column,
+                    symbol,
+                    kind,
+                    language,
+                    relationship,
+                    distance,
+                    confidence,
+                    provenance,
+                    score
                 );
             }
             DiffImpactMatch::TestTarget {
@@ -421,7 +438,11 @@ pub fn print_diff_impact(
                 ..
             } => {
                 println!(
-                    "test_target {target} ({target_kind}, {language}) confidence={confidence} provenance={provenance} score={score:.2}"
+                    concat!(
+                        "test_target {} ({}, {}) ",
+                        "confidence={} provenance={} score={:.2}"
+                    ),
+                    target, target_kind, language, confidence, provenance, score
                 );
             }
         }

@@ -1,0 +1,64 @@
+mod common;
+
+fn assert_has_must_use_annotation(source: &str, function_name: &str) {
+    let marker = format!("pub fn {function_name}");
+    let offset = source.find(&marker).unwrap_or_else(|| {
+        panic!("missing public function marker: {marker}");
+    });
+    let prefix = &source[..offset];
+    let lookback_start = prefix.len().saturating_sub(200);
+    let lookback = &prefix[lookback_start..];
+    assert!(
+        lookback.contains("#[must_use"),
+        "expected #[must_use] on public function '{function_name}'"
+    );
+}
+
+fn assert_source_contains_markers(source: &str, markers: &[&str]) {
+    for marker in markers {
+        assert!(source.contains(marker), "missing required marker: {marker}");
+    }
+}
+
+#[test]
+fn milestone44_public_query_contract_apis_are_must_use() {
+    let query_source = common::read_repo_file("src/query/mod.rs");
+    for function_name in [
+        "find_matches_scoped",
+        "refs_matches_scoped",
+        "context_matches_scoped",
+        "diff_impact_for_changed_files",
+        "verify_plan_for_changed_files",
+    ] {
+        assert_has_must_use_annotation(&query_source, function_name);
+    }
+}
+
+#[test]
+fn milestone44_query_boundaries_include_targeted_invariant_assertions() {
+    let query_source = common::read_repo_file("src/query/mod.rs");
+    assert_source_contains_markers(
+        &query_source,
+        &[
+            "usize::BITS >= 32",
+            "max_results >= 1",
+            "results.len() <= bounded_usize(max_results)",
+        ],
+    );
+}
+
+#[test]
+fn milestone44_touched_modules_respect_line_length_limit() {
+    let max_columns = 100;
+    for path in ["src/main.rs", "src/query/mod.rs", "src/output.rs"] {
+        let source = common::read_repo_file(path);
+        for (line_number, line) in source.lines().enumerate() {
+            let width = line.chars().count();
+            assert!(
+                width <= max_columns,
+                "{path}:{} exceeds {max_columns} columns (found {width})",
+                line_number + 1
+            );
+        }
+    }
+}

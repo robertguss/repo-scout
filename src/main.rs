@@ -9,9 +9,10 @@ use clap::Parser;
 use crate::cli::{Cli, Command};
 use crate::indexer::index_repository;
 use crate::query::{
-    ChangedLineRange, DiffImpactOptions, QueryScope, VerifyPlanOptions, context_matches,
-    context_matches_scoped, diff_impact_for_changed_files, explain_symbol, find_matches_scoped,
-    impact_matches, refs_matches_scoped, tests_for_symbol, verify_plan_for_changed_files,
+    ChangedLineRange, DiffImpactChangedMode, DiffImpactImportMode, DiffImpactOptions,
+    DiffImpactTestMode, QueryScope, VerifyPlanOptions, context_matches, context_matches_scoped,
+    diff_impact_for_changed_files, explain_symbol, find_matches_scoped, impact_matches,
+    refs_matches_scoped, tests_for_symbol, verify_plan_for_changed_files,
 };
 use crate::store::ensure_store;
 
@@ -84,16 +85,10 @@ fn run_status(args: crate::cli::RepoArgs) -> anyhow::Result<()> {
 
 fn run_find(args: crate::cli::FindArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
-    let mut matches = find_matches_scoped(
-        &store.db_path,
-        &args.symbol,
-        &crate::query::QueryScope {
-            code_only: args.code_only,
-            exclude_tests: args.exclude_tests,
-        },
-    )?;
+    let scope = QueryScope::from_flags(args.code_only, args.exclude_tests);
+    let mut matches = find_matches_scoped(&store.db_path, &args.symbol, &scope)?;
     if let Some(max_results) = args.max_results {
-        matches.truncate(max_results);
+        matches.truncate(u32_to_usize(max_results));
     }
     if args.json {
         output::print_query_json("find", &args.symbol, &matches)?;
@@ -110,7 +105,8 @@ fn run_find(args: crate::cli::FindArgs) -> anyhow::Result<()> {
 ///
 /// # Returns
 ///
-/// `Ok(())` on success; an error if ensuring the store, querying references, or printing the results fails.
+/// `Ok(())` on success.
+/// Returns an error when store setup, query execution, or printing fails.
 ///
 /// # Examples
 ///
@@ -127,16 +123,10 @@ fn run_find(args: crate::cli::FindArgs) -> anyhow::Result<()> {
 /// ```
 fn run_refs(args: crate::cli::RefsArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
-    let mut matches = refs_matches_scoped(
-        &store.db_path,
-        &args.symbol,
-        &crate::query::QueryScope {
-            code_only: args.code_only,
-            exclude_tests: args.exclude_tests,
-        },
-    )?;
+    let scope = QueryScope::from_flags(args.code_only, args.exclude_tests);
+    let mut matches = refs_matches_scoped(&store.db_path, &args.symbol, &scope)?;
     if let Some(max_results) = args.max_results {
-        matches.truncate(max_results);
+        matches.truncate(u32_to_usize(max_results));
     }
     if args.json {
         output::print_query_json("refs", &args.symbol, &matches)?;
@@ -187,7 +177,8 @@ fn run_impact(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
 ///
 /// # Returns
 ///
-/// `Ok(())` on success, `Err` if the store cannot be accessed or the query or output formatting fails.
+/// `Ok(())` on success.
+/// Returns `Err` if the store cannot be accessed or output generation fails.
 ///
 /// # Examples
 ///
@@ -207,10 +198,7 @@ fn run_impact(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
 /// ```
 fn run_context(args: crate::cli::ContextArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
-    let scope = QueryScope {
-        code_only: args.code_only,
-        exclude_tests: args.exclude_tests,
-    };
+    let scope = QueryScope::from_flags(args.code_only, args.exclude_tests);
     let matches = if scope == QueryScope::default() {
         context_matches(&store.db_path, &args.task, args.budget)?
     } else {
@@ -353,38 +341,52 @@ fn run_diff_impact(args: crate::cli::DiffImpactArgs) -> anyhow::Result<()> {
     let mut changed_symbols = args.changed_symbols.clone();
     changed_symbols.sort();
     changed_symbols.dedup();
-    let include_tests = if args.include_tests {
-        true
+    let test_mode = if args.exclude_tests {
+        DiffImpactTestMode::ExcludeTests
     } else {
-        !args.exclude_tests
+        DiffImpactTestMode::IncludeTests
     };
 
     let options = DiffImpactOptions {
         max_distance: args.max_distance,
-        include_tests,
-        include_imports: args.include_imports,
+        test_mode,
+        import_mode: if args.include_imports {
+            DiffImpactImportMode::IncludeImports
+        } else {
+            DiffImpactImportMode::ExcludeImports
+        },
         changed_lines,
         changed_symbols,
-        exclude_changed: args.exclude_changed,
+        changed_mode: if args.exclude_changed {
+            DiffImpactChangedMode::ExcludeChanged
+        } else {
+            DiffImpactChangedMode::IncludeChanged
+        },
         max_results: args.max_results,
     };
     let matches = diff_impact_for_changed_files(&store.db_path, &changed_files, &options)?;
+    let include_tests = matches!(options.test_mode, DiffImpactTestMode::IncludeTests);
     if args.json {
         output::print_diff_impact_json(
             &changed_files,
             options.max_distance,
-            options.include_tests,
+            include_tests,
             &matches,
         )?;
     } else {
         output::print_diff_impact(
             &changed_files,
             options.max_distance,
-            options.include_tests,
+            include_tests,
             &matches,
         );
     }
     Ok(())
+}
+
+#[must_use]
+fn u32_to_usize(value: u32) -> usize {
+    usize::try_from(value).unwrap_or(usize::MAX)
 }
 
 fn parse_changed_line_spec(
@@ -416,22 +418,30 @@ fn parse_changed_line_spec(
     let end_line = end_part.parse::<u32>().ok();
     let Some(start_line) = start_line else {
         anyhow::bail!(
-            "invalid --changed-line '{raw_spec}': expected format path:start[:end] with positive line numbers"
+            "invalid --changed-line '{}': expected format {}",
+            raw_spec,
+            "path:start[:end] with positive line numbers"
         );
     };
     let Some(end_line) = end_line else {
         anyhow::bail!(
-            "invalid --changed-line '{raw_spec}': expected format path:start[:end] with positive line numbers"
+            "invalid --changed-line '{}': expected format {}",
+            raw_spec,
+            "path:start[:end] with positive line numbers"
         );
     };
     if start_line == 0 || end_line == 0 || end_line < start_line {
         anyhow::bail!(
-            "invalid --changed-line '{raw_spec}': expected format path:start[:end] with start <= end and both >= 1"
+            "invalid --changed-line '{}': expected format {}",
+            raw_spec,
+            "path:start[:end] with start <= end and both >= 1"
         );
     }
     if path_part.trim().is_empty() {
         anyhow::bail!(
-            "invalid --changed-line '{raw_spec}': expected format path:start[:end] with a non-empty path"
+            "invalid --changed-line '{}': expected format {}",
+            raw_spec,
+            "path:start[:end] with a non-empty path"
         );
     }
 

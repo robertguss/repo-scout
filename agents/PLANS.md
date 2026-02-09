@@ -57,6 +57,16 @@ rules that affect this change, and any required workflow tools (for example repo
 dogfooding commands). If `AGENTS.md` and contracts both apply, the stricter rule wins. If a conflict
 remains ambiguous, record the decision in the `Decision Log` with rationale before coding.
 
+## Repository legacy plan boundary
+
+In this repository, `agents/plans/repo-scout-phase1-execplan.md` through
+`agents/plans/repo-scout-phase8-execplan.md` are explicitly treated as legacy pre-Tiger adoption
+artifacts. They are historical references, not templates for new work.
+
+`agents/plans/repo-scout-phase9-execplan.md` and all future ExecPlans are in active conformance
+scope and must include `Contract Inputs`, `AGENTS.md Constraints`, and
+`Risk Tier and Required Controls`.
+
 ## Requirements
 
 NON-NEGOTIABLE REQUIREMENTS:

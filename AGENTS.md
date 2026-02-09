@@ -73,6 +73,15 @@
   prefer end-to-end flows.
 - Run `cargo test` before PRs; add new tests when changing ranking, JSON output, or AST behavior.
 
+## Test Error-Handling Policy
+
+- In `tests/` code, `unwrap()` and `expect()` are allowed for fixture setup, UTF-8 decoding,
+  JSON parsing, and assertion preconditions when failure should immediately fail the test.
+- In `tests/common/`, `panic!` is allowed for terminal helper failures (for example, bounded retry
+  timeouts) where returning `Result` would only defer the same test failure.
+- In `src/` production code, you must not introduce `unwrap()`/`expect()`/`panic!` unless an
+  explicit contract exception applies.
+
 ## Commit & Pull Request Guidelines
 
 - Commit subjects should use contract prefixes and imperative summary text after the prefix (example:
@@ -94,6 +103,33 @@
 - Templates in `templates/`, checklists in `checklists/`, validators in `scripts/`, and CI gate in
   `.github/workflows/contract-gates.yml` are part of the required workflow.
 - If `AGENTS.md` guidance and contract assets conflict, the stricter rule wins.
+
+## Contract Installation Policy
+
+- Contract installation scope in this repository is intentionally Rust-only.
+- contracts/languages/PYTHON_CODING_CONTRACT.md is intentionally not installed.
+- contracts/languages/TYPESCRIPT_CODING_CONTRACT.md is intentionally not installed.
+- Python and TypeScript remain supported as indexed/query languages, but Rust is the only active
+  coding contract scope in this repository.
+
+## Process Artifact Policy
+
+- Canonical strategy: PR-body-first evidence using `.github/pull_request_template.md`.
+- Required validators before PR updates:
+  - `bash scripts/validate_tdd_cycle.sh --base origin/main`
+  - `bash scripts/validate_evidence_packet.sh --pr-body .github/pull_request_template.md`
+- Committed evidence is optional; use `.evidence/EVIDENCE_PACKET.md` only when extra local transcript
+  detail is needed.
+- Historical commit subjects before Tiger adoption are not retroactively enforced.
+- Validation scope for commit-prefix policy is `origin/main..HEAD` unless a different
+  branch-appropriate base is explicitly required.
+
+## Legacy ExecPlan Policy
+
+- `agents/plans/repo-scout-phase1-execplan.md` through
+  `agents/plans/repo-scout-phase8-execplan.md` are legacy pre-Tiger adoption artifacts.
+- `agents/plans/repo-scout-phase9-execplan.md` and all future ExecPlans must include:
+  `Contract Inputs`, `AGENTS.md Constraints`, and `Risk Tier and Required Controls`.
 
 ## ExecPlans
 
