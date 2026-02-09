@@ -253,9 +253,14 @@ pub const DEFAULT_VERIFY_PLAN_MAX_TARGETED: u32 = 8;
 
 #[must_use]
 fn bounded_usize(value: u32) -> usize {
+    debug_assert!(
+        usize::BITS >= 32,
+        "repo-scout requires usize to represent u32 boundary values"
+    );
     usize::try_from(value).unwrap_or(usize::MAX)
 }
 
+#[must_use]
 pub fn diff_impact_for_changed_files(
     db_path: &Path,
     changed_files: &[String],
@@ -385,7 +390,8 @@ fn changed_symbol_seeds(
     include_imports: bool,
 ) -> anyhow::Result<Vec<ChangedSymbolSeed>> {
     let mut statement = connection.prepare(
-        "SELECT symbol_id, symbol, kind, file_path, start_line, start_column, end_line, language, qualified_symbol
+        "SELECT symbol_id, symbol, kind, file_path, start_line, start_column, end_line,
+                language, qualified_symbol
          FROM symbols_v2
          WHERE file_path = ?1
            AND (?2 OR kind <> 'import')
@@ -487,7 +493,8 @@ fn incoming_neighbors(
     to_symbol_id: i64,
 ) -> anyhow::Result<Vec<IncomingNeighbor>> {
     let mut statement = connection.prepare(
-        "SELECT fs.symbol_id, fs.symbol, fs.kind, fs.file_path, fs.start_line, fs.start_column, fs.language, fs.qualified_symbol, e.edge_kind, e.confidence, e.provenance
+        "SELECT fs.symbol_id, fs.symbol, fs.kind, fs.file_path, fs.start_line, fs.start_column,
+                fs.language, fs.qualified_symbol, e.edge_kind, e.confidence, e.provenance
          FROM symbol_edges_v2 e
          JOIN symbols_v2 fs ON fs.symbol_id = e.from_symbol_id
          WHERE e.to_symbol_id = ?1
@@ -642,6 +649,10 @@ fn sort_and_cap_diff_impact_results(
     results.sort_by(diff_impact_sort_key);
     if let Some(max_results) = max_results {
         results.truncate(bounded_usize(max_results));
+        debug_assert!(
+            results.len() <= bounded_usize(max_results),
+            "diff-impact truncation must not exceed configured max_results"
+        );
     }
 }
 
@@ -674,7 +685,8 @@ pub fn explain_symbol(
 ) -> anyhow::Result<Vec<ExplainMatch>> {
     let connection = Connection::open(db_path)?;
     let mut statement = connection.prepare(
-        "SELECT symbol_id, symbol, kind, file_path, start_line, start_column, end_line, end_column, signature, language, qualified_symbol
+        "SELECT symbol_id, symbol, kind, file_path, start_line, start_column, end_line,
+                end_column, signature, language, qualified_symbol
          FROM symbols_v2
          WHERE symbol = ?1
          ORDER BY file_path ASC, start_line ASC, start_column ASC, kind ASC",
@@ -986,9 +998,12 @@ fn extract_symbol_snippet(
     Some(trimmed.to_string())
 }
 
-/// Finds code locations that match `symbol`, preferring exact AST definitions and falling back to text matches.
+/// Finds code locations that match `symbol`.
+/// Prefers exact AST definitions and falls back to text matches.
 ///
-/// Searches the SQLite database at `db_path` for exact AST definition matches of `symbol`. If any AST definition matches are found those are returned; otherwise the function returns ranked text-based matches.
+/// Searches the SQLite database at `db_path` for exact AST definition matches of `symbol`.
+/// If AST matches are found, those are returned.
+/// Otherwise, the function returns ranked text-based matches.
 ///
 /// # Parameters
 ///
@@ -997,7 +1012,7 @@ fn extract_symbol_snippet(
 ///
 /// # Returns
 ///
-/// A vector of `QueryMatch` entries representing locations where `symbol` appears, ordered by relevance.
+/// A vector of `QueryMatch` entries where `symbol` appears, ordered by relevance.
 ///
 /// # Examples
 ///
@@ -1011,6 +1026,7 @@ pub fn find_matches(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<QueryMat
     find_matches_scoped(db_path, symbol, &QueryScope::default())
 }
 
+#[must_use]
 pub fn find_matches_scoped(
     db_path: &Path,
     symbol: &str,
@@ -1048,6 +1064,7 @@ pub fn refs_matches(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<QueryMat
     refs_matches_scoped(db_path, symbol, &QueryScope::default())
 }
 
+#[must_use]
 pub fn refs_matches_scoped(
     db_path: &Path,
     symbol: &str,
@@ -1105,7 +1122,8 @@ pub fn impact_matches(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<Impact
 
     for target_id in target_ids {
         let mut incoming_statement = connection.prepare(
-            "SELECT fs.file_path, fs.start_line, fs.start_column, fs.symbol, fs.kind, e.edge_kind, e.confidence, e.provenance
+            "SELECT fs.file_path, fs.start_line, fs.start_column, fs.symbol, fs.kind,
+                    e.edge_kind, e.confidence, e.provenance
              FROM symbol_edges_v2 e
              JOIN symbols_v2 fs ON fs.symbol_id = e.from_symbol_id
              WHERE e.to_symbol_id = ?1
@@ -1173,7 +1191,12 @@ pub fn impact_matches(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<Impact
 /// ```
 /// use std::path::Path;
 /// // Assume a SQLite DB at "db.sqlite" with the expected schema.
-/// let matches = query::context_matches(Path::new("db.sqlite"), "refactor authentication flow", 1000).unwrap();
+/// let matches = query::context_matches(
+///     Path::new("db.sqlite"),
+///     "refactor authentication flow",
+///     1000,
+/// )
+/// .unwrap();
 /// assert!(!matches.is_empty());
 /// ```
 pub fn context_matches(
@@ -1184,6 +1207,7 @@ pub fn context_matches(
     context_matches_scoped(db_path, task, budget, &QueryScope::default())
 }
 
+#[must_use]
 pub fn context_matches_scoped(
     db_path: &Path,
     task: &str,
@@ -1375,6 +1399,7 @@ fn sort_context_matches(matches: &mut [ContextMatch]) {
 
 fn truncate_context_matches_by_budget(matches: &mut Vec<ContextMatch>, budget: u32) {
     let max_results = std::cmp::max(1, budget / 200);
+    debug_assert!(max_results >= 1, "context budget must map to at least one result");
     matches.truncate(bounded_usize(max_results));
 }
 
@@ -1474,6 +1499,7 @@ pub fn tests_for_symbol(
 /// // `steps` is a Vec<VerificationStep> describing targeted test commands and a final
 /// // "cargo test" full-suite step.
 /// ```
+#[must_use]
 pub fn verify_plan_for_changed_files(
     db_path: &Path,
     changed_files: &[String],
@@ -1840,7 +1866,9 @@ fn fallback_path_class_rank(file_path: &str) -> u8 {
 
 /// Collects all mapped rows into a vector of `QueryMatch`.
 ///
-/// This consumes the provided `MappedRows` iterator, returning a `Vec<QueryMatch>` built from each successful row mapping. Any row-mapping error is returned.
+/// This consumes the provided `MappedRows` iterator, returning a `Vec<QueryMatch>`
+/// built from each successful row mapping.
+/// Any row-mapping error is returned.
 ///
 /// # Returns
 ///
@@ -1997,8 +2025,8 @@ fn context_direct_score(
 /// Finds test files that reference a symbol and how often the symbol appears in each.
 ///
 /// Returns a vector of `(file_path, hit_count)` for files that look like test targets
-/// (paths under `tests/` or files matching `*_test.rs` / `*test.rs`), ordered by `hit_count` descending
-/// and then by `file_path` ascending.
+/// (paths under `tests/` or files matching `*_test.rs` / `*test.rs`),
+/// ordered by `hit_count` descending and then by `file_path` ascending.
 ///
 /// # Examples
 ///
@@ -2038,10 +2066,11 @@ fn test_targets_for_symbol(
     Ok(targets)
 }
 
-/// Derives a `cargo test` invocation for a standalone test file located directly under a `tests/` directory.
+/// Derives a `cargo test` invocation for a standalone test file directly under `tests/`.
 ///
-/// Returns `Some` with the command `cargo test --test {stem}` when `target` is a path of the form `tests/<file>` (no additional subdirectories)
-/// and the file has a valid stem; returns `None` otherwise.
+/// Returns `Some` with command `cargo test --test {stem}` when `target` is a path
+/// of the form `tests/<file>` (no additional subdirectories) and the file has
+/// a valid stem; returns `None` otherwise.
 ///
 /// # Examples
 ///
@@ -2163,11 +2192,14 @@ fn upsert_verification_step(
     }
 }
 
-/// Convert a confidence label into a numeric ranking where larger values indicate stronger confidence.
+/// Convert a confidence label into a numeric rank.
+/// Larger values indicate stronger confidence.
 ///
 /// # Returns
 ///
-/// `u8` where larger values indicate greater confidence: `3` for `"graph_likely"`, `2` for `"context_high"`, `1` for `"context_medium"`, and `0` for any other input.
+/// `u8` where larger values indicate greater confidence.
+/// `3` for `"graph_likely"`, `2` for `"context_high"`, `1` for `"context_medium"`,
+/// and `0` for any other input.
 ///
 /// # Examples
 ///

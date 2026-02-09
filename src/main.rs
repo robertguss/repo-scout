@@ -105,7 +105,8 @@ fn run_find(args: crate::cli::FindArgs) -> anyhow::Result<()> {
 ///
 /// # Returns
 ///
-/// `Ok(())` on success; an error if ensuring the store, querying references, or printing the results fails.
+/// `Ok(())` on success.
+/// Returns an error when store setup, query execution, or printing fails.
 ///
 /// # Examples
 ///
@@ -176,7 +177,8 @@ fn run_impact(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
 ///
 /// # Returns
 ///
-/// `Ok(())` on success, `Err` if the store cannot be accessed or the query or output formatting fails.
+/// `Ok(())` on success.
+/// Returns `Err` if the store cannot be accessed or output generation fails.
 ///
 /// # Examples
 ///
@@ -416,22 +418,34 @@ fn parse_changed_line_spec(
     let end_line = end_part.parse::<u32>().ok();
     let Some(start_line) = start_line else {
         anyhow::bail!(
-            "invalid --changed-line '{raw_spec}': expected format path:start[:end] with positive line numbers"
+            concat!(
+                "invalid --changed-line '{raw_spec}': expected format ",
+                "path:start[:end] with positive line numbers"
+            )
         );
     };
     let Some(end_line) = end_line else {
         anyhow::bail!(
-            "invalid --changed-line '{raw_spec}': expected format path:start[:end] with positive line numbers"
+            concat!(
+                "invalid --changed-line '{raw_spec}': expected format ",
+                "path:start[:end] with positive line numbers"
+            )
         );
     };
     if start_line == 0 || end_line == 0 || end_line < start_line {
         anyhow::bail!(
-            "invalid --changed-line '{raw_spec}': expected format path:start[:end] with start <= end and both >= 1"
+            concat!(
+                "invalid --changed-line '{raw_spec}': expected format ",
+                "path:start[:end] with start <= end and both >= 1"
+            )
         );
     }
     if path_part.trim().is_empty() {
         anyhow::bail!(
-            "invalid --changed-line '{raw_spec}': expected format path:start[:end] with a non-empty path"
+            concat!(
+                "invalid --changed-line '{raw_spec}': expected format ",
+                "path:start[:end] with a non-empty path"
+            )
         );
     }
 
