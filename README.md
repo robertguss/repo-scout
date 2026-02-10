@@ -5,9 +5,12 @@ questions fast.
 
 ## Current Status
 
-Phase 16 High-Bar/GA hardening is complete. `repo-scout` currently ships production-ready
-Rust/Go/Python/TypeScript support, cross-language convergence coverage, and release-grade
-deterministic replay/benchmark/known-issues/release-checklist gates.
+Phase 18 maintenance governance hardening is complete. `repo-scout` currently ships
+production-ready Rust/Go/Python/TypeScript support, cross-language convergence coverage, and
+release-grade deterministic replay/benchmark/known-issues/release-checklist gates plus
+maintenance-mode backlog/freshness guardrails.
+Phase 16 High-Bar/GA hardening is complete and remains the release baseline for core quality
+gates.
 
 Roadmap and phase artifacts are tracked in
 `agents/plans/repo-scout-roadmap-to-production-and-ga.md`.
@@ -175,6 +178,8 @@ just phase16-known-issues-budget .
 just phase16-release-checklist .
 just phase16-deterministic-replay .
 just phase16-large-repo-replay .
+just phase18-maintenance-pack .
+just phase18-docs-freshness .
 just dogfood-pre launch
 just dogfood-post launch
 
@@ -307,3 +312,5 @@ with the exact index path and tells you to delete the DB and rerun `index`.
 - `docs/architecture.md`
 - `docs/dogfood-log.md`
 - `docs/performance-baseline.md`
+- `docs/maintenance-backlog-phase18.md`
+- `docs/maintenance-cadence-phase18.md`

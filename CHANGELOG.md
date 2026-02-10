@@ -32,6 +32,8 @@ All notable changes to this project are documented in this file.
   `agents/plans/README.md`, and `docs/dogfood-log.md`.
 - Phase 18 closure evidence and progress tracking updates in:
   `docs/dogfood-log.md`, `agents/plans/repo-scout-phase18-execplan.md`, and `CHANGELOG.md`.
+- Status and operator docs now reflect Phase 18 completion and maintenance-mode workflows in:
+  `README.md` and `agents/plans/repo-scout-roadmap-to-production-and-ga.md`.
 
 ## [0.1.0] - 2026-02-10
 

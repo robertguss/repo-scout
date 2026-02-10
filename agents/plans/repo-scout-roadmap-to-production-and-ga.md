@@ -233,7 +233,7 @@ Create one ExecPlan per phase:
 - `agents/plans/repo-scout-phase15-execplan.md` (created, complete)
 - `agents/plans/repo-scout-phase16-execplan.md` (created, complete)
 - `agents/plans/repo-scout-phase17-execplan.md` (created, complete)
-- `agents/plans/repo-scout-phase18-execplan.md` (created, active)
+- `agents/plans/repo-scout-phase18-execplan.md` (created, complete)
 
 Each plan should include `Contract Inputs`, `AGENTS.md Constraints`, and `Risk Tier and Required
 Controls` per Tiger-era policy.
@@ -255,4 +255,6 @@ repeated `find`/`refs`/`tests-for`/`verify-plan`/`diff-impact` outputs, benchmar
 and threshold budgets, known-issues budget triage/ownership gate, larger-repo benchmark
 guardrails, release-checklist closure gating, and large-repo deterministic replay scenarios; zero
 deferred known issues remain at closure. Phase 17 docs-consistency closure is complete. Phase 18
-maintenance/backlog hardening is now active.
+maintenance/backlog hardening is complete with backlog governance and docs freshness guardrails
+(`docs/maintenance-backlog-phase18.md`, `docs/maintenance-cadence-phase18.md`,
+`scripts/check_phase18_maintenance_pack.sh`, `scripts/check_phase18_docs_freshness.sh`).
