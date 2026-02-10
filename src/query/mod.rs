@@ -1431,10 +1431,11 @@ pub fn tests_for_symbol(
     include_support: bool,
 ) -> anyhow::Result<Vec<TestTarget>> {
     let connection = Connection::open(db_path)?;
+    let runners = RecommendationRunners::for_db_path(db_path);
     let mut ranked_targets = test_targets_for_symbol(&connection, symbol)?
         .into_iter()
         .map(|(target, hit_count)| {
-            let is_runnable = is_runnable_test_target(&target);
+            let is_runnable = is_runnable_test_target(&target, &runners);
             (target, hit_count, is_runnable)
         })
         .filter(|(_, _, is_runnable)| include_support || *is_runnable)
@@ -1510,6 +1511,7 @@ pub fn verify_plan_for_changed_files(
     options: &VerifyPlanOptions,
 ) -> anyhow::Result<Vec<VerificationStep>> {
     let connection = Connection::open(db_path)?;
+    let runners = RecommendationRunners::for_db_path(db_path);
     let changed_lines_by_file = changed_lines_by_file(&options.changed_lines);
     let changed_symbol_filter = options
         .changed_symbols
@@ -1518,12 +1520,13 @@ pub fn verify_plan_for_changed_files(
         .collect::<HashSet<_>>();
     let mut steps_by_command: HashMap<String, VerificationStep> = HashMap::new();
     for changed_file in changed_files {
-        add_changed_file_target_step(changed_file, &mut steps_by_command);
+        add_changed_file_target_step(changed_file, &runners, &mut steps_by_command);
         add_changed_symbol_target_steps(
             &connection,
             changed_file,
             &changed_lines_by_file,
             &changed_symbol_filter,
+            &runners,
             &mut steps_by_command,
         )?;
     }
@@ -1531,9 +1534,54 @@ pub fn verify_plan_for_changed_files(
         .max_targeted
         .unwrap_or(DEFAULT_VERIFY_PLAN_MAX_TARGETED);
     let mut steps = finalize_targeted_verification_steps(steps_by_command, targeted_cap);
-    append_full_suite_verification_step(&mut steps);
+    append_full_suite_verification_step(&mut steps, changed_files, &runners);
     sort_verification_steps(&mut steps);
     Ok(steps)
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct RecommendationRunners {
+    pytest: bool,
+}
+
+impl RecommendationRunners {
+    fn for_db_path(db_path: &Path) -> Self {
+        let Some(repo_root) = repo_root_from_db_path(db_path) else {
+            return Self::default();
+        };
+        Self {
+            pytest: is_pytest_explicitly_configured(repo_root),
+        }
+    }
+}
+
+fn repo_root_from_db_path(db_path: &Path) -> Option<&Path> {
+    let index_dir = db_path.parent()?;
+    let is_repo_scout_dir = index_dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name == ".repo-scout");
+    if !is_repo_scout_dir {
+        return None;
+    }
+    index_dir.parent()
+}
+
+fn is_pytest_explicitly_configured(repo_root: &Path) -> bool {
+    repo_root.join("pytest.ini").is_file()
+        || file_contains(
+            repo_root.join("pyproject.toml"),
+            "[tool.pytest.ini_options]",
+        )
+        || file_contains(repo_root.join("tox.ini"), "[pytest]")
+        || file_contains(repo_root.join("setup.cfg"), "[tool:pytest]")
+}
+
+fn file_contains(path: impl AsRef<Path>, marker: &str) -> bool {
+    let path = path.as_ref();
+    fs::read_to_string(path)
+        .map(|contents| contents.contains(marker))
+        .unwrap_or(false)
 }
 
 #[derive(Debug)]
@@ -1545,9 +1593,10 @@ struct ChangedFileSymbol {
 
 fn add_changed_file_target_step(
     changed_file: &str,
+    runners: &RecommendationRunners,
     steps_by_command: &mut HashMap<String, VerificationStep>,
 ) {
-    let Some(command) = test_command_for_target(changed_file) else {
+    let Some(command) = test_command_for_target(changed_file, runners) else {
         return;
     };
     upsert_verification_step(
@@ -1567,6 +1616,7 @@ fn add_changed_symbol_target_steps(
     changed_file: &str,
     changed_lines_by_file: &HashMap<String, Vec<ChangedLineRange>>,
     changed_symbol_filter: &HashSet<String>,
+    runners: &RecommendationRunners,
     steps_by_command: &mut HashMap<String, VerificationStep>,
 ) -> anyhow::Result<()> {
     for symbol in changed_file_symbols(connection, changed_file)? {
@@ -1579,7 +1629,7 @@ fn add_changed_symbol_target_steps(
             continue;
         }
         for (target, hit_count) in test_targets_for_symbol(connection, &symbol.symbol)? {
-            let Some(command) = test_command_for_target(&target) else {
+            let Some(command) = test_command_for_target(&target, runners) else {
                 continue;
             };
             let (confidence, score) = if hit_count > 1 {
@@ -1682,14 +1732,42 @@ fn finalize_targeted_verification_steps(
     prioritized
 }
 
-fn append_full_suite_verification_step(steps: &mut Vec<VerificationStep>) {
+fn append_full_suite_verification_step(
+    steps: &mut Vec<VerificationStep>,
+    changed_files: &[String],
+    runners: &RecommendationRunners,
+) {
+    let full_suite_step = select_full_suite_command(steps, changed_files, runners);
     steps.push(VerificationStep {
-        step: "cargo test".to_string(),
+        step: full_suite_step,
         scope: "full_suite".to_string(),
         why_included: "required safety gate after refactor".to_string(),
         confidence: "context_high".to_string(),
         score: 1.0,
     });
+}
+
+fn select_full_suite_command(
+    targeted_steps: &[VerificationStep],
+    changed_files: &[String],
+    runners: &RecommendationRunners,
+) -> String {
+    if targeted_steps
+        .iter()
+        .any(|step| step.step.starts_with("cargo test"))
+        || changed_files.iter().any(|file| file.ends_with(".rs"))
+    {
+        return "cargo test".to_string();
+    }
+    if runners.pytest
+        && (targeted_steps
+            .iter()
+            .any(|step| step.step.starts_with("pytest "))
+            || changed_files.iter().any(|file| file.ends_with(".py")))
+    {
+        return "pytest".to_string();
+    }
+    "cargo test".to_string()
 }
 
 fn sort_verification_steps(steps: &mut [VerificationStep]) {
@@ -1876,6 +1954,7 @@ fn is_test_like_path(file_path: &str) -> bool {
 fn is_test_like_file_name(file_name: &str) -> bool {
     file_name.ends_with("_test.rs")
         || file_name.ends_with("_test.py")
+        || file_name.ends_with("_tests.py")
         || (file_name.starts_with("test_") && file_name.ends_with(".py"))
         || file_name.ends_with(".test.ts")
         || file_name.ends_with(".test.tsx")
@@ -2080,6 +2159,7 @@ fn test_targets_for_symbol(
                OR file_path LIKE '%/tests/%'
                OR file_path GLOB '*_test.rs'
                OR file_path GLOB '*_test.py'
+               OR file_path GLOB '*_tests.py'
                OR file_path LIKE 'test_%.py'
                OR file_path LIKE '%/test_%.py'
                OR file_path LIKE '%.test.ts'
@@ -2122,7 +2202,12 @@ fn test_targets_for_symbol(
 /// // Non-tests directory is rejected
 /// assert_eq!(test_command_for_target("src/lib.rs"), None);
 /// ```
-fn test_command_for_target(target: &str) -> Option<String> {
+fn test_command_for_target(target: &str, runners: &RecommendationRunners) -> Option<String> {
+    cargo_test_command_for_target(target)
+        .or_else(|| pytest_test_command_for_target(target, runners))
+}
+
+fn cargo_test_command_for_target(target: &str) -> Option<String> {
     let file_path = Path::new(target);
     let mut components = file_path.components();
     if components.next()?.as_os_str() != "tests" {
@@ -2140,8 +2225,29 @@ fn test_command_for_target(target: &str) -> Option<String> {
     Some(format!("cargo test --test {stem}"))
 }
 
-fn is_runnable_test_target(target: &str) -> bool {
-    test_command_for_target(target).is_some()
+fn pytest_test_command_for_target(target: &str, runners: &RecommendationRunners) -> Option<String> {
+    if !runners.pytest || !is_pytest_test_file(target) {
+        return None;
+    }
+    Some(format!("pytest {target}"))
+}
+
+fn is_pytest_test_file(target: &str) -> bool {
+    if !target.ends_with(".py") {
+        return false;
+    }
+    Path::new(target)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|file_name| {
+            (file_name.starts_with("test_") && file_name.ends_with(".py"))
+                || file_name.ends_with("_test.py")
+                || file_name.ends_with("_tests.py")
+        })
+}
+
+fn is_runnable_test_target(target: &str, runners: &RecommendationRunners) -> bool {
+    test_command_for_target(target, runners).is_some()
 }
 
 /// Assigns a numeric rank to a verification scope for ordering.

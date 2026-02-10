@@ -510,6 +510,9 @@ fn resolve_symbol_id_in_tx(
     if let Some(scoped_match) = resolve_symbol_id_by_scope(tx, key)? {
         return Ok(Some(scoped_match));
     }
+    if key.qualified_symbol.is_some() {
+        return Ok(None);
+    }
     resolve_symbol_id_by_symbol(tx, key)
 }
 
