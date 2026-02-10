@@ -21,6 +21,46 @@ This log captures real `repo-scout` usage while building `repo-scout`.
 ## Entries
 
 - Date: `2026-02-10`
+- Task: Phase 13 Python production-ready closure (`pytest` runner-aware recommendations +
+  relative-import `diff-impact` attribution).
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find test_command_for_target --repo . --json`
+  - `cargo run -- refs test_command_for_target --repo . --json`
+  - `cargo test --test milestone60_python_recommendations -- --nocapture` (red)
+  - `cargo test --test milestone60_python_recommendations -- --nocapture` (green)
+  - `cargo test --test milestone34_python_semantics -- --nocapture`
+  - `cargo test --test milestone49_rust_hardening -- --nocapture`
+  - `cargo test --test milestone12_diff_impact -- --nocapture`
+  - `cargo run -- index --repo tests/fixtures/phase13/python_recommendations`
+  - `cargo run -- tests-for compute_plan --repo tests/fixtures/phase13/python_recommendations --json`
+  - `cargo run -- verify-plan --changed-file src/service.py --repo tests/fixtures/phase13/python_recommendations --json`
+  - `cargo run -- diff-impact --changed-file src/pkg/util.py --repo tests/fixtures/phase13/python_recommendations --json`
+  - `cargo clippy --all-targets --all-features -- -D warnings`
+  - `cargo test`
+- What helped:
+  - Explicit pytest detection from local config files (`pytest.ini`, `pyproject.toml`, `tox.ini`,
+    `setup.cfg`) allowed strict runner-aware behavior without ambiguous heuristics.
+  - Resolver updates for Python relative imports plus qualified-symbol fallback deferral restored
+    caller attribution while preserving existing cross-language graph contracts.
+- What failed or felt weak:
+  - A first-pass symbol-resolution fallback guard was too broad and regressed
+    `milestone12_diff_impact` graph-neighbor contracts.
+- Action taken:
+  - failing tests added:
+    - `tests/milestone60_python_recommendations.rs`
+  - fixes implemented:
+    - runner-aware command synthesis and full-suite gate selection in `src/query/mod.rs`
+    - Python relative-import path + call-edge handling in `src/indexer/languages/python.rs`
+    - qualified-symbol fallback deferral in `src/indexer/mod.rs`
+    - repeatable fixture corpus under `tests/fixtures/phase13/python_recommendations/`
+  - docs update:
+    - `README.md`, `docs/cli-reference.md`, `docs/architecture.md`, `docs/json-output.md`,
+      `docs/performance-baseline.md`, `docs/dogfood-log.md`,
+      `agents/plans/repo-scout-phase13-execplan.md`.
+- Status: `fixed`
+
+- Date: `2026-02-10`
 - Task: Phase 12 Go production-ready closure (`refs` + graph/impact compatibility hardening).
 - Commands run:
   - `cargo run -- index --repo .`

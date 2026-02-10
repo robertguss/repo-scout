@@ -236,11 +236,17 @@ Top-level fields:
 
 Phase 5/6 keeps schema 2 stable and adds precision controls through CLI options: `--max-targeted`
 bounds symbol-derived targeted rows (default cap `8`, `0` means none), while changed runnable test
-targets and the `cargo test` full-suite gate remain preserved. Phase 6 adds additive changed-scope
+targets and the full-suite gate remain preserved (`cargo test` by default, `pytest` for explicit
+Python runner contexts with Python-only changed scope). Phase 6 adds additive changed-scope
 filters:
 
 - repeatable `--changed-line path:start[:end]` limits symbol-derived targeted rows by span overlap,
 - repeatable `--changed-symbol` limits symbol-derived targeted rows to named symbols.
+
+Runner-aware notes:
+
+- Targeted `step` rows can include `pytest <target>` when explicit pytest configuration is detected.
+- Full-suite `step` can be `pytest` in explicit Python runner contexts.
 
 ## Schema 3 Contracts (Implemented, Frozen)
 

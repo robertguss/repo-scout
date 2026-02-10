@@ -158,7 +158,7 @@ Behavior:
 - Adds one-hop graph neighbors (`context_medium`, score derived from direct match score).
 - `--code-only` keeps only `.rs`, `.ts`, `.tsx`, `.py`, `.go` paths.
 - `--exclude-tests` removes test-like paths (`tests/`, `/tests/`, `*_test.rs`, `*.test.ts`,
-  `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`, `test_*.py`, `*_test.py`).
+  `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`, `test_*.py`, `*_test.py`, `*_tests.py`).
 - Truncates to `max(1, budget / 200)` results.
 
 Example:
@@ -180,6 +180,7 @@ Current target discovery:
 - file name matching `*_test.rs`
 - file name matching `*.test.ts`, `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`
 - file name matching `test_*.py` or `*_test.py`
+- file name matching `*_tests.py`
 
 Output rows include:
 
@@ -191,6 +192,13 @@ Output rows include:
 
 Default behavior returns runnable integration targets only. Set `--include-support` to restore
 support paths (for example `tests/common/mod.rs`) in deterministic ranked order.
+
+Runner-aware runnable target behavior:
+
+- Rust direct `tests/<file>.rs` targets map to `cargo test --test <file_stem>`.
+- Python targets map to `pytest <target>` only when explicit pytest configuration is detected
+  (`pytest.ini`, `[tool.pytest.ini_options]` in `pyproject.toml`, `[pytest]` in `tox.ini`, or
+  `[tool:pytest]` in `setup.cfg`).
 
 Example:
 
@@ -211,12 +219,15 @@ Behavior:
 - Parses and normalizes repeatable `--changed-line` ranges (`path:start[:end]`).
 - Applies repeatable `--changed-symbol` filters additively to changed-file symbol selection.
 - Dampens high-frequency generic changed symbols (for example `Path`, `output`) for better signal.
-- Suggests runnable targeted commands only (`cargo test --test <name>` for direct `tests/<file>.rs`
-  targets).
+- Suggests runnable targeted commands only:
+  - `cargo test --test <name>` for direct `tests/<file>.rs` targets.
+  - `pytest <target>` for Python test targets when explicit pytest configuration is detected.
 - Caps symbol-derived targeted rows to `8` by default.
 - `--max-targeted 0` suppresses symbol-derived targeted rows, while still preserving changed
   runnable test targets and the required full-suite gate.
-- Always appends a full-suite safety gate: `cargo test`.
+- Always appends a full-suite safety gate:
+  - `cargo test` for Rust-scoped verification contexts (default).
+  - `pytest` for explicit Python runner contexts when changed scope is Python-only.
 
 Example:
 
@@ -244,7 +255,8 @@ Behavior:
   prefixes) with deterministic candidate targets across both `<module>.rs` and `<module>/mod.rs`
   layouts.
 - Uses module-aware TypeScript/Python call resolution so namespace/member and module-alias attribute
-  calls resolve to the intended module under duplicate symbol names.
+  calls resolve to the intended module under duplicate symbol names, including Python relative
+  imports (`from .module import symbol`) for identifier-call attribution.
 - Uses cycle-safe, deterministic dedupe to prevent duplicate growth and changed-symbol echo rows at
   non-zero distances.
 - `--exclude-changed` removes changed-symbol (`distance=0`) rows from final output while traversal
