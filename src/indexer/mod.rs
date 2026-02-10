@@ -102,13 +102,14 @@ fn index_file(
     let tx = connection.transaction()?;
     clear_file_rows(&tx, &file.relative_path)?;
     insert_text_occurrences(&tx, &file.relative_path, prepared.token_occurrences)?;
-    insert_symbols(
+    let insert_symbols_result = insert_symbols(
         &tx,
         &file.relative_path,
         prepared.extracted_symbols,
         &mut reusable_symbol_ids,
         &mut next_symbol_id,
-    )?;
+    );
+    insert_symbols_result?;
     insert_references(&tx, &file.relative_path, prepared.extracted_references)?;
     insert_or_defer_edges(&tx, prepared.pending_edges, deferred_edges)?;
     upsert_indexed_file_row(&tx, &file.relative_path, &file.content_hash)?;
@@ -310,14 +311,15 @@ fn insert_or_defer_edges(
             ));
             continue;
         }
-        insert_symbol_edge(
+        let insert_edge_result = insert_symbol_edge(
             tx,
             from_symbol_id,
             to_symbol_id,
             &edge_kind,
             confidence,
             &provenance,
-        )?;
+        );
+        insert_edge_result?;
     }
     Ok(())
 }
@@ -354,14 +356,15 @@ fn replay_deferred_edges(
         if should_defer_import_edge(&tx, &edge_kind, to_symbol_id)? {
             continue;
         }
-        insert_symbol_edge(
+        let insert_edge_result = insert_symbol_edge(
             &tx,
             from_symbol_id,
             to_symbol_id,
             &edge_kind,
             confidence,
             &provenance,
-        )?;
+        );
+        insert_edge_result?;
     }
     tx.commit()?;
     Ok(())
@@ -636,10 +639,7 @@ fn existing_symbol_ids(
     file_path: &str,
 ) -> anyhow::Result<HashMap<(String, String), Vec<i64>>> {
     let mut statement = connection.prepare(
-        "SELECT symbol_id, symbol, kind
-         FROM symbols_v2
-         WHERE file_path = ?1
-         ORDER BY symbol_id ASC",
+        "SELECT symbol_id, symbol, kind FROM symbols_v2 WHERE file_path = ?1 ORDER BY symbol_id ASC",
     )?;
     let rows = statement.query_map([file_path], |row| {
         Ok((
@@ -756,4 +756,302 @@ fn extract_with_adapter(
     }
 
     Ok(languages::ExtractionUnit::default())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::store::schema;
+    use rusqlite::params;
+
+    fn bootstrap_connection() -> Connection {
+        let connection = Connection::open_in_memory().expect("in-memory sqlite should open");
+        schema::bootstrap_schema(&connection).expect("schema should bootstrap");
+        connection
+    }
+
+    fn insert_symbol_row(
+        connection: &Connection,
+        symbol_id: i64,
+        file_path: &str,
+        symbol: &str,
+        kind: &str,
+        language: &str,
+        qualified_symbol: Option<&str>,
+    ) {
+        connection
+            .execute(
+                "INSERT INTO symbols_v2(
+                    symbol_id, file_path, symbol, kind, language, qualified_symbol, container,
+                    start_line, start_column, end_line, end_column, signature
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL, 1, 1, 1, 2, NULL)",
+                params![
+                    symbol_id,
+                    file_path,
+                    symbol,
+                    kind,
+                    language,
+                    qualified_symbol
+                ],
+            )
+            .expect("symbol row should insert");
+    }
+
+    fn symbol_key(
+        symbol: &str,
+        file_path: Option<&str>,
+        language: Option<&str>,
+        qualified_symbol: Option<&str>,
+    ) -> languages::SymbolKey {
+        languages::SymbolKey {
+            symbol: symbol.to_string(),
+            qualified_symbol: qualified_symbol.map(str::to_string),
+            file_path: file_path.map(str::to_string),
+            language: language.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn index_file_indexes_changed_source_file() {
+        let mut connection = bootstrap_connection();
+        let bytes = b"notes about symbols\n".to_vec();
+        let source_file = files::SourceFile {
+            relative_path: "notes/readme.txt".to_string(),
+            content_hash: blake3::hash(&bytes).to_hex().to_string(),
+            bytes,
+        };
+        let mut deferred_edges = Vec::new();
+        let outcome = index_file(&mut connection, source_file, &mut deferred_edges)
+            .expect("index_file should succeed");
+        assert!(matches!(outcome, FileIndexOutcome::Indexed));
+    }
+
+    #[test]
+    fn insert_or_defer_edges_covers_missing_and_insert_paths() {
+        let mut connection = bootstrap_connection();
+        insert_symbol_row(
+            &connection,
+            1,
+            "src/lib.rs",
+            "caller",
+            "function",
+            "rust",
+            Some("rust:src/lib.rs::caller"),
+        );
+        insert_symbol_row(
+            &connection,
+            2,
+            "src/lib.rs",
+            "callee",
+            "function",
+            "rust",
+            Some("rust:src/lib.rs::callee"),
+        );
+        insert_symbol_row(
+            &connection,
+            3,
+            "src/lib.rs",
+            "imported",
+            "import",
+            "rust",
+            Some("rust:src/lib.rs::imported"),
+        );
+
+        let tx = connection.transaction().expect("transaction should start");
+        let mut deferred_edges = Vec::new();
+        insert_or_defer_edges(
+            &tx,
+            vec![
+                (
+                    symbol_key(
+                        "missing_from",
+                        Some("src/lib.rs"),
+                        Some("rust"),
+                        Some("rust:src/lib.rs::missing_from"),
+                    ),
+                    symbol_key(
+                        "callee",
+                        Some("src/lib.rs"),
+                        Some("rust"),
+                        Some("rust:src/lib.rs::callee"),
+                    ),
+                    "calls".to_string(),
+                    0.95,
+                    "call_resolution".to_string(),
+                ),
+                (
+                    symbol_key(
+                        "caller",
+                        Some("src/lib.rs"),
+                        Some("rust"),
+                        Some("rust:src/lib.rs::caller"),
+                    ),
+                    symbol_key(
+                        "callee",
+                        Some("src/lib.rs"),
+                        Some("rust"),
+                        Some("rust:src/lib.rs::callee"),
+                    ),
+                    "calls".to_string(),
+                    0.95,
+                    "call_resolution".to_string(),
+                ),
+                (
+                    symbol_key(
+                        "caller",
+                        Some("src/lib.rs"),
+                        Some("rust"),
+                        Some("rust:src/lib.rs::caller"),
+                    ),
+                    symbol_key(
+                        "imported",
+                        Some("src/lib.rs"),
+                        Some("rust"),
+                        Some("rust:src/lib.rs::imported"),
+                    ),
+                    "imports".to_string(),
+                    0.9,
+                    "import_resolution".to_string(),
+                ),
+            ],
+            &mut deferred_edges,
+        )
+        .expect("edge insertion should succeed");
+
+        let edge_count: i64 = tx
+            .query_row("SELECT COUNT(*) FROM symbol_edges_v2", [], |row| row.get(0))
+            .expect("edge count should query");
+        assert_eq!(edge_count, 1);
+        assert_eq!(
+            deferred_edges.len(),
+            2,
+            "missing-from and deferred import edges should be queued"
+        );
+        tx.commit().expect("transaction should commit");
+    }
+
+    #[test]
+    fn replay_deferred_edges_skips_missing_and_replays_resolved_edges() {
+        let mut connection = bootstrap_connection();
+        insert_symbol_row(
+            &connection,
+            1,
+            "src/lib.rs",
+            "caller",
+            "function",
+            "rust",
+            Some("rust:src/lib.rs::caller"),
+        );
+        insert_symbol_row(
+            &connection,
+            2,
+            "src/lib.rs",
+            "callee",
+            "function",
+            "rust",
+            Some("rust:src/lib.rs::callee"),
+        );
+
+        replay_deferred_edges(
+            &mut connection,
+            vec![
+                (
+                    symbol_key(
+                        "missing_from",
+                        Some("src/lib.rs"),
+                        Some("rust"),
+                        Some("rust:src/lib.rs::missing_from"),
+                    ),
+                    symbol_key(
+                        "callee",
+                        Some("src/lib.rs"),
+                        Some("rust"),
+                        Some("rust:src/lib.rs::callee"),
+                    ),
+                    "calls".to_string(),
+                    0.95,
+                    "call_resolution".to_string(),
+                ),
+                (
+                    symbol_key(
+                        "caller",
+                        Some("src/lib.rs"),
+                        Some("rust"),
+                        Some("rust:src/lib.rs::caller"),
+                    ),
+                    symbol_key(
+                        "callee",
+                        Some("src/lib.rs"),
+                        Some("rust"),
+                        Some("rust:src/lib.rs::callee"),
+                    ),
+                    "calls".to_string(),
+                    0.95,
+                    "call_resolution".to_string(),
+                ),
+            ],
+        )
+        .expect("replay should succeed");
+
+        let edge_count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM symbol_edges_v2", [], |row| row.get(0))
+            .expect("edge count should query");
+        assert_eq!(edge_count, 1);
+    }
+
+    #[test]
+    fn symbol_resolution_and_reuse_helpers_cover_fallback_paths() {
+        let mut connection = bootstrap_connection();
+        insert_symbol_row(
+            &connection,
+            11,
+            "src/lib.rs",
+            "solo",
+            "function",
+            "rust",
+            Some("rust:src/lib.rs::solo"),
+        );
+
+        let tx = connection.transaction().expect("transaction should start");
+        let resolved = resolve_symbol_id_by_symbol(&tx, &symbol_key("solo", None, None, None))
+            .expect("symbol resolution should succeed");
+        assert_eq!(resolved, Some(11));
+        tx.commit().expect("transaction should commit");
+
+        let existing = existing_symbol_ids(&connection, "src/lib.rs")
+            .expect("existing symbol ids should load");
+        assert_eq!(
+            existing
+                .get(&(String::from("solo"), String::from("function")))
+                .expect("symbol key should exist"),
+            &vec![11]
+        );
+        assert_eq!(
+            next_symbol_id_start(&connection).expect("next id should load"),
+            12
+        );
+
+        let mut reusable = HashMap::from([(
+            (String::from("solo"), String::from("function")),
+            Vec::<i64>::new(),
+        )]);
+        assert_eq!(
+            take_reusable_symbol_id(&mut reusable, "solo", "function"),
+            None,
+            "empty reusable-id buckets should return None"
+        );
+    }
+
+    #[test]
+    fn symbol_id_helpers_surface_missing_schema_errors() {
+        let connection = Connection::open_in_memory().expect("in-memory db should open");
+        assert!(
+            existing_symbol_ids(&connection, "src/lib.rs").is_err(),
+            "existing-symbol-id helper should fail when symbols_v2 is missing"
+        );
+        assert!(
+            next_symbol_id_start(&connection).is_err(),
+            "next-symbol-id helper should fail when symbols_v2 is missing"
+        );
+    }
 }

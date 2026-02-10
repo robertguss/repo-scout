@@ -41,3 +41,49 @@ pub fn discover_source_files(repo: &Path) -> anyhow::Result<Vec<SourceFile>> {
     files.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
     Ok(files)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::discover_source_files;
+    use std::fs;
+
+    #[cfg(unix)]
+    fn with_unreadable_file(path: &std::path::Path, f: impl FnOnce()) {
+        use std::os::unix::fs::PermissionsExt;
+
+        let original = fs::metadata(path)
+            .expect("fixture file metadata should load")
+            .permissions();
+        let mut unreadable = original.clone();
+        unreadable.set_mode(0o000);
+        fs::set_permissions(path, unreadable).expect("file should be made unreadable");
+        f();
+        fs::set_permissions(path, original).expect("file permissions should be restored");
+    }
+
+    #[test]
+    fn discover_source_files_reports_walk_errors() {
+        let repo = tempfile::tempdir().expect("temp dir should be created");
+        let missing = repo.path().join("missing");
+        let error = discover_source_files(&missing).expect_err("missing repo should fail walking");
+        assert!(error.to_string().contains("failed to walk"));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn discover_source_files_reports_read_errors() {
+        let repo = tempfile::tempdir().expect("temp dir should be created");
+        let unreadable = repo.path().join("secret.rs");
+        fs::write(&unreadable, "fn hidden() {}\n").expect("fixture file should be written");
+
+        with_unreadable_file(&unreadable, || {
+            let error = discover_source_files(repo.path())
+                .expect_err("unreadable file should fail content loading");
+            assert!(
+                error
+                    .to_string()
+                    .contains("failed to read file for indexing")
+            );
+        });
+    }
+}

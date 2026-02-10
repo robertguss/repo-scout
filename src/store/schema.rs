@@ -115,10 +115,11 @@ pub fn bootstrap_schema(connection: &Connection) -> anyhow::Result<()> {
     )?;
     migrate_schema_v3(connection)?;
 
-    connection.execute(
+    let upsert_schema_result = connection.execute(
         "INSERT OR REPLACE INTO meta(key, value) VALUES('schema_version', ?1)",
         [SCHEMA_VERSION.to_string()],
-    )?;
+    );
+    upsert_schema_result?;
 
     Ok(())
 }
@@ -143,26 +144,29 @@ pub fn read_schema_version(connection: &Connection) -> anyhow::Result<i64> {
 }
 
 fn migrate_schema_v3(connection: &Connection) -> anyhow::Result<()> {
-    ensure_column_exists(
+    let add_language_result = ensure_column_exists(
         connection,
         "symbols_v2",
         "language",
         "ALTER TABLE symbols_v2 ADD COLUMN language TEXT NOT NULL DEFAULT 'unknown'",
-    )?;
-    ensure_column_exists(
+    );
+    add_language_result?;
+    let add_qualified_symbol_result = ensure_column_exists(
         connection,
         "symbols_v2",
         "qualified_symbol",
         "ALTER TABLE symbols_v2 ADD COLUMN qualified_symbol TEXT",
-    )?;
-    ensure_column_exists(
+    );
+    add_qualified_symbol_result?;
+    let add_provenance_result = ensure_column_exists(
         connection,
         "symbol_edges_v2",
         "provenance",
         "ALTER TABLE symbol_edges_v2 ADD COLUMN provenance TEXT NOT NULL DEFAULT 'ast_definition'",
-    )?;
+    );
+    add_provenance_result?;
 
-    connection.execute_batch(
+    let migrate_rows_result = connection.execute_batch(
         r#"
         UPDATE symbols_v2
         SET language = CASE
@@ -192,7 +196,8 @@ fn migrate_schema_v3(connection: &Connection) -> anyhow::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_symbols_v2_qualified_symbol
             ON symbols_v2(qualified_symbol);
         "#,
-    )?;
+    );
+    migrate_rows_result?;
 
     Ok(())
 }
@@ -220,4 +225,152 @@ fn table_has_column(connection: &Connection, table: &str, column: &str) -> anyho
     }
 
     Ok(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SCHEMA_VERSION, bootstrap_schema, read_schema_version};
+    use rusqlite::Connection;
+
+    fn table_columns(connection: &Connection, table: &str) -> Vec<String> {
+        let mut statement = connection
+            .prepare(&format!("PRAGMA table_info({table})"))
+            .expect("pragma statement should prepare");
+        let rows = statement
+            .query_map([], |row| row.get::<_, String>(1))
+            .expect("pragma rows should query");
+        rows.map(|row| row.expect("column name row should decode"))
+            .collect()
+    }
+
+    #[test]
+    fn read_schema_version_reports_missing_row() {
+        let connection = Connection::open_in_memory().expect("sqlite in-memory db should open");
+        connection
+            .execute(
+                "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+                [],
+            )
+            .expect("meta table should be created");
+
+        let error =
+            read_schema_version(&connection).expect_err("missing schema version should fail");
+        assert!(error.to_string().contains("schema_version missing"));
+    }
+
+    #[test]
+    fn read_schema_version_reports_invalid_value() {
+        let connection = Connection::open_in_memory().expect("sqlite in-memory db should open");
+        connection
+            .execute(
+                "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+                [],
+            )
+            .expect("meta table should be created");
+        connection
+            .execute(
+                "INSERT INTO meta(key, value) VALUES('schema_version', 'not-an-int')",
+                [],
+            )
+            .expect("invalid schema row should insert");
+
+        let error =
+            read_schema_version(&connection).expect_err("invalid schema version should fail");
+        assert!(error.to_string().contains("invalid schema_version value"));
+    }
+
+    #[test]
+    fn bootstrap_schema_migrates_legacy_tables_and_sets_version() {
+        let connection = Connection::open_in_memory().expect("sqlite in-memory db should open");
+        connection
+            .execute_batch(
+                r#"
+                CREATE TABLE IF NOT EXISTS meta (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS symbols (
+                    id INTEGER PRIMARY KEY,
+                    file_path TEXT NOT NULL,
+                    symbol TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS refs (
+                    id INTEGER PRIMARY KEY,
+                    file_path TEXT NOT NULL,
+                    symbol TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS indexed_files (
+                    file_path TEXT PRIMARY KEY,
+                    content_hash TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS text_occurrences (
+                    id INTEGER PRIMARY KEY,
+                    file_path TEXT NOT NULL,
+                    symbol TEXT NOT NULL,
+                    line INTEGER NOT NULL,
+                    column INTEGER NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS ast_definitions (
+                    id INTEGER PRIMARY KEY,
+                    file_path TEXT NOT NULL,
+                    symbol TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    line INTEGER NOT NULL,
+                    column INTEGER NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS ast_references (
+                    id INTEGER PRIMARY KEY,
+                    file_path TEXT NOT NULL,
+                    symbol TEXT NOT NULL,
+                    line INTEGER NOT NULL,
+                    column INTEGER NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS symbols_v2 (
+                    symbol_id INTEGER PRIMARY KEY,
+                    file_path TEXT NOT NULL,
+                    symbol TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    container TEXT,
+                    start_line INTEGER NOT NULL,
+                    start_column INTEGER NOT NULL,
+                    end_line INTEGER NOT NULL,
+                    end_column INTEGER NOT NULL,
+                    signature TEXT,
+                    UNIQUE(file_path, symbol, kind, start_line, start_column)
+                );
+                CREATE TABLE IF NOT EXISTS symbol_edges_v2 (
+                    edge_id INTEGER PRIMARY KEY,
+                    from_symbol_id INTEGER NOT NULL,
+                    to_symbol_id INTEGER NOT NULL,
+                    edge_kind TEXT NOT NULL,
+                    confidence REAL NOT NULL,
+                    UNIQUE(from_symbol_id, to_symbol_id, edge_kind)
+                );
+                "#,
+            )
+            .expect("legacy schema should be created");
+
+        bootstrap_schema(&connection).expect("bootstrap should migrate legacy schema");
+
+        let symbols_columns = table_columns(&connection, "symbols_v2");
+        assert!(
+            symbols_columns.iter().any(|column| column == "language"),
+            "language column should be added by migration"
+        );
+        assert!(
+            symbols_columns
+                .iter()
+                .any(|column| column == "qualified_symbol"),
+            "qualified_symbol column should be added by migration"
+        );
+
+        let edges_columns = table_columns(&connection, "symbol_edges_v2");
+        assert!(
+            edges_columns.iter().any(|column| column == "provenance"),
+            "provenance column should be added by migration"
+        );
+
+        let schema_version = read_schema_version(&connection).expect("schema version should read");
+        assert_eq!(schema_version, SCHEMA_VERSION);
+    }
 }

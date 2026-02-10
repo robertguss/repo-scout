@@ -14,14 +14,14 @@ pub struct StoreMetadata {
 
 pub fn ensure_store(repo: &Path) -> anyhow::Result<StoreMetadata> {
     let db_path = index_db_path(repo);
-    if let Some(parent) = db_path.parent() {
-        fs::create_dir_all(parent).with_context(|| {
-            format!(
-                "failed to create index directory for {}",
-                parent.to_string_lossy()
-            )
-        })?;
-    }
+    let parent = db_path.parent().unwrap_or_else(|| Path::new("."));
+    let create_dir_result = fs::create_dir_all(parent).with_context(|| {
+        format!(
+            "failed to create index directory for {}",
+            parent.to_string_lossy()
+        )
+    });
+    create_dir_result?;
 
     let connection = Connection::open(&db_path)
         .with_context(|| format!("failed to open sqlite database {}", db_path.display()))
@@ -135,6 +135,12 @@ mod tests {
 
         let non_corrupt = anyhow!("plain error");
         assert!(!is_corruption_error(&non_corrupt));
+
+        let sqlite_without_code = anyhow::Error::new(rusqlite::Error::ExecuteReturnedResults);
+        assert!(
+            !is_corruption_error(&sqlite_without_code),
+            "non-corruption sqlite variants should not be classified as corruption"
+        );
     }
 
     #[test]
@@ -146,5 +152,17 @@ mod tests {
         let corrupt = sqlite_failure_error(ErrorCode::DatabaseCorrupt);
         let hinted = with_corruption_hint(corrupt, Path::new("index.db")).to_string();
         assert!(hinted.contains("index database appears corrupted at index.db"));
+    }
+
+    #[test]
+    fn ensure_store_reports_parent_directory_creation_failure() {
+        let sandbox = tempdir().expect("temp dir should be created");
+        let repo_file = sandbox.path().join("repo-as-file");
+        fs::write(&repo_file, "not-a-directory").expect("repo file should be created");
+
+        let error =
+            ensure_store(&repo_file).expect_err("repo file should fail parent directory creation");
+        let message = format!("{error:#}");
+        assert!(message.contains("failed to create index directory"));
     }
 }

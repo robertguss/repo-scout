@@ -62,3 +62,29 @@ fn push_token(
         column: (start + 1) as u32,
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{TokenOccurrence, extract_token_occurrences, push_token};
+
+    #[test]
+    fn extract_token_occurrences_collects_ascii_identifiers() {
+        let occurrences = extract_token_occurrences("alpha beta_2\n3gamma _delta");
+        let symbols = occurrences
+            .iter()
+            .map(|item| item.symbol.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(symbols, vec!["alpha", "beta_2", "_delta"]);
+    }
+
+    #[test]
+    fn push_token_ignores_empty_and_non_identifier_tokens() {
+        let mut occurrences = Vec::<TokenOccurrence>::new();
+        push_token(&mut occurrences, "abc", 1, 1, 1);
+        push_token(&mut occurrences, "1abc", 0, 4, 1);
+        push_token(&mut occurrences, "_ok", 0, 3, 2);
+        assert_eq!(occurrences.len(), 1);
+        assert_eq!(occurrences[0].symbol, "_ok");
+        assert_eq!(occurrences[0].line, 2);
+    }
+}

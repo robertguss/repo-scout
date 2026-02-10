@@ -779,12 +779,11 @@ fn relationship_summaries_for_symbol_id(
         contains: 0,
     };
 
-    let mut inbound_statement = connection.prepare(
-        "SELECT edge_kind, COUNT(*)
-         FROM symbol_edges_v2
-         WHERE to_symbol_id = ?1
-         GROUP BY edge_kind",
-    )?;
+    let inbound_sql = "SELECT edge_kind, COUNT(*) \
+         FROM symbol_edges_v2 \
+         WHERE to_symbol_id = ?1 \
+         GROUP BY edge_kind";
+    let mut inbound_statement = connection.prepare(inbound_sql)?;
     let inbound_rows = inbound_statement.query_map(params![symbol_id], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as u32))
     })?;
@@ -799,12 +798,11 @@ fn relationship_summaries_for_symbol_id(
         }
     }
 
-    let mut outbound_statement = connection.prepare(
-        "SELECT edge_kind, COUNT(*)
-         FROM symbol_edges_v2
-         WHERE from_symbol_id = ?1
-         GROUP BY edge_kind",
-    )?;
+    let outbound_sql = "SELECT edge_kind, COUNT(*) \
+         FROM symbol_edges_v2 \
+         WHERE from_symbol_id = ?1 \
+         GROUP BY edge_kind";
+    let mut outbound_statement = connection.prepare(outbound_sql)?;
     let outbound_rows = outbound_statement.query_map(params![symbol_id], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as u32))
     })?;
@@ -826,7 +824,6 @@ fn diff_impact_sort_key(left: &DiffImpactMatch, right: &DiffImpactMatch) -> std:
     diff_impact_score(right)
         .partial_cmp(&diff_impact_score(left))
         .unwrap_or(std::cmp::Ordering::Equal)
-        .then(diff_impact_kind_rank(left).cmp(&diff_impact_kind_rank(right)))
         .then_with(|| match (left, right) {
             (
                 DiffImpactMatch::ImpactedSymbol {
@@ -860,7 +857,12 @@ fn diff_impact_sort_key(left: &DiffImpactMatch, right: &DiffImpactMatch) -> std:
                     ..
                 },
             ) => lk.cmp(rk).then(lt.cmp(rt)),
-            _ => std::cmp::Ordering::Equal,
+            (DiffImpactMatch::ImpactedSymbol { .. }, DiffImpactMatch::TestTarget { .. }) => {
+                std::cmp::Ordering::Less
+            }
+            (DiffImpactMatch::TestTarget { .. }, DiffImpactMatch::ImpactedSymbol { .. }) => {
+                std::cmp::Ordering::Greater
+            }
         })
 }
 
@@ -868,13 +870,6 @@ fn diff_impact_score(item: &DiffImpactMatch) -> f64 {
     match item {
         DiffImpactMatch::ImpactedSymbol { score, .. }
         | DiffImpactMatch::TestTarget { score, .. } => *score,
-    }
-}
-
-fn diff_impact_kind_rank(item: &DiffImpactMatch) -> u8 {
-    match item {
-        DiffImpactMatch::ImpactedSymbol { .. } => 0,
-        DiffImpactMatch::TestTarget { .. } => 1,
     }
 }
 
@@ -1124,11 +1119,11 @@ pub fn impact_matches(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<Impact
 
     for target_id in target_ids {
         let mut incoming_statement = connection.prepare(
-            "SELECT fs.file_path, fs.start_line, fs.start_column, fs.symbol, fs.kind,
-                    e.edge_kind, e.confidence, e.provenance
-             FROM symbol_edges_v2 e
-             JOIN symbols_v2 fs ON fs.symbol_id = e.from_symbol_id
-             WHERE e.to_symbol_id = ?1
+            "SELECT fs.file_path, fs.start_line, fs.start_column, fs.symbol, fs.kind, \
+                    e.edge_kind, e.confidence, e.provenance \
+             FROM symbol_edges_v2 e \
+             JOIN symbols_v2 fs ON fs.symbol_id = e.from_symbol_id \
+             WHERE e.to_symbol_id = ?1 \
              ORDER BY fs.file_path ASC, fs.start_line ASC, fs.start_column ASC, fs.symbol ASC",
         )?;
         let incoming_rows = incoming_statement.query_map(params![target_id], |row| {
@@ -1228,7 +1223,7 @@ pub fn context_matches_scoped(
             continue;
         };
         push_direct_context_match(&mut matches, &mut seen, &seed, &metadata);
-        push_neighbor_context_matches(
+        let neighbor_result = push_neighbor_context_matches(
             &connection,
             seed.symbol_id,
             &seed.symbol,
@@ -1236,7 +1231,8 @@ pub fn context_matches_scoped(
             metadata.direct_score,
             &mut seen,
             &mut matches,
-        )?;
+        );
+        neighbor_result?;
     }
     filter_context_matches_by_scope(&mut matches, scope);
     sort_context_matches(&mut matches);
@@ -1342,10 +1338,10 @@ fn push_neighbor_context_matches(
     matches: &mut Vec<ContextMatch>,
 ) -> anyhow::Result<()> {
     let mut statement = connection.prepare(
-        "SELECT n.file_path, n.symbol, n.kind, n.start_line, n.end_line
-         FROM symbol_edges_v2 e
-         JOIN symbols_v2 n ON n.symbol_id = e.to_symbol_id
-         WHERE e.from_symbol_id = ?1
+        "SELECT n.file_path, n.symbol, n.kind, n.start_line, n.end_line \
+         FROM symbol_edges_v2 e \
+         JOIN symbols_v2 n ON n.symbol_id = e.to_symbol_id \
+         WHERE e.from_symbol_id = ?1 \
          ORDER BY n.file_path ASC, n.start_line ASC, n.start_column ASC, n.symbol ASC",
     )?;
     let rows = statement.query_map(params![symbol_id], |row| {
@@ -2517,4 +2513,1099 @@ fn is_generic_changed_symbol(symbol: &str) -> bool {
 
 fn is_changed_test_target_reason(why_included: &str) -> bool {
     why_included.starts_with("changed file '") && why_included.ends_with("is itself a test target")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::store::schema;
+    use rusqlite::params;
+    use std::collections::HashMap;
+    use std::fs;
+    use std::path::Path;
+    use tempfile::{TempDir, tempdir};
+
+    fn bootstrap_temp_store() -> (TempDir, std::path::PathBuf) {
+        let repo = tempdir().expect("temp dir should be created");
+        let db_dir = repo.path().join(".repo-scout");
+        fs::create_dir_all(&db_dir).expect("index directory should be created");
+        let db_path = db_dir.join("index.db");
+        let connection = Connection::open(&db_path).expect("sqlite db should be created");
+        schema::bootstrap_schema(&connection).expect("schema should be bootstrapped");
+        (repo, db_path)
+    }
+
+    fn empty_temp_db() -> (TempDir, std::path::PathBuf) {
+        let repo = tempdir().expect("temp dir should be created");
+        let db_path = repo.path().join("empty.db");
+        Connection::open(&db_path).expect("empty sqlite db should be created");
+        (repo, db_path)
+    }
+
+    fn insert_symbol_row(
+        connection: &Connection,
+        symbol_id: i64,
+        file_path: &str,
+        symbol: &str,
+        kind: &str,
+        line: u32,
+        column: u32,
+        end_line: u32,
+        language: &str,
+        qualified_symbol: Option<&str>,
+    ) {
+        connection
+            .execute(
+                "INSERT INTO symbols_v2(
+                    symbol_id, file_path, symbol, kind, language, qualified_symbol, container,
+                    start_line, start_column, end_line, end_column, signature
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL, ?7, ?8, ?9, ?10, NULL)",
+                params![
+                    symbol_id,
+                    file_path,
+                    symbol,
+                    kind,
+                    language,
+                    qualified_symbol,
+                    i64::from(line),
+                    i64::from(column),
+                    i64::from(end_line),
+                    i64::from(column + 1),
+                ],
+            )
+            .expect("symbol row should insert");
+    }
+
+    fn insert_text_occurrence(
+        connection: &Connection,
+        file_path: &str,
+        line: u32,
+        column: u32,
+        symbol: &str,
+    ) {
+        connection
+            .execute(
+                "INSERT INTO text_occurrences(file_path, symbol, line, column)
+                 VALUES (?1, ?2, ?3, ?4)",
+                params![file_path, symbol, i64::from(line), i64::from(column)],
+            )
+            .expect("text occurrence should insert");
+    }
+
+    fn sample_test_target(step: &str, confidence: &str, score: f64) -> VerificationStep {
+        VerificationStep {
+            step: step.to_string(),
+            scope: "targeted".to_string(),
+            why_included: "targeted verification step".to_string(),
+            confidence: confidence.to_string(),
+            score,
+        }
+    }
+
+    #[test]
+    fn find_and_refs_wrappers_cover_fallback_and_scope_filters() {
+        let (_repo, db_path) = bootstrap_temp_store();
+        let connection = Connection::open(&db_path).expect("db should open");
+        for (file_path, line) in [
+            ("src/lib.rs", 1),
+            ("pkg/app.tsx", 2),
+            ("svc/main.go", 3),
+            ("tests/test_example.py", 4),
+            ("docs/readme.md", 5),
+        ] {
+            insert_text_occurrence(&connection, file_path, line, 1, "needle");
+        }
+        insert_text_occurrence(&connection, "src/lib.rs", 6, 1, "needle_suffix");
+
+        let all_find = find_matches(&db_path, "needle").expect("find should succeed");
+        assert_eq!(all_find.len(), 6);
+        assert!(
+            all_find
+                .iter()
+                .any(|item| item.why_matched == "text_substring_match"),
+            "substring fallback should be present when text variants exist"
+        );
+
+        let all_refs = refs_matches(&db_path, "needle").expect("refs should succeed");
+        assert_eq!(all_refs.len(), 6);
+
+        let scoped = find_matches_scoped(&db_path, "needle", &QueryScope::from_flags(true, true))
+            .expect("scoped find should succeed");
+        assert_eq!(scoped.len(), 4);
+        assert!(
+            scoped
+                .iter()
+                .all(|item| !item.file_path.starts_with("tests/")),
+            "exclude-tests scope should drop test paths"
+        );
+        assert!(
+            scoped.iter().all(|item| !item.file_path.ends_with(".md")),
+            "code-only scope should drop non-code paths"
+        );
+    }
+
+    #[test]
+    fn context_matches_returns_empty_when_keywords_are_filtered_out() {
+        let (_repo, db_path) = bootstrap_temp_store();
+        let matches =
+            context_matches(&db_path, "the and with", 400).expect("context query should run");
+        assert!(matches.is_empty());
+    }
+
+    #[test]
+    fn explain_symbol_covers_relationship_summaries_and_snippets() {
+        let (repo, db_path) = bootstrap_temp_store();
+        fs::create_dir_all(repo.path().join("src")).expect("src dir should be created");
+        fs::write(repo.path().join("src/lib.rs"), "fn target() {}\n")
+            .expect("source file should be written");
+        fs::write(repo.path().join("src/z.rs"), "fn target() {}\n")
+            .expect("secondary source file should be written");
+
+        let connection = Connection::open(&db_path).expect("db should open");
+        insert_symbol_row(
+            &connection,
+            1,
+            "src/lib.rs",
+            "target",
+            "function",
+            1,
+            4,
+            1,
+            "mystery",
+            None,
+        );
+        insert_symbol_row(
+            &connection,
+            2,
+            "src/z.rs",
+            "target",
+            "function",
+            1,
+            4,
+            1,
+            "rust",
+            None,
+        );
+
+        for id in 10..=14 {
+            insert_symbol_row(
+                &connection,
+                id,
+                "src/caller.rs",
+                &format!("from_{id}"),
+                "function",
+                1,
+                1,
+                1,
+                "rust",
+                Some(&format!("rust:src/caller.rs::from_{id}")),
+            );
+        }
+        for id in 20..=24 {
+            insert_symbol_row(
+                &connection,
+                id,
+                "src/callee.rs",
+                &format!("to_{id}"),
+                "function",
+                1,
+                1,
+                1,
+                "rust",
+                Some(&format!("rust:src/callee.rs::to_{id}")),
+            );
+        }
+
+        for (from_id, edge_kind, provenance) in [
+            (10, "calls", "call_resolution"),
+            (11, "imports", "import_resolution"),
+            (12, "implements", "ast_reference"),
+            (13, "contains", "ast_definition"),
+            (14, "mystery", "ast"),
+        ] {
+            connection
+                .execute(
+                    "INSERT INTO symbol_edges_v2(
+                        from_symbol_id, to_symbol_id, edge_kind, confidence, provenance
+                     )
+                     VALUES (?1, ?2, ?3, ?4, ?5)",
+                    params![from_id, 1, edge_kind, 0.9_f64, provenance],
+                )
+                .expect("inbound edge should insert");
+        }
+        for (to_id, edge_kind, provenance) in [
+            (20, "calls", "call_resolution"),
+            (21, "imports", "import_resolution"),
+            (22, "implements", "ast_reference"),
+            (23, "contains", "ast_definition"),
+            (24, "mystery", "ast"),
+        ] {
+            connection
+                .execute(
+                    "INSERT INTO symbol_edges_v2(
+                        from_symbol_id, to_symbol_id, edge_kind, confidence, provenance
+                     )
+                     VALUES (?1, ?2, ?3, ?4, ?5)",
+                    params![1, to_id, edge_kind, 0.9_f64, provenance],
+                )
+                .expect("outbound edge should insert");
+        }
+
+        let explain =
+            explain_symbol(&db_path, "target", true).expect("explain query should succeed");
+        assert_eq!(explain.len(), 2);
+        assert_eq!(explain[0].file_path, "src/lib.rs");
+        assert_eq!(explain[0].language, "rust");
+        assert_eq!(explain[0].inbound.called_by, 1);
+        assert_eq!(explain[0].inbound.imported_by, 1);
+        assert_eq!(explain[0].inbound.implemented_by, 1);
+        assert_eq!(explain[0].inbound.contained_by, 1);
+        assert_eq!(explain[0].outbound.calls, 1);
+        assert_eq!(explain[0].outbound.imports, 1);
+        assert_eq!(explain[0].outbound.implements, 1);
+        assert_eq!(explain[0].outbound.contains, 1);
+        assert_eq!(explain[0].snippet.as_deref(), Some("fn target() {}"));
+    }
+
+    #[test]
+    fn extract_symbol_snippet_handles_empty_out_of_bounds_and_blank_ranges() {
+        let (repo, db_path) = bootstrap_temp_store();
+        fs::create_dir_all(repo.path().join("src")).expect("src dir should be created");
+        fs::write(repo.path().join("src/empty.rs"), "").expect("empty source should be written");
+        fs::write(repo.path().join("src/blank.rs"), "   \n")
+            .expect("blank source should be written");
+        fs::write(repo.path().join("src/filled.rs"), "line1\nline2\n")
+            .expect("filled source should be written");
+
+        assert_eq!(extract_symbol_snippet(&db_path, "src/empty.rs", 1, 1), None);
+        assert_eq!(
+            extract_symbol_snippet(&db_path, "src/filled.rs", 99, 99),
+            None
+        );
+        assert_eq!(extract_symbol_snippet(&db_path, "src/blank.rs", 1, 1), None);
+        assert_eq!(
+            extract_symbol_snippet(&db_path, "src/filled.rs", 2, 1).as_deref(),
+            Some("line2")
+        );
+    }
+
+    #[test]
+    fn semantic_and_language_fallback_helpers_cover_default_branches() {
+        assert_eq!(edge_kind_relationship("other"), "called_by");
+        assert_eq!(
+            normalized_provenance("mystery", "calls"),
+            "call_resolution".to_string()
+        );
+        assert_eq!(
+            normalized_provenance("mystery", "imports"),
+            "import_resolution".to_string()
+        );
+        assert_eq!(
+            normalized_provenance("mystery", "contains"),
+            "ast_definition".to_string()
+        );
+        assert_eq!(
+            normalized_provenance("mystery", "implements"),
+            "ast_reference".to_string()
+        );
+        assert_eq!(
+            normalized_provenance("mystery", "unknown"),
+            "ast_reference".to_string()
+        );
+
+        assert_eq!(
+            calibrated_semantic_confidence("text_fallback"),
+            "context_medium".to_string()
+        );
+        assert_eq!(
+            calibrated_semantic_confidence("mystery"),
+            "context_low".to_string()
+        );
+
+        assert_eq!(
+            calibrated_semantic_score("other", "call_resolution", 1, 0.1),
+            0.95
+        );
+        assert_eq!(
+            calibrated_semantic_score("other", "import_resolution", 1, 0.1),
+            0.94
+        );
+        assert_eq!(
+            calibrated_semantic_score("other", "ast_reference", 1, 0.1),
+            0.93
+        );
+        assert_eq!(
+            calibrated_semantic_score("other", "ast_definition", 1, 0.1),
+            0.93
+        );
+        assert_eq!(
+            calibrated_semantic_score("other", "text_fallback", 1, 0.1),
+            0.72
+        );
+        assert_eq!(calibrated_semantic_score("other", "mystery", 1, 0.1), 0.90);
+
+        assert_eq!(language_for_file_path("src/lib.rs"), "rust");
+        assert_eq!(language_for_file_path("src/a.ts"), "typescript");
+        assert_eq!(language_for_file_path("src/a.tsx"), "typescript");
+        assert_eq!(language_for_file_path("src/a.py"), "python");
+        assert_eq!(language_for_file_path("src/a.go"), "go");
+        assert_eq!(language_for_file_path("README.md"), "unknown");
+        assert_eq!(normalized_language("mystery", "src/a.py"), "python");
+    }
+
+    #[test]
+    fn keyword_helpers_cover_filters_and_tokenization_edges() {
+        let keywords = extract_keywords("Fix the HTTPServer and io in parser with parser");
+        assert_eq!(keywords, vec!["fix", "httpserver", "parser"]);
+        assert_eq!(
+            symbol_keywords("HTTPServer::do_work + parseJSON"),
+            vec!["httpserver", "json", "parse", "work"]
+        );
+        assert_eq!(
+            matched_task_keywords(
+                &[
+                    "parse".to_string(),
+                    "http".to_string(),
+                    "unused".to_string()
+                ],
+                &["parser".to_string(), "httpserver".to_string()]
+            ),
+            vec!["parse".to_string(), "http".to_string()]
+        );
+        assert_eq!(context_direct_score(20, true, 20), 0.98);
+    }
+
+    #[test]
+    fn command_and_scope_helpers_cover_non_default_paths() {
+        assert_eq!(
+            go_package_target_for_test_file("service_test.go"),
+            Some(".".to_string())
+        );
+        assert_eq!(
+            go_package_target_for_test_file("./pkg/service_test.go"),
+            Some("./pkg".to_string())
+        );
+        assert!(!is_pytest_test_file("tests/helper.txt"));
+        assert!(is_typescript_source_file("src/file.ts"));
+        assert!(is_typescript_source_file("src/file.tsx"));
+        assert_eq!(verification_scope_rank("unknown"), 2);
+        assert_eq!(confidence_rank("unknown"), 0);
+    }
+
+    #[test]
+    fn upsert_finalize_and_full_suite_selection_cover_tiebreakers() {
+        let mut steps_by_command = HashMap::new();
+        upsert_verification_step(
+            &mut steps_by_command,
+            sample_test_target("cargo test --test foo", "context_medium", 0.8),
+        );
+        upsert_verification_step(
+            &mut steps_by_command,
+            sample_test_target("cargo test --test foo", "graph_likely", 0.8),
+        );
+        assert_eq!(
+            steps_by_command
+                .get("cargo test --test foo")
+                .expect("step should exist")
+                .confidence,
+            "graph_likely"
+        );
+
+        upsert_verification_step(
+            &mut steps_by_command,
+            VerificationStep {
+                step: "cargo test --test foo".to_string(),
+                scope: "targeted".to_string(),
+                why_included: "aaa".to_string(),
+                confidence: "graph_likely".to_string(),
+                score: 0.8,
+            },
+        );
+        assert_eq!(
+            steps_by_command
+                .get("cargo test --test foo")
+                .expect("step should exist")
+                .why_included,
+            "aaa"
+        );
+
+        steps_by_command.insert(
+            "cargo test --test changed_a".to_string(),
+            VerificationStep {
+                step: "cargo test --test changed_a".to_string(),
+                scope: "targeted".to_string(),
+                why_included: "changed file 'tests/changed_a.rs' is itself a test target"
+                    .to_string(),
+                confidence: "context_high".to_string(),
+                score: 0.4,
+            },
+        );
+        steps_by_command.insert(
+            "cargo test --test changed_b".to_string(),
+            VerificationStep {
+                step: "cargo test --test changed_b".to_string(),
+                scope: "targeted".to_string(),
+                why_included: "changed file 'tests/changed_b.rs' is itself a test target"
+                    .to_string(),
+                confidence: "context_high".to_string(),
+                score: 0.4,
+            },
+        );
+        steps_by_command.insert(
+            "cargo test --test ranked".to_string(),
+            sample_test_target("cargo test --test ranked", "graph_likely", 0.95),
+        );
+        let finalized = finalize_targeted_verification_steps(steps_by_command, 1);
+        assert_eq!(
+            finalized[0].step, "cargo test --test changed_a",
+            "changed test targets should be sorted lexicographically first"
+        );
+        assert_eq!(finalized[1].step, "cargo test --test changed_b");
+        assert_eq!(
+            finalized
+                .last()
+                .expect("ranked targeted step should remain")
+                .step,
+            "cargo test --test ranked"
+        );
+
+        let rust_command = select_full_suite_command(
+            &[],
+            &["src/lib.rs".to_string()],
+            &RecommendationRunners::default(),
+        );
+        assert_eq!(rust_command, "cargo test");
+
+        let pytest_command = select_full_suite_command(
+            &[],
+            &["src/service.py".to_string()],
+            &RecommendationRunners {
+                pytest: true,
+                node: NodeTestRunner::None,
+            },
+        );
+        assert_eq!(pytest_command, "pytest");
+
+        let jest_command = select_full_suite_command(
+            &[VerificationStep {
+                step: "npx jest --runTestsByPath tests/service.test.ts".to_string(),
+                scope: "targeted".to_string(),
+                why_included: "targeted".to_string(),
+                confidence: "graph_likely".to_string(),
+                score: 0.8,
+            }],
+            &["src/service.ts".to_string()],
+            &RecommendationRunners {
+                pytest: false,
+                node: NodeTestRunner::Jest,
+            },
+        );
+        assert_eq!(jest_command, "npx jest");
+
+        let go_command = select_full_suite_command(
+            &[VerificationStep {
+                step: "go test ./pkg".to_string(),
+                scope: "targeted".to_string(),
+                why_included: "targeted".to_string(),
+                confidence: "context_high".to_string(),
+                score: 0.8,
+            }],
+            &["pkg/service.go".to_string()],
+            &RecommendationRunners::default(),
+        );
+        assert_eq!(go_command, "go test ./...");
+    }
+
+    #[test]
+    fn runner_detection_and_repo_root_resolution_cover_fallbacks() {
+        assert_eq!(repo_root_from_db_path(Path::new("index.db")), None);
+        let defaults = RecommendationRunners::for_db_path(Path::new("index.db"));
+        assert!(!defaults.pytest);
+        assert_eq!(defaults.node, NodeTestRunner::None);
+
+        let repo = tempdir().expect("temp dir should be created");
+        let hidden = repo.path().join(".repo-scout");
+        fs::create_dir_all(&hidden).expect("hidden directory should be created");
+        fs::write(hidden.join("index.db"), "").expect("db placeholder should be created");
+
+        fs::write(repo.path().join("package.json"), "{ invalid")
+            .expect("invalid json should write");
+        assert_eq!(detect_node_test_runner(repo.path()), NodeTestRunner::None);
+
+        fs::write(
+            repo.path().join("package.json"),
+            r#"{"scripts":{"test":"jest && vitest"}}"#,
+        )
+        .expect("package json should write");
+        assert_eq!(
+            detect_node_test_runner(repo.path()),
+            NodeTestRunner::Ambiguous
+        );
+
+        fs::write(
+            repo.path().join("package.json"),
+            r#"{"scripts":{"test":"echo ok"}}"#,
+        )
+        .expect("plain package json should write");
+        assert_eq!(detect_node_test_runner(repo.path()), NodeTestRunner::None);
+    }
+
+    #[test]
+    fn query_functions_report_errors_for_missing_schema() {
+        let (_repo, db_path) = empty_temp_db();
+        let changed_files = vec!["src/lib.rs".to_string()];
+        let diff_options = DiffImpactOptions {
+            max_distance: 1,
+            test_mode: DiffImpactTestMode::ExcludeTests,
+            import_mode: DiffImpactImportMode::ExcludeImports,
+            changed_lines: Vec::new(),
+            changed_symbols: Vec::new(),
+            changed_mode: DiffImpactChangedMode::IncludeChanged,
+            max_results: None,
+        };
+        assert!(
+            diff_impact_for_changed_files(&db_path, &changed_files, &diff_options).is_err(),
+            "diff-impact should error when required schema tables are absent"
+        );
+        assert!(
+            explain_symbol(&db_path, "target", false).is_err(),
+            "explain should fail against an empty schema"
+        );
+        assert!(
+            impact_matches(&db_path, "target").is_err(),
+            "impact should fail against an empty schema"
+        );
+        assert!(
+            context_matches_scoped(&db_path, "target", 400, &QueryScope::default()).is_err(),
+            "context should fail against an empty schema"
+        );
+        assert!(
+            verify_plan_for_changed_files(&db_path, &changed_files, &VerifyPlanOptions::default())
+                .is_err(),
+            "verify-plan should fail against an empty schema"
+        );
+    }
+
+    #[test]
+    fn diff_impact_expand_neighbors_errors_when_edges_table_is_missing() {
+        let (_repo, db_path) = empty_temp_db();
+        let connection = Connection::open(&db_path).expect("db should open");
+        connection
+            .execute_batch(
+                r#"
+                CREATE TABLE symbols_v2 (
+                    symbol_id INTEGER PRIMARY KEY,
+                    symbol TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    file_path TEXT NOT NULL,
+                    start_line INTEGER NOT NULL,
+                    start_column INTEGER NOT NULL,
+                    end_line INTEGER NOT NULL,
+                    language TEXT NOT NULL,
+                    qualified_symbol TEXT
+                );
+                "#,
+            )
+            .expect("minimal symbols table should be created");
+        connection
+            .execute(
+                "INSERT INTO symbols_v2(
+                    symbol_id, symbol, kind, file_path, start_line, start_column,
+                    end_line, language, qualified_symbol
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                params![
+                    1_i64,
+                    "changed_symbol",
+                    "function",
+                    "src/lib.rs",
+                    1_i64,
+                    1_i64,
+                    1_i64,
+                    "rust",
+                    "rust:src/lib.rs::changed_symbol"
+                ],
+            )
+            .expect("seed symbol should insert");
+
+        let options = DiffImpactOptions {
+            max_distance: 1,
+            test_mode: DiffImpactTestMode::ExcludeTests,
+            import_mode: DiffImpactImportMode::ExcludeImports,
+            changed_lines: Vec::new(),
+            changed_symbols: Vec::new(),
+            changed_mode: DiffImpactChangedMode::IncludeChanged,
+            max_results: None,
+        };
+        let error = diff_impact_for_changed_files(&db_path, &["src/lib.rs".to_string()], &options)
+            .expect_err("missing edge table should fail neighbor expansion");
+        assert!(
+            error.to_string().contains("symbol_edges_v2"),
+            "error should point to the missing edge table"
+        );
+    }
+
+    #[test]
+    fn impact_and_context_helpers_cover_remaining_relationship_and_dedup_branches() {
+        let (_repo, db_path) = bootstrap_temp_store();
+        let connection = Connection::open(&db_path).expect("db should open");
+        insert_symbol_row(
+            &connection,
+            1,
+            "src/lib.rs",
+            "target",
+            "function",
+            10,
+            1,
+            10,
+            "rust",
+            Some("rust:src/lib.rs::target"),
+        );
+        insert_symbol_row(
+            &connection,
+            2,
+            "src/caller.rs",
+            "impl_user",
+            "function",
+            1,
+            1,
+            1,
+            "rust",
+            Some("rust:src/caller.rs::impl_user"),
+        );
+        insert_symbol_row(
+            &connection,
+            3,
+            "src/caller.rs",
+            "unknown_user",
+            "function",
+            2,
+            1,
+            2,
+            "rust",
+            Some("rust:src/caller.rs::unknown_user"),
+        );
+        connection
+            .execute(
+                "INSERT INTO symbol_edges_v2(
+                    from_symbol_id, to_symbol_id, edge_kind, confidence, provenance
+                 ) VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![2_i64, 1_i64, "implements", 0.91_f64, "ast_reference"],
+            )
+            .expect("implements edge should insert");
+        connection
+            .execute(
+                "INSERT INTO symbol_edges_v2(
+                    from_symbol_id, to_symbol_id, edge_kind, confidence, provenance
+                 ) VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![3_i64, 1_i64, "mystery", 0.64_f64, "ast_reference"],
+            )
+            .expect("unknown edge should insert");
+
+        let impacts = impact_matches(&db_path, "target").expect("impact should succeed");
+        assert!(
+            impacts
+                .iter()
+                .any(|item| item.relationship == "implemented_by"),
+            "implements edges should map to implemented_by relationships"
+        );
+        assert!(
+            impacts.iter().any(|item| item.relationship == "mystery"),
+            "unknown edge kinds should preserve their raw relationship label"
+        );
+
+        insert_symbol_row(
+            &connection,
+            10,
+            "src/lib.rs",
+            "target",
+            "function",
+            10,
+            2,
+            10,
+            "rust",
+            Some("rust:src/lib.rs::target:alt"),
+        );
+        insert_symbol_row(
+            &connection,
+            11,
+            "src/dep.rs",
+            "neighbor",
+            "function",
+            20,
+            1,
+            20,
+            "rust",
+            Some("rust:src/dep.rs::neighbor"),
+        );
+        insert_symbol_row(
+            &connection,
+            12,
+            "src/dep.rs",
+            "neighbor",
+            "function",
+            20,
+            2,
+            20,
+            "rust",
+            Some("rust:src/dep.rs::neighbor:alt"),
+        );
+        connection
+            .execute(
+                "INSERT INTO symbol_edges_v2(
+                    from_symbol_id, to_symbol_id, edge_kind, confidence, provenance
+                 ) VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![1_i64, 11_i64, "calls", 0.95_f64, "call_resolution"],
+            )
+            .expect("first neighbor edge should insert");
+        connection
+            .execute(
+                "INSERT INTO symbol_edges_v2(
+                    from_symbol_id, to_symbol_id, edge_kind, confidence, provenance
+                 ) VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![1_i64, 12_i64, "calls", 0.95_f64, "call_resolution"],
+            )
+            .expect("second neighbor edge should insert");
+
+        let context = context_matches_scoped(&db_path, "target", 400, &QueryScope::default())
+            .expect("context should succeed");
+        assert!(
+            context
+                .iter()
+                .filter(|item| item.symbol == "target" && item.kind == "function")
+                .count()
+                == 1,
+            "direct-match dedup should collapse duplicate seed keys"
+        );
+        assert!(
+            context
+                .iter()
+                .filter(|item| item.symbol == "neighbor" && item.kind == "function")
+                .count()
+                == 1,
+            "neighbor dedup should collapse duplicate neighbor keys"
+        );
+    }
+
+    #[test]
+    fn helper_queries_surface_prepare_errors_and_typescript_full_suite_path() {
+        let connection = Connection::open_in_memory().expect("in-memory db should open");
+        assert!(changed_file_symbols(&connection, "src/lib.rs").is_err());
+        assert!(ast_definition_matches(&connection, "needle").is_err());
+        assert!(ast_reference_matches(&connection, "needle").is_err());
+        assert!(text_exact_matches(&connection, "needle", &QueryScope::default()).is_err());
+        assert!(text_substring_matches(&connection, "needle", &QueryScope::default()).is_err());
+        assert!(test_targets_for_symbol(&connection, "needle").is_err());
+
+        let jest_command = select_full_suite_command(
+            &[],
+            &["src/app/view.ts".to_string()],
+            &RecommendationRunners {
+                pytest: false,
+                node: NodeTestRunner::Jest,
+            },
+        );
+        assert_eq!(
+            jest_command, "npx jest",
+            "typescript changed files should select node full-suite command when configured"
+        );
+    }
+
+    #[test]
+    fn relationship_impact_and_context_helpers_cover_prepare_paths() {
+        let (_repo, db_path) = bootstrap_temp_store();
+        let connection = Connection::open(&db_path).expect("db should open");
+        let (inbound, outbound) = relationship_summaries_for_symbol_id(&connection, 404_i64)
+            .expect("empty relationship summaries should load");
+        assert_eq!(inbound.called_by, 0);
+        assert_eq!(inbound.imported_by, 0);
+        assert_eq!(inbound.implemented_by, 0);
+        assert_eq!(inbound.contained_by, 0);
+        assert_eq!(outbound.calls, 0);
+        assert_eq!(outbound.imports, 0);
+        assert_eq!(outbound.implements, 0);
+        assert_eq!(outbound.contains, 0);
+
+        let missing_edges = Connection::open_in_memory().expect("in-memory db should open");
+        assert!(
+            push_neighbor_context_matches(
+                &missing_edges,
+                1_i64,
+                "target",
+                &[],
+                0.5,
+                &mut HashSet::new(),
+                &mut Vec::new(),
+            )
+            .is_err(),
+            "neighbor context query should error when graph tables are missing"
+        );
+
+        let repo = tempdir().expect("temp dir should be created");
+        let missing_db_path = repo.path().join("missing_edges.db");
+        let missing_connection =
+            Connection::open(&missing_db_path).expect("missing-edge db should open");
+        missing_connection
+            .execute_batch(
+                r#"
+                CREATE TABLE symbols_v2 (
+                    symbol_id INTEGER PRIMARY KEY,
+                    file_path TEXT NOT NULL,
+                    symbol TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    start_line INTEGER NOT NULL,
+                    start_column INTEGER NOT NULL
+                );
+                INSERT INTO symbols_v2(
+                    symbol_id, file_path, symbol, kind, start_line, start_column
+                ) VALUES (1, 'src/lib.rs', 'target', 'function', 1, 1);
+                "#,
+            )
+            .expect("minimal symbol table should be created");
+        assert!(
+            impact_matches(&missing_db_path, "target").is_err(),
+            "impact query should error when edge table is missing"
+        );
+    }
+
+    #[test]
+    fn diff_impact_sort_key_covers_mixed_variant_ordering_arms() {
+        let impacted = DiffImpactMatch::ImpactedSymbol {
+            symbol: "caller".to_string(),
+            qualified_symbol: "rust:src/caller.rs::caller".to_string(),
+            kind: "function".to_string(),
+            language: "rust".to_string(),
+            file_path: "src/caller.rs".to_string(),
+            line: 1,
+            column: 1,
+            distance: 1,
+            relationship: "called_by".to_string(),
+            why_included: "seed".to_string(),
+            confidence: "graph_likely".to_string(),
+            provenance: "call_resolution".to_string(),
+            score: 0.8,
+        };
+        let test_target = DiffImpactMatch::TestTarget {
+            target: "tests/caller.rs".to_string(),
+            target_kind: "integration_test_file".to_string(),
+            language: "rust".to_string(),
+            why_included: "target".to_string(),
+            confidence: "context_medium".to_string(),
+            provenance: "text_fallback".to_string(),
+            score: 0.8,
+        };
+        assert_eq!(
+            diff_impact_sort_key(&impacted, &test_target),
+            std::cmp::Ordering::Less
+        );
+        assert_eq!(
+            diff_impact_sort_key(&test_target, &impacted),
+            std::cmp::Ordering::Greater
+        );
+    }
+
+    #[test]
+    fn diff_impact_helpers_cover_dedup_exclusion_capping_and_test_target_replacement() {
+        let (_repo, db_path) = bootstrap_temp_store();
+        let connection = Connection::open(&db_path).expect("db should open");
+
+        insert_symbol_row(
+            &connection,
+            1,
+            "src/a.rs",
+            "changed_a",
+            "function",
+            1,
+            1,
+            1,
+            "rust",
+            Some("rust:src/a.rs::changed_a"),
+        );
+        insert_symbol_row(
+            &connection,
+            2,
+            "src/a.rs",
+            "changed_a",
+            "variable",
+            1,
+            1,
+            1,
+            "rust",
+            Some("rust:src/a.rs::changed_a"),
+        );
+        insert_symbol_row(
+            &connection,
+            3,
+            "src/a.rs",
+            "changed_b",
+            "function",
+            2,
+            1,
+            2,
+            "rust",
+            Some("rust:src/a.rs::changed_b"),
+        );
+        insert_symbol_row(
+            &connection,
+            4,
+            "src/caller.rs",
+            "caller",
+            "function",
+            1,
+            1,
+            1,
+            "rust",
+            Some("rust:src/caller.rs::caller"),
+        );
+
+        connection
+            .execute(
+                "INSERT INTO symbol_edges_v2(
+                    from_symbol_id, to_symbol_id, edge_kind, confidence, provenance
+                 )
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![4_i64, 1_i64, "calls", 0.95_f64, "call_resolution"],
+            )
+            .expect("edge should insert");
+        connection
+            .execute(
+                "INSERT INTO symbol_edges_v2(
+                    from_symbol_id, to_symbol_id, edge_kind, confidence, provenance
+                 )
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![4_i64, 3_i64, "calls", 0.95_f64, "call_resolution"],
+            )
+            .expect("edge should insert");
+
+        insert_text_occurrence(&connection, "tests/caller_one.rs", 1, 1, "caller");
+        insert_text_occurrence(&connection, "tests/caller_one.rs", 2, 1, "caller");
+
+        let mut baseline_results = vec![
+            DiffImpactMatch::ImpactedSymbol {
+                symbol: "caller".to_string(),
+                qualified_symbol: "rust:src/caller.rs::caller".to_string(),
+                kind: "function".to_string(),
+                language: "rust".to_string(),
+                file_path: "src/caller.rs".to_string(),
+                line: 1,
+                column: 1,
+                distance: 1,
+                relationship: "called_by".to_string(),
+                why_included: "seed".to_string(),
+                confidence: "graph_likely".to_string(),
+                provenance: "call_resolution".to_string(),
+                score: 0.95,
+            },
+            DiffImpactMatch::TestTarget {
+                target: "tests/existing.rs".to_string(),
+                target_kind: "integration_test_file".to_string(),
+                language: "rust".to_string(),
+                why_included: "existing".to_string(),
+                confidence: "context_medium".to_string(),
+                provenance: "text_fallback".to_string(),
+                score: 0.1,
+            },
+        ];
+        append_diff_impact_test_targets(&connection, &mut baseline_results)
+            .expect("test target enrichment should succeed");
+        assert!(
+            baseline_results.iter().any(|item| {
+                matches!(
+                    item,
+                    DiffImpactMatch::TestTarget { target, .. }
+                        if target == "tests/caller_one.rs"
+                )
+            }),
+            "append_diff_impact_test_targets should add runtime-derived targets"
+        );
+
+        let mut existing_targets = BTreeMap::new();
+        existing_targets.insert(
+            "integration_test_file:tests/caller_one.rs".to_string(),
+            DiffImpactMatch::TestTarget {
+                target: "tests/caller_one.rs".to_string(),
+                target_kind: "integration_test_file".to_string(),
+                language: "rust".to_string(),
+                why_included: "existing".to_string(),
+                confidence: "graph_likely".to_string(),
+                provenance: "text_fallback".to_string(),
+                score: 0.9,
+            },
+        );
+        assert!(!should_replace_test_target(
+            &existing_targets,
+            "integration_test_file:tests/caller_one.rs",
+            0.8
+        ));
+        assert!(should_replace_test_target(
+            &existing_targets,
+            "integration_test_file:tests/caller_one.rs",
+            0.95
+        ));
+
+        let options = DiffImpactOptions {
+            max_distance: 1,
+            test_mode: DiffImpactTestMode::IncludeTests,
+            import_mode: DiffImpactImportMode::ExcludeImports,
+            changed_lines: Vec::new(),
+            changed_symbols: vec!["changed_a".to_string(), "changed_b".to_string()],
+            changed_mode: DiffImpactChangedMode::ExcludeChanged,
+            max_results: Some(2),
+        };
+        let results = diff_impact_for_changed_files(&db_path, &["src/a.rs".to_string()], &options)
+            .expect("diff-impact should succeed");
+        assert!(results.len() <= 2);
+        assert!(
+            !results.is_empty(),
+            "exclude_changed assertions should evaluate at least one result row"
+        );
+        for item in &results {
+            if let DiffImpactMatch::ImpactedSymbol { relationship, .. } = item {
+                assert_ne!(
+                    relationship, "changed_symbol",
+                    "exclude_changed mode should strip changed_symbol rows"
+                );
+            }
+        }
+
+        let mut sortable = vec![
+            DiffImpactMatch::TestTarget {
+                target: "b".to_string(),
+                target_kind: "integration_test_file".to_string(),
+                language: "rust".to_string(),
+                why_included: "w".to_string(),
+                confidence: "context_medium".to_string(),
+                provenance: "text_fallback".to_string(),
+                score: 0.5,
+            },
+            DiffImpactMatch::TestTarget {
+                target: "a".to_string(),
+                target_kind: "integration_test_file".to_string(),
+                language: "rust".to_string(),
+                why_included: "w".to_string(),
+                confidence: "context_medium".to_string(),
+                provenance: "text_fallback".to_string(),
+                score: 0.5,
+            },
+        ];
+        sort_and_cap_diff_impact_results(&mut sortable, Some(1));
+        assert_eq!(sortable.len(), 1);
+        assert!(matches!(
+            sortable[0],
+            DiffImpactMatch::TestTarget {
+                ref target,
+                ref target_kind,
+                ref language,
+                ref why_included,
+                ref confidence,
+                ref provenance,
+                score,
+            } if target == "a"
+                && target_kind == "integration_test_file"
+                && language == "rust"
+                && why_included == "w"
+                && confidence == "context_medium"
+                && provenance == "text_fallback"
+                && (score - 0.5).abs() < f64::EPSILON
+        ));
+    }
 }

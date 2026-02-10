@@ -294,34 +294,27 @@ fn push_identifier_list_definitions(
     language: &str,
     output: &mut Vec<ExtractedSymbol>,
 ) {
-    let Some(names_node) = node.child_by_field_name("name") else {
+    let Some(name_node) = node.child_by_field_name("name") else {
         return;
     };
-    let mut stack = vec![names_node];
-    while let Some(current) = stack.pop() {
-        if is_name_node(current.kind()) {
-            if let Some(symbol) = node_text(current, source) {
-                let (start_line, start_column) = start_position(current);
-                let (end_line, end_column) = end_position(node);
-                output.push(ExtractedSymbol {
-                    symbol: symbol.clone(),
-                    qualified_symbol: Some(format!("{language}:{file_path}::{symbol}")),
-                    kind: kind.to_string(),
-                    language: language.to_string(),
-                    container: None,
-                    start_line,
-                    start_column,
-                    end_line,
-                    end_column,
-                    signature: None,
-                });
-            }
-            continue;
-        }
-        let mut cursor = current.walk();
-        for child in current.children(&mut cursor) {
-            stack.push(child);
-        }
+    if !is_name_node(name_node.kind()) {
+        return;
+    }
+    if let Some(symbol) = node_text(name_node, source) {
+        let (start_line, start_column) = start_position(name_node);
+        let (end_line, end_column) = end_position(node);
+        output.push(ExtractedSymbol {
+            symbol: symbol.clone(),
+            qualified_symbol: Some(format!("{language}:{file_path}::{symbol}")),
+            kind: kind.to_string(),
+            language: language.to_string(),
+            container: None,
+            start_line,
+            start_column,
+            end_line,
+            end_column,
+            signature: None,
+        });
     }
 }
 
@@ -354,29 +347,27 @@ fn collect_call_symbols(
 ) {
     match node.kind() {
         "identifier" | "field_identifier" => {
-            if let Some(symbol) = node_text(node, source) {
-                let (line, column) = start_position(node);
-                references.push(ExtractedReference {
-                    symbol: symbol.clone(),
-                    line,
-                    column,
-                });
-                if let Some(caller_symbol) = caller {
-                    for to_symbol_key in call_target_symbol_keys(
-                        file_path,
-                        language,
-                        &symbol,
-                        None,
-                        import_target_hints,
-                    ) {
-                        edges.push(ExtractedEdge {
-                            from_symbol_key: scoped_symbol_key(file_path, language, caller_symbol),
-                            to_symbol_key,
-                            edge_kind: "calls".to_string(),
-                            confidence: 0.95,
-                            provenance: "call_resolution".to_string(),
-                        });
-                    }
+            let symbol = node_text(node, source).unwrap_or_default();
+            if symbol.is_empty() {
+                return;
+            }
+            let (line, column) = start_position(node);
+            references.push(ExtractedReference {
+                symbol: symbol.clone(),
+                line,
+                column,
+            });
+            if let Some(caller_symbol) = caller {
+                for to_symbol_key in
+                    call_target_symbol_keys(file_path, language, &symbol, None, import_target_hints)
+                {
+                    edges.push(ExtractedEdge {
+                        from_symbol_key: scoped_symbol_key(file_path, language, caller_symbol),
+                        to_symbol_key,
+                        edge_kind: "calls".to_string(),
+                        confidence: 0.95,
+                        provenance: "call_resolution".to_string(),
+                    });
                 }
             }
         }
@@ -385,39 +376,36 @@ fn collect_call_symbols(
                 .child_by_field_name("operand")
                 .and_then(|operand| node_text(operand, source))
                 .and_then(|text| first_identifier(&text));
-            if let Some(field_node) = node.child_by_field_name("field") {
-                if let Some(symbol) = node_text(field_node, source) {
-                    let (line, column) = start_position(field_node);
-                    references.push(ExtractedReference {
-                        symbol: symbol.clone(),
-                        line,
-                        column,
-                    });
-
-                    if let Some(caller_symbol) = caller {
-                        for to_symbol_key in call_target_symbol_keys(
-                            file_path,
-                            language,
-                            &symbol,
-                            qualifier.as_deref(),
-                            import_target_hints,
-                        ) {
-                            edges.push(ExtractedEdge {
-                                from_symbol_key: scoped_symbol_key(
-                                    file_path,
-                                    language,
-                                    caller_symbol,
-                                ),
-                                to_symbol_key,
-                                edge_kind: "calls".to_string(),
-                                confidence: 0.95,
-                                provenance: "call_resolution".to_string(),
-                            });
-                        }
-                    }
-                }
+            let field_node = node.child_by_field_name("field").unwrap_or(node);
+            let symbol = node_text(field_node, source).unwrap_or_default();
+            if symbol.is_empty() {
                 return;
             }
+            let (line, column) = start_position(field_node);
+            references.push(ExtractedReference {
+                symbol: symbol.clone(),
+                line,
+                column,
+            });
+
+            if let Some(caller_symbol) = caller {
+                for to_symbol_key in call_target_symbol_keys(
+                    file_path,
+                    language,
+                    &symbol,
+                    qualifier.as_deref(),
+                    import_target_hints,
+                ) {
+                    edges.push(ExtractedEdge {
+                        from_symbol_key: scoped_symbol_key(file_path, language, caller_symbol),
+                        to_symbol_key,
+                        edge_kind: "calls".to_string(),
+                        confidence: 0.95,
+                        provenance: "call_resolution".to_string(),
+                    });
+                }
+            }
+            return;
         }
         _ => {}
     }
@@ -666,8 +654,10 @@ fn is_name_node(kind: &str) -> bool {
 }
 
 fn node_text(node: Node<'_>, source: &str) -> Option<String> {
-    node.utf8_text(source.as_bytes())
-        .ok()
+    source
+        .as_bytes()
+        .get(node.start_byte()..node.end_byte())
+        .and_then(|bytes| std::str::from_utf8(bytes).ok())
         .map(str::trim)
         .filter(|text| !text.is_empty())
         .map(str::to_string)
@@ -681,4 +671,572 @@ fn start_position(node: Node<'_>) -> (u32, u32) {
 fn end_position(node: Node<'_>) -> (u32, u32) {
     let position = node.end_position();
     (position.row as u32 + 1, position.column as u32 + 1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse_go_root(source: &str) -> tree_sitter::Tree {
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_go::LANGUAGE.into())
+            .expect("go language should load");
+        parser.parse(source, None).expect("go source should parse")
+    }
+
+    fn find_first_kind<'a>(root: Node<'a>, kind: &str) -> Option<Node<'a>> {
+        let mut stack = vec![root];
+        while let Some(node) = stack.pop() {
+            if node.kind() == kind {
+                return Some(node);
+            }
+            let mut cursor = node.walk();
+            let mut children = node.children(&mut cursor).collect::<Vec<_>>();
+            children.reverse();
+            for child in children {
+                stack.push(child);
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn go_import_and_path_helpers_cover_edge_cases() {
+        assert_eq!(
+            go_import_candidate_paths("pkg/service.go"),
+            vec!["pkg/service.go".to_string()]
+        );
+        assert!(go_import_candidate_paths("").is_empty());
+        assert_eq!(
+            go_import_candidate_paths("pkg/service"),
+            vec![
+                "pkg/service.go".to_string(),
+                "pkg/service/service.go".to_string(),
+                "pkg/service/main.go".to_string()
+            ]
+        );
+
+        assert_eq!(resolve_go_import_path("src/app/main.go", "  "), None);
+        assert_eq!(resolve_go_import_path("src/app/main.go", "/"), None);
+        assert_eq!(
+            resolve_go_import_path("src/app/main.go", "src/pkg/tool"),
+            Some("src/pkg/tool".to_string())
+        );
+        assert_eq!(
+            resolve_go_import_path("src/app/main.go", "pkg/tool"),
+            Some("src/pkg/tool".to_string())
+        );
+        assert_eq!(
+            resolve_go_import_path("main.go", "pkg/tool"),
+            Some("main.go/pkg/tool".to_string())
+        );
+        assert_eq!(
+            resolve_go_import_path("", "pkg/tool"),
+            Some("pkg/tool".to_string())
+        );
+
+        assert_eq!(unquote_go_string("x"), None);
+        assert_eq!(
+            unquote_go_string("\"pkg/tool\""),
+            Some("pkg/tool".to_string())
+        );
+        assert_eq!(
+            unquote_go_string("`pkg/tool`"),
+            Some("pkg/tool".to_string())
+        );
+        assert_eq!(unquote_go_string("'pkg/tool'"), None);
+        assert_eq!(
+            package_name_from_import("/pkg/tool/"),
+            Some("tool".to_string())
+        );
+
+        assert_eq!(
+            normalize_relative_path(Path::new("src/pkg/../util/./tool.go")),
+            "src/util/tool.go".to_string()
+        );
+    }
+
+    #[test]
+    fn adapter_extract_covers_const_var_import_and_call_paths() {
+        let source = r#"
+package main
+
+import (
+    alias "pkg/tools"
+    . "pkg/dot"
+    _ "pkg/blank"
+    "pkg/noalias"
+)
+
+type Worker struct{}
+type Name = string
+type Greeter interface{ Hello() }
+
+const (
+    CONST_A = 1
+    CONST_B = 2
+)
+
+var (
+    varA = 1
+    varB = 2
+)
+
+func (w *Worker) run() {
+    alias.Do()
+    noalias.Call()
+    helper()
+}
+
+func helper() {}
+"#;
+
+        let unit = GoLanguageAdapter
+            .extract("src/main.go", source)
+            .expect("extraction should succeed");
+
+        assert!(
+            unit.symbols
+                .iter()
+                .any(|item| item.kind == "const" && item.symbol == "CONST_A"),
+            "const_spec should emit const symbols"
+        );
+        assert!(
+            unit.symbols
+                .iter()
+                .any(|item| item.kind == "variable" && item.symbol == "varA"),
+            "var_spec should emit variable symbols"
+        );
+        assert!(
+            unit.symbols
+                .iter()
+                .any(|item| item.kind == "import" && item.symbol == "alias"),
+            "import bindings should emit import symbols"
+        );
+        assert!(
+            unit.edges.iter().any(|edge| {
+                edge.edge_kind == "contains"
+                    && edge.from_symbol_key.symbol == "Worker"
+                    && edge.to_symbol_key.symbol == "run"
+            }),
+            "method container relation should produce contains edge"
+        );
+        assert!(
+            unit.references
+                .iter()
+                .any(|reference| reference.symbol == "Do" || reference.symbol == "Call"),
+            "selector calls should emit references"
+        );
+    }
+
+    #[test]
+    fn named_definition_and_call_helpers_cover_none_branches() {
+        let source = r#"
+package main
+import _ "pkg/x"
+func run() { helper() }
+"#;
+        let tree = parse_go_root(source);
+        let root = tree.root_node();
+        let import_spec = find_first_kind(root, "import_spec").expect("import_spec should exist");
+        let call_expression =
+            find_first_kind(root, "call_expression").expect("call_expression should exist");
+
+        let mut output = Vec::new();
+        assert_eq!(
+            push_named_definition(
+                import_spec,
+                source,
+                "function",
+                None,
+                "src/main.go",
+                "go",
+                &mut output
+            ),
+            None
+        );
+        assert!(output.is_empty());
+        push_identifier_list_definitions(
+            import_spec,
+            source,
+            "import",
+            "src/main.go",
+            "go",
+            &mut output,
+        );
+        assert!(
+            output.is_empty(),
+            "non-identifier import name bindings should short-circuit identifier-list extraction"
+        );
+
+        let function_node = call_expression
+            .child_by_field_name("function")
+            .expect("function node should exist");
+        let mut references = Vec::new();
+        let mut edges = Vec::new();
+        collect_call_symbols(
+            function_node,
+            source,
+            None,
+            "src/main.go",
+            "go",
+            &HashMap::new(),
+            &mut references,
+            &mut edges,
+        );
+        assert!(
+            !references.is_empty(),
+            "recursive call collection should capture symbols even without caller"
+        );
+        assert!(edges.is_empty(), "no caller means no call edges");
+    }
+
+    #[test]
+    fn callable_and_identifier_helpers_cover_fallbacks() {
+        let source = "package main\n\nvar x = 1\n";
+        let tree = parse_go_root(source);
+        let root = tree.root_node();
+        assert_eq!(enclosing_callable_name(root, source), None);
+        assert_eq!(last_identifier_text(root, source), Some("x".to_string()));
+        assert_eq!(first_identifier("..."), None);
+        assert!(is_name_node("identifier"));
+        assert!(!is_name_node("literal"));
+
+        let var_spec = find_first_kind(root, "var_spec").expect("var_spec should exist");
+        assert_eq!(node_text(var_spec, source), Some("x = 1".to_string()));
+        let (start_line, start_column) = start_position(var_spec);
+        let (end_line, end_column) = end_position(var_spec);
+        assert!(start_line >= 1 && start_column >= 1);
+        assert!(end_line >= start_line && end_column >= 1);
+    }
+
+    #[test]
+    fn helper_paths_cover_dedup_recursion_and_missing_field_fallbacks() {
+        let source = r#"
+package main
+
+import alias "pkg/tools"
+
+type Alias string
+
+var (
+    a, b = 1, 2
+)
+
+func dupe() {}
+func dupe() {}
+
+func run() {
+    alias.Do()
+    helper()
+}
+"#;
+        let unit = GoLanguageAdapter
+            .extract("src/main.go", source)
+            .expect("extraction should succeed");
+        assert!(
+            unit.symbols.iter().any(|item| item.symbol == "dupe"),
+            "duplicate definitions should still leave one symbol after dedup"
+        );
+
+        let tree = parse_go_root(source);
+        let root = tree.root_node();
+        assert!(
+            find_first_kind(root, "missing_kind").is_none(),
+            "missing kinds should return None from finder helper"
+        );
+
+        let mut defs = Vec::new();
+        let var_spec = find_first_kind(root, "var_spec").expect("var_spec should exist");
+        push_identifier_list_definitions(
+            var_spec,
+            source,
+            "variable",
+            "src/main.go",
+            "go",
+            &mut defs,
+        );
+        assert!(
+            defs.iter().any(|item| item.symbol == "a"),
+            "identifier list recursion should emit variable symbols"
+        );
+
+        let mut missing_name_defs = Vec::new();
+        push_identifier_list_definitions(
+            root,
+            source,
+            "variable",
+            "src/main.go",
+            "go",
+            &mut missing_name_defs,
+        );
+        assert!(
+            missing_name_defs.is_empty(),
+            "nodes without a name field should return early"
+        );
+
+        assert_eq!(go_type_kind(root), "type");
+        let type_spec = find_first_kind(root, "type_spec").expect("type_spec should exist");
+        assert_eq!(go_type_kind(type_spec), "type");
+
+        let mut refs = Vec::new();
+        let mut edges = Vec::new();
+        let identifier = find_first_kind(root, "identifier").expect("identifier should exist");
+        collect_call_symbols(
+            identifier,
+            source,
+            None,
+            "src/main.go",
+            "go",
+            &HashMap::new(),
+            &mut refs,
+            &mut edges,
+        );
+        assert!(
+            !refs.is_empty() && edges.is_empty(),
+            "identifier calls without caller context should record references only"
+        );
+
+        let selector =
+            find_first_kind(root, "selector_expression").expect("selector expression should exist");
+        collect_call_symbols(
+            selector,
+            source,
+            Some("run"),
+            "src/main.go",
+            "go",
+            &HashMap::new(),
+            &mut refs,
+            &mut edges,
+        );
+        assert!(
+            !edges.is_empty(),
+            "selector calls with caller context should emit call edges"
+        );
+
+        let mut recursive_refs = Vec::new();
+        let mut recursive_edges = Vec::new();
+        collect_call_symbols(
+            root,
+            source,
+            Some("run"),
+            "src/main.go",
+            "go",
+            &HashMap::new(),
+            &mut recursive_refs,
+            &mut recursive_edges,
+        );
+        assert!(
+            !recursive_refs.is_empty(),
+            "fallback recursion should walk child nodes and collect references"
+        );
+
+        assert_eq!(
+            normalize_relative_path(Path::new("/tmp/./pkg/../tool.go")),
+            "tmp/tool.go".to_string()
+        );
+    }
+
+    #[test]
+    fn helper_paths_cover_remaining_dedup_and_selector_return_paths() {
+        let duplicate_symbol_source = r#"
+package main
+func dupe() {} func dupe() {}
+"#;
+        let duplicate_unit = GoLanguageAdapter
+            .extract("src/main.go", duplicate_symbol_source)
+            .expect("go extraction should succeed");
+        assert!(
+            duplicate_unit
+                .symbols
+                .iter()
+                .filter(|item| item.kind == "function" && item.symbol == "dupe")
+                .count()
+                >= 2,
+            "same-line duplicate function names should both be retained before sorting"
+        );
+
+        let var_list_source = r#"
+package main
+var a, b = 1, 2
+"#;
+        let tree = parse_go_root(var_list_source);
+        let root = tree.root_node();
+        let var_spec = find_first_kind(root, "var_spec").expect("var_spec should exist");
+        let mut var_defs = Vec::new();
+        push_identifier_list_definitions(
+            var_spec,
+            var_list_source,
+            "variable",
+            "src/main.go",
+            "go",
+            &mut var_defs,
+        );
+        assert!(
+            !var_defs.is_empty(),
+            "identifier-list helper should emit symbols for name fields"
+        );
+
+        let call_source = r#"
+package main
+func run() {
+    alias.Do()
+}
+"#;
+        let call_tree = parse_go_root(call_source);
+        let call_root = call_tree.root_node();
+        let selector = find_first_kind(call_root, "selector_expression")
+            .expect("selector expression should exist");
+        let mut selector_refs = Vec::new();
+        let mut selector_edges = Vec::new();
+        collect_call_symbols(
+            selector,
+            call_source,
+            Some("run"),
+            "src/main.go",
+            "go",
+            &HashMap::new(),
+            &mut selector_refs,
+            &mut selector_edges,
+        );
+        assert!(
+            selector_refs.iter().any(|item| item.symbol == "Do"),
+            "selector expressions should capture field references"
+        );
+        assert!(
+            selector_edges
+                .iter()
+                .any(|edge| edge.to_symbol_key.symbol == "Do"),
+            "selector-expression branch should emit call edges and return early"
+        );
+
+        let identifier = find_first_kind(call_root, "identifier").expect("identifier should exist");
+        let mut identifier_refs = Vec::new();
+        let mut identifier_edges = Vec::new();
+        collect_call_symbols(
+            identifier,
+            call_source,
+            Some("run"),
+            "src/main.go",
+            "go",
+            &HashMap::new(),
+            &mut identifier_refs,
+            &mut identifier_edges,
+        );
+        assert!(
+            !identifier_refs.is_empty() && !identifier_edges.is_empty(),
+            "identifier call branch should record both references and edges"
+        );
+    }
+
+    #[test]
+    fn helper_paths_cover_identifier_list_recursion_and_selector_without_caller() {
+        let source = r#"
+package main
+
+func consume(first, second int) {}
+
+func run() {
+    alias.Do()
+}
+"#;
+        let tree = parse_go_root(source);
+        let root = tree.root_node();
+        let parameter_declaration = find_first_kind(root, "parameter_declaration")
+            .expect("parameter declaration should exist");
+        let mut defs = Vec::new();
+        push_identifier_list_definitions(
+            parameter_declaration,
+            source,
+            "parameter",
+            "src/main.go",
+            "go",
+            &mut defs,
+        );
+        assert!(
+            defs.iter().any(|item| item.symbol == "first"),
+            "identifier-list recursion should emit the first parameter name"
+        );
+
+        let selector =
+            find_first_kind(root, "selector_expression").expect("selector expression should exist");
+        let mut references = Vec::new();
+        let mut edges = Vec::new();
+        collect_call_symbols(
+            selector,
+            source,
+            None,
+            "src/main.go",
+            "go",
+            &HashMap::new(),
+            &mut references,
+            &mut edges,
+        );
+        assert!(
+            references.iter().any(|item| item.symbol == "Do"),
+            "selector-expression paths should still collect field references"
+        );
+        assert!(
+            edges.is_empty(),
+            "selector-expression branch should return early without caller context"
+        );
+    }
+
+    #[test]
+    fn collect_call_symbols_guards_cover_empty_symbol_and_missing_selector_field_paths() {
+        let identifier_source = r#"
+package main
+func run() { helper() }
+"#;
+        let identifier_tree = parse_go_root(identifier_source);
+        let identifier_call = find_first_kind(identifier_tree.root_node(), "call_expression")
+            .expect("identifier call expression should exist");
+        let identifier_function = identifier_call
+            .child_by_field_name("function")
+            .expect("identifier call should expose function child");
+        let mut identifier_references = Vec::new();
+        let mut identifier_edges = Vec::new();
+        collect_call_symbols(
+            identifier_function,
+            "",
+            Some("run"),
+            "src/main.go",
+            "go",
+            &HashMap::new(),
+            &mut identifier_references,
+            &mut identifier_edges,
+        );
+        assert!(
+            identifier_references.is_empty() && identifier_edges.is_empty(),
+            "mismatched source text should trigger empty-symbol guard and return early"
+        );
+
+        let selector_source = r#"
+package main
+func run() { alias.Do() }
+"#;
+        let selector_tree = parse_go_root(selector_source);
+        let selector_call = find_first_kind(selector_tree.root_node(), "call_expression")
+            .expect("selector call expression should exist");
+        let selector_function = selector_call
+            .child_by_field_name("function")
+            .expect("selector call should expose function child");
+        let mut selector_references = Vec::new();
+        let mut selector_edges = Vec::new();
+        collect_call_symbols(
+            selector_function,
+            "",
+            Some("run"),
+            "src/main.go",
+            "go",
+            &HashMap::new(),
+            &mut selector_references,
+            &mut selector_edges,
+        );
+        assert!(
+            selector_references.is_empty() && selector_edges.is_empty(),
+            "mismatched source text should trigger selector field empty-symbol guard"
+        );
+    }
 }

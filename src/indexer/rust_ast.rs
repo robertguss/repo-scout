@@ -529,3 +529,92 @@ impl FileOrderKey for AstReference {
         (self.line, self.column)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tree_sitter::Parser;
+
+    fn parse_rust(source: &str) -> tree_sitter::Tree {
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_rust::LANGUAGE.into())
+            .expect("rust language should load");
+        parser
+            .parse(source, None)
+            .expect("rust source should parse")
+    }
+
+    fn find_first_kind<'a>(root: Node<'a>, kind: &str) -> Option<Node<'a>> {
+        let mut stack = vec![root];
+        while let Some(node) = stack.pop() {
+            if node.kind() == kind {
+                return Some(node);
+            }
+            let mut cursor = node.walk();
+            let mut children = node.children(&mut cursor).collect::<Vec<_>>();
+            children.reverse();
+            for child in children {
+                stack.push(child);
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn push_named_definition_guards_cover_missing_wrong_kind_and_missing_text() {
+        let impl_source = "impl Foo {}";
+        let impl_tree = parse_rust(impl_source);
+        let impl_node = find_first_kind(impl_tree.root_node(), "impl_item")
+            .expect("impl item should be present");
+        assert!(
+            find_first_kind(impl_tree.root_node(), "missing_kind").is_none(),
+            "finder should return None when no node matches the requested kind"
+        );
+        let mut defs = Vec::new();
+        push_named_definition(impl_node, impl_source, "impl", None, None, &mut defs);
+        assert!(
+            defs.is_empty(),
+            "nodes without name fields should be ignored"
+        );
+
+        let struct_source = "struct S { field: i32 }";
+        let struct_tree = parse_rust(struct_source);
+        let field_node = find_first_kind(struct_tree.root_node(), "field_declaration")
+            .expect("field declaration should be present");
+        push_named_definition(field_node, struct_source, "field", None, None, &mut defs);
+        assert!(
+            defs.is_empty(),
+            "field identifiers should be rejected by named-definition guard"
+        );
+
+        let function_source = "fn run() {}";
+        let function_tree = parse_rust(function_source);
+        let function_node = find_first_kind(function_tree.root_node(), "function_item")
+            .expect("function item should be present");
+        push_named_definition(function_node, "", "function", None, None, &mut defs);
+        assert!(
+            defs.is_empty(),
+            "missing node text should prevent definition emission"
+        );
+    }
+
+    #[test]
+    fn signature_and_enclosing_function_helpers_cover_none_paths() {
+        let block_source = "{\n}\n";
+        let block_tree = parse_rust(block_source);
+        assert_eq!(
+            signature_summary(block_tree.root_node(), block_source),
+            None,
+            "empty signature heads should return None"
+        );
+
+        let root_source = "fn outer() { let value = 1; }\n";
+        let root_tree = parse_rust(root_source);
+        assert_eq!(
+            enclosing_function_name(root_tree.root_node(), root_source),
+            None,
+            "root nodes should not report enclosing functions"
+        );
+    }
+}

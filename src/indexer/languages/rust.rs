@@ -220,9 +220,7 @@ fn current_module_segments(caller_file_path: &str) -> Vec<String> {
         return Vec::new();
     }
 
-    let Some(file_name) = path_parts.last().copied() else {
-        return Vec::new();
-    };
+    let file_name = path_parts[path_parts.len() - 1];
     let path_start = usize::from(path_parts.len() > 1);
     let mut segments = path_parts[path_start..path_parts.len().saturating_sub(1)]
         .iter()
@@ -294,23 +292,24 @@ fn relation_hints(file_path: &str, content: &str, language: &str) -> Vec<Extract
                 continue;
             };
             let rest = rest.trim_start();
-            if let Some((trait_part, type_part)) = rest.split_once(" for ") {
-                let trait_head = trait_part.split('<').next().unwrap_or(trait_part);
-                let type_head = type_part.split('<').next().unwrap_or(type_part);
-                let Some(trait_symbol) = last_rust_identifier(trait_head) else {
-                    continue;
-                };
-                let Some(type_symbol) = last_rust_identifier(type_head) else {
-                    continue;
-                };
-                edges.push(ExtractedEdge {
-                    from_symbol_key: scoped_symbol_key(file_path, language, &type_symbol),
-                    to_symbol_key: scoped_symbol_key(file_path, language, &trait_symbol),
-                    edge_kind: "implements".to_string(),
-                    confidence: 0.95,
-                    provenance: "ast_reference".to_string(),
-                });
-            }
+            let Some((trait_part, type_part)) = rest.split_once(" for ") else {
+                continue;
+            };
+            let trait_head = trait_part.split('<').next().unwrap_or(trait_part);
+            let type_head = type_part.split('<').next().unwrap_or(type_part);
+            let Some(trait_symbol) = last_rust_identifier(trait_head) else {
+                continue;
+            };
+            let Some(type_symbol) = last_rust_identifier(type_head) else {
+                continue;
+            };
+            edges.push(ExtractedEdge {
+                from_symbol_key: scoped_symbol_key(file_path, language, &type_symbol),
+                to_symbol_key: scoped_symbol_key(file_path, language, &trait_symbol),
+                edge_kind: "implements".to_string(),
+                confidence: 0.95,
+                provenance: "ast_reference".to_string(),
+            });
         }
     }
 
@@ -347,9 +346,6 @@ fn path_suffix_segments(segment: &str) -> Option<Vec<String>> {
         end = start - 2;
     }
 
-    if parts.is_empty() {
-        return None;
-    }
     parts.reverse();
     Some(parts)
 }
@@ -394,4 +390,135 @@ fn last_rust_identifier(segment: &str) -> Option<String> {
         .split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
         .rfind(|part| !part.is_empty())
         .map(str::to_string)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn adapter_extract_emits_call_edges_with_caller_context() {
+        let source = r#"
+fn callee() {}
+
+fn caller() {
+    callee();
+}
+
+callee();
+"#;
+        let unit = RustLanguageAdapter
+            .extract("src/lib.rs", source)
+            .expect("rust extraction should succeed");
+        assert!(
+            unit.references.iter().any(|item| item.symbol == "callee"),
+            "call references should be captured"
+        );
+        assert!(
+            unit.edges.iter().any(|edge| {
+                edge.edge_kind == "calls"
+                    && edge.from_symbol_key.symbol == "caller"
+                    && edge.to_symbol_key.symbol == "callee"
+            }),
+            "caller-scoped call edges should be emitted"
+        );
+    }
+
+    #[test]
+    fn module_resolution_helpers_cover_empty_and_unbalanced_paths() {
+        assert!(
+            qualified_module_candidate_paths("src/lib.rs", &[]).is_empty(),
+            "empty reference segments should not produce module candidates"
+        );
+        assert_eq!(
+            resolve_module_segments_for_reference("src/lib.rs", &[]),
+            None
+        );
+        assert!(
+            current_module_segments("").is_empty(),
+            "empty caller paths should produce no module segments"
+        );
+        assert_eq!(crate_root_prefix(""), "");
+        assert_eq!(crate_root_prefix("main.rs"), "");
+        assert_eq!(
+            join_module_candidate_path("", "lib.rs"),
+            "lib.rs".to_string()
+        );
+        assert_eq!(path_suffix_segments("::"), None);
+        assert_eq!(
+            path_suffix_segments("crate::pkg::Type"),
+            Some(vec![
+                "crate".to_string(),
+                "pkg".to_string(),
+                "Type".to_string()
+            ])
+        );
+        assert_eq!(
+            qualified_module_segments_for_reference("foo();", 1, 99),
+            None
+        );
+        assert_eq!(strip_leading_impl_generics("<T"), None);
+        assert_eq!(strip_leading_impl_generics("<T>Type"), Some("Type"));
+    }
+
+    #[test]
+    fn relation_hints_cover_invalid_and_valid_use_impl_forms() {
+        let source = r#"
+use :: as alias;
+use crate::foo as ;
+impl <T for Missing {}
+impl Missing {}
+impl :: for MyType {}
+impl Trait for :: {}
+impl Trait for MyType {}
+"#;
+        let edges = relation_hints("src/lib.rs", source, "rust");
+        assert!(
+            edges.iter().any(|edge| {
+                edge.edge_kind == "implements"
+                    && edge.from_symbol_key.symbol == "MyType"
+                    && edge.to_symbol_key.symbol == "Trait"
+            }),
+            "valid impl lines should still produce implements edges"
+        );
+        assert_eq!(
+            edges
+                .iter()
+                .filter(|edge| edge.edge_kind == "implements")
+                .count(),
+            1,
+            "malformed impl/use lines should be ignored"
+        );
+    }
+
+    #[test]
+    fn relation_hints_cover_missing_alias_identifier_and_balanced_impl_generics() {
+        let source = r#"
+use crate::foo as ::;
+impl<T> Trait for MyType {}
+"#;
+        let edges = relation_hints("src/lib.rs", source, "rust");
+        assert!(
+            edges.iter().any(|edge| {
+                edge.edge_kind == "implements"
+                    && edge.from_symbol_key.symbol == "MyType"
+                    && edge.to_symbol_key.symbol == "Trait"
+            }),
+            "balanced impl generics should still emit implements edges"
+        );
+        assert_eq!(
+            strip_leading_impl_generics("<T>MyType"),
+            Some("MyType"),
+            "balanced generic parameter lists should strip the leading impl generic clause"
+        );
+    }
+
+    #[test]
+    fn strip_leading_impl_generics_supports_nested_generic_bounds() {
+        assert_eq!(
+            strip_leading_impl_generics("<T: Trait<U>>MyType"),
+            Some("MyType"),
+            "nested generic bounds should still strip balanced impl generics"
+        );
+    }
 }

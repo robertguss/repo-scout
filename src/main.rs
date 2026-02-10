@@ -367,12 +367,13 @@ fn run_diff_impact(args: crate::cli::DiffImpactArgs) -> anyhow::Result<()> {
     let matches = diff_impact_for_changed_files(&store.db_path, &changed_files, &options)?;
     let include_tests = matches!(options.test_mode, DiffImpactTestMode::IncludeTests);
     if args.json {
-        output::print_diff_impact_json(
+        let print_result = output::print_diff_impact_json(
             &changed_files,
             options.max_distance,
             include_tests,
             &matches,
-        )?;
+        );
+        print_result?;
     } else {
         output::print_diff_impact(
             &changed_files,
@@ -526,8 +527,225 @@ fn normalize_changed_file(repo_root: &std::path::Path, changed_file: &str) -> St
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_changed_file, parse_changed_line_spec};
+    use super::{
+        normalize_changed_file, parse_changed_line_spec, run_context, run_diff_impact, run_explain,
+        run_find, run_impact, run_index, run_refs, run_status, run_tests_for, run_verify_plan,
+    };
+    use crate::cli::{
+        ContextArgs, DiffImpactArgs, ExplainArgs, FindArgs, QueryArgs, RefsArgs, RepoArgs,
+        TestsForArgs, VerifyPlanArgs,
+    };
     use std::path::Path;
+    use tempfile::TempDir;
+
+    #[cfg(unix)]
+    fn create_symlink(src: &Path, dst: &Path) -> std::io::Result<()> {
+        std::os::unix::fs::symlink(src, dst)
+    }
+
+    fn write_file(path: &Path, content: &str) {
+        let parent = path.parent().expect("fixture file should have a parent");
+        std::fs::create_dir_all(parent).expect("fixture parent directory should be created");
+        std::fs::write(path, content).expect("fixture file should be written");
+    }
+
+    fn fixture_repo() -> TempDir {
+        let repo = tempfile::tempdir().expect("temp repo should be created");
+        write_file(
+            &repo.path().join("src/lib.rs"),
+            r#"
+pub fn run_find() {}
+pub fn run_refs() { run_find(); }
+"#,
+        );
+        write_file(
+            &repo.path().join("tests/lib_test.rs"),
+            r#"
+#[test]
+fn integration_check() {
+    crate::run_find();
+}
+"#,
+        );
+        repo
+    }
+
+    #[test]
+    fn command_handlers_cover_json_scope_and_changed_line_paths() {
+        let repo = fixture_repo();
+        let repo_path = repo.path().to_path_buf();
+
+        run_index(RepoArgs {
+            repo: repo_path.clone(),
+        })
+        .expect("index should succeed");
+        run_status(RepoArgs {
+            repo: repo_path.clone(),
+        })
+        .expect("status should succeed");
+
+        run_find(FindArgs {
+            symbol: "run_find".to_string(),
+            repo: repo_path.clone(),
+            json: true,
+            code_only: true,
+            exclude_tests: true,
+            max_results: Some(1),
+        })
+        .expect("find json should succeed");
+        run_find(FindArgs {
+            symbol: "run_find".to_string(),
+            repo: repo_path.clone(),
+            json: false,
+            code_only: false,
+            exclude_tests: false,
+            max_results: None,
+        })
+        .expect("find text should succeed");
+
+        run_refs(RefsArgs {
+            symbol: "run_find".to_string(),
+            repo: repo_path.clone(),
+            json: true,
+            code_only: false,
+            exclude_tests: false,
+            max_results: Some(10),
+        })
+        .expect("refs json should succeed");
+        run_refs(RefsArgs {
+            symbol: "run_find".to_string(),
+            repo: repo_path.clone(),
+            json: false,
+            code_only: true,
+            exclude_tests: false,
+            max_results: None,
+        })
+        .expect("refs text should succeed");
+
+        run_impact(QueryArgs {
+            symbol: "run_find".to_string(),
+            repo: repo_path.clone(),
+            json: true,
+        })
+        .expect("impact json should succeed");
+        run_impact(QueryArgs {
+            symbol: "run_find".to_string(),
+            repo: repo_path.clone(),
+            json: false,
+        })
+        .expect("impact text should succeed");
+
+        run_context(ContextArgs {
+            task: "run find references".to_string(),
+            repo: repo_path.clone(),
+            json: true,
+            budget: 16,
+            code_only: false,
+            exclude_tests: false,
+        })
+        .expect("context json with default scope should succeed");
+        run_context(ContextArgs {
+            task: "run find references".to_string(),
+            repo: repo_path.clone(),
+            json: false,
+            budget: 16,
+            code_only: true,
+            exclude_tests: true,
+        })
+        .expect("context text with scoped query should succeed");
+
+        run_tests_for(TestsForArgs {
+            symbol: "run_find".to_string(),
+            repo: repo_path.clone(),
+            json: true,
+            include_support: true,
+        })
+        .expect("tests-for json should succeed");
+        run_tests_for(TestsForArgs {
+            symbol: "run_find".to_string(),
+            repo: repo_path.clone(),
+            json: false,
+            include_support: false,
+        })
+        .expect("tests-for text should succeed");
+
+        let changed_lines = vec![
+            "src/lib.rs:4:4".to_string(),
+            "src/lib.rs:2:2".to_string(),
+            "src/lib.rs:4:4".to_string(),
+        ];
+
+        run_verify_plan(VerifyPlanArgs {
+            changed_files: vec![
+                "tests/lib_test.rs".to_string(),
+                "src/lib.rs".to_string(),
+                "src/lib.rs".to_string(),
+            ],
+            changed_lines: changed_lines.clone(),
+            changed_symbols: vec![
+                "run_find".to_string(),
+                "run_refs".to_string(),
+                "run_find".to_string(),
+            ],
+            max_targeted: Some(3),
+            repo: repo_path.clone(),
+            json: true,
+        })
+        .expect("verify-plan json should succeed");
+        run_verify_plan(VerifyPlanArgs {
+            changed_files: vec!["src/lib.rs".to_string()],
+            changed_lines: changed_lines.clone(),
+            changed_symbols: vec!["run_find".to_string()],
+            max_targeted: None,
+            repo: repo_path.clone(),
+            json: false,
+        })
+        .expect("verify-plan text should succeed");
+
+        run_diff_impact(DiffImpactArgs {
+            changed_files: vec!["src/lib.rs".to_string(), "src/lib.rs".to_string()],
+            changed_lines: changed_lines.clone(),
+            changed_symbols: vec!["run_find".to_string(), "run_find".to_string()],
+            max_distance: 2,
+            max_results: Some(20),
+            include_tests: false,
+            exclude_tests: true,
+            include_imports: true,
+            exclude_changed: true,
+            repo: repo_path.clone(),
+            json: true,
+        })
+        .expect("diff-impact json should succeed");
+        run_diff_impact(DiffImpactArgs {
+            changed_files: vec!["src/lib.rs".to_string()],
+            changed_lines,
+            changed_symbols: vec!["run_find".to_string()],
+            max_distance: 1,
+            max_results: None,
+            include_tests: true,
+            exclude_tests: false,
+            include_imports: false,
+            exclude_changed: false,
+            repo: repo_path.clone(),
+            json: false,
+        })
+        .expect("diff-impact text should succeed");
+
+        run_explain(ExplainArgs {
+            symbol: "run_find".to_string(),
+            repo: repo_path.clone(),
+            json: true,
+            include_snippets: true,
+        })
+        .expect("explain json should succeed");
+        run_explain(ExplainArgs {
+            symbol: "run_find".to_string(),
+            repo: repo_path,
+            json: false,
+            include_snippets: false,
+        })
+        .expect("explain text should succeed");
+    }
 
     #[test]
     fn parse_changed_line_spec_accepts_windows_drive_path_without_end() {
@@ -580,8 +798,44 @@ mod tests {
     }
 
     #[test]
+    fn parse_changed_line_spec_rejects_non_numeric_end_line() {
+        let error = parse_changed_line_spec(Path::new("."), "src/lib.rs:12:not-a-number")
+            .expect_err("non-numeric end line should fail");
+        assert!(
+            error
+                .to_string()
+                .contains("path:start[:end] with positive line numbers")
+        );
+    }
+
+    #[test]
     fn normalize_changed_file_trims_prefix_and_normalizes_separators() {
         let normalized = normalize_changed_file(Path::new("."), "./src\\main.rs");
         assert_eq!(normalized, "src/main.rs");
+    }
+
+    #[test]
+    fn normalize_changed_file_uses_current_dir_fallback_for_missing_repo_root() {
+        let repo_root = Path::new("target/repo-scout-tests/missing-repo-root");
+        let absolute_candidate = std::env::current_dir()
+            .expect("current dir should be available")
+            .join(repo_root)
+            .join("src/lib.rs");
+        let normalized = normalize_changed_file(repo_root, &absolute_candidate.to_string_lossy());
+        assert_eq!(normalized, "src/lib.rs");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn normalize_changed_file_uses_literal_repo_prefix_when_canonical_prefix_differs() {
+        let sandbox = tempfile::tempdir().expect("sandbox should be created");
+        let real_root = sandbox.path().join("real");
+        std::fs::create_dir_all(&real_root).expect("real root should be created");
+        let link_root = sandbox.path().join("repo-link");
+        create_symlink(&real_root, &link_root).expect("symlink should be created");
+
+        let missing_candidate = link_root.join("src/missing.rs");
+        let normalized = normalize_changed_file(&link_root, &missing_candidate.to_string_lossy());
+        assert_eq!(normalized, "src/missing.rs");
     }
 }
