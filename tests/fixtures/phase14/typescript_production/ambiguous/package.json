@@ -1,0 +1,9 @@
+{
+  "scripts": {
+    "test": "jest && vitest"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0",
+    "vitest": "^1.6.0"
+  }
+}
