@@ -237,7 +237,8 @@ Top-level fields:
 Phase 5/6 keeps schema 2 stable and adds precision controls through CLI options: `--max-targeted`
 bounds symbol-derived targeted rows (default cap `8`, `0` means none), while changed runnable test
 targets and the full-suite gate remain preserved (`cargo test` by default, `pytest` for explicit
-Python runner contexts with Python-only changed scope). Phase 6 adds additive changed-scope
+Python runner contexts with Python-only changed scope, and `npx vitest run` / `npx jest` for
+explicit unambiguous TypeScript-only Node runner contexts). Phase 6 adds additive changed-scope
 filters:
 
 - repeatable `--changed-line path:start[:end]` limits symbol-derived targeted rows by span overlap,
@@ -246,7 +247,9 @@ filters:
 Runner-aware notes:
 
 - Targeted `step` rows can include `pytest <target>` when explicit pytest configuration is detected.
-- Full-suite `step` can be `pytest` in explicit Python runner contexts.
+- Targeted `step` rows can include `npx vitest run <target>` or
+  `npx jest --runTestsByPath <target>` when `package.json` unambiguously signals one Node runner.
+- Full-suite `step` can be `pytest`, `npx vitest run`, or `npx jest` in explicit runner contexts.
 
 ## Schema 3 Contracts (Implemented, Frozen)
 

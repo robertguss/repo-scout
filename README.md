@@ -3,10 +3,10 @@
 `repo-scout` is a local, deterministic CLI for indexing a repository and answering code-navigation
 questions fast.
 
-Phase 13 is fully implemented and closes Python production-ready recommendation behavior with
-strict `pytest` runner-aware command synthesis in `tests-for`/`verify-plan`, expanded Python
-test-path matching (`*_tests.py`), and relative-import call attribution in `diff-impact`, while
-preserving prior Rust and Go production-closure guarantees.
+Phase 14 is fully implemented and closes TypeScript production-ready behavior with strict
+`jest`/`vitest` runner-aware command synthesis in `tests-for`/`verify-plan` plus
+directory-import caller attribution (`./module` -> `./module/index.ts`) in `diff-impact`, while
+preserving prior Rust, Go, and Python production-closure guarantees.
 
 ## What It Does
 
@@ -106,8 +106,13 @@ cargo run -- explain impact_matches --repo /path/to/repo --json
 - `tests-for <SYMBOL> --repo <PATH> [--include-support] [--json]`
   - Returns runnable test targets by default and restores support paths when `--include-support` is
     set.
+  - Runner-aware detection is strict and explicit:
+    - Rust: `cargo test --test <file_stem>` for direct `tests/<file>.rs`.
+    - Python: `pytest <target>` when explicit pytest configuration is detected.
+    - TypeScript: Vitest/Jest runnable targets only when `package.json` signals exactly one runner.
 - `verify-plan --changed-file <PATH> --repo <PATH> [--changed-line <path:start[:end]>] [--changed-symbol <symbol> ...] [--max-targeted <N>] [--json]`
-  - Produces deterministic verification steps (bounded targeted test commands + `cargo test`).
+  - Produces deterministic verification steps (bounded targeted test commands + runner-aware
+    full-suite gate).
   - `--changed-line` and repeatable `--changed-symbol` narrow symbol-derived targeted steps.
   - Default targeted cap is `8`; changed runnable test files are preserved even when
     `--max-targeted=0`.
@@ -117,6 +122,9 @@ cargo run -- explain impact_matches --repo /path/to/repo --json
     `<module>/mod.rs`, reducing dropped `called_by` rows in duplicate-name graphs.
   - TypeScript namespace/member calls and Python module-alias attribute calls now resolve with
     module-aware context to avoid duplicate-name cross-link ambiguity.
+  - TypeScript relative directory imports now include deterministic candidate paths for
+    `index.ts`/`index.tsx`, preserving caller attribution when `./module` resolves to
+    `./module/index.ts`.
   - Go import-alias selector calls now resolve deterministic candidate targets so duplicate function
     names across packages do not drop expected `called_by` rows.
   - Test-target emission remains default-on (`include_tests = true` in schema 3); use
@@ -231,6 +239,13 @@ Phase 13 note: `tests-for` and `verify-plan` now synthesize `pytest` commands on
 pytest configuration is detected (`pytest.ini`, `pyproject.toml` `[tool.pytest.ini_options]`,
 `tox.ini` `[pytest]`, or `setup.cfg` `[tool:pytest]`), and Python relative imports
 (`from .module import symbol`) preserve caller attribution in `diff-impact`.
+
+Phase 14 note: `tests-for` and `verify-plan` now synthesize strict Node runner commands for
+TypeScript test files when `package.json` unambiguously signals exactly one runner:
+`npx vitest run <target>` / `npx vitest run` for Vitest, and
+`npx jest --runTestsByPath <target>` / `npx jest` for Jest. Ambiguous Jest+Vitest contexts remain
+conservative. TypeScript directory imports (`./module`) now include `index.ts`/`index.tsx`
+candidate paths for stable `diff-impact` caller attribution.
 
 ## Error Recovery
 

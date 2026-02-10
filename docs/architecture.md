@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the current `repo-scout` architecture after Phase 13.
+This document describes the current `repo-scout` architecture after Phase 14.
 
 ## High-Level Flow
 
@@ -32,7 +32,8 @@ This document describes the current `repo-scout` architecture after Phase 13.
   - Rust adapter now performs deterministic module-qualified candidate resolution across
     `crate::`/`self::`/`super::` prefixes and both `<module>.rs` + `<module>/mod.rs` layouts.
   - TypeScript/Python adapters now include module-aware alias hints for namespace/member and
-    module-alias attribute call resolution.
+    module-alias attribute call resolution, including TypeScript directory-import candidates for
+    `index.ts`/`index.tsx` paths.
   - Go adapter now provides definition extraction plus AST-backed call references and deterministic
     import-alias-aware selector call-edge candidates.
 - `src/indexer/mod.rs`
@@ -130,7 +131,10 @@ schema migration safety.
 - Find direct symbol occurrences in test-like files.
 - Classify targets as runnable integration test files or support paths.
 - By default return runnable targets only; `--include-support` restores support paths additively.
-- Runner-aware command synthesis treats Python targets as runnable only in explicit pytest contexts.
+- Runner-aware command synthesis is strict:
+  - Python targets are runnable only in explicit pytest contexts.
+  - TypeScript targets are runnable only when `package.json` unambiguously signals one Node runner
+    (`jest` or `vitest`).
 - Score and sort deterministically with runnable targets first.
 
 ### `verify-plan`
@@ -147,7 +151,8 @@ schema migration safety.
 - Preserve changed runnable test targets regardless cap value.
 - Keep best evidence for duplicate commands.
 - Append deterministic full-suite gate by runner context (`cargo test` by default; `pytest` in
-  explicit Python runner contexts when changed scope is Python-only).
+  explicit Python runner contexts for Python-only scope; `npx vitest run` / `npx jest` in explicit
+  unambiguous TypeScript-only Node runner contexts).
 
 ### `diff-impact`
 
@@ -164,6 +169,8 @@ schema migration safety.
   deterministic file-path candidates for both `<module>.rs` and `<module>/mod.rs`.
 - Resolve TypeScript namespace/member and Python module-alias attribute calls with module-aware
   hints so duplicate-name callees do not cross-link ambiguously.
+- Resolve TypeScript directory imports (`./module`) with deterministic direct + `index.ts`/`index.tsx`
+  candidate paths so caller attribution is preserved in `diff-impact`.
 - Resolve Python relative-import identifier calls (`from .module import symbol`) to preserve
   caller attribution in changed-file impact walks.
 - Resolve Go import-alias selector calls with deterministic import-path candidate files so duplicate

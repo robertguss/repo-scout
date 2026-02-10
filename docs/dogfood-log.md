@@ -21,6 +21,52 @@ This log captures real `repo-scout` usage while building `repo-scout`.
 ## Entries
 
 - Date: `2026-02-10`
+- Task: Phase 14 TypeScript production-ready closure (strict Jest/Vitest runner-aware
+  recommendations + directory-import caller attribution).
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find test_command_for_target --repo . --json`
+  - `cargo run -- refs test_command_for_target --repo . --json`
+  - `cargo test --test milestone61_typescript_production -- --nocapture` (red)
+  - `cargo test --test milestone61_typescript_production -- --nocapture` (green)
+  - `cargo test --test milestone15_typescript -- --nocapture`
+  - `cargo test --test milestone33_typescript_semantics -- --nocapture`
+  - `cargo test --test milestone37_semantic_precision -- --nocapture`
+  - `cargo test --test milestone60_python_recommendations -- --nocapture`
+  - `cargo test --test milestone49_rust_hardening -- --nocapture`
+  - `cargo run -- index --repo tests/fixtures/phase14/typescript_production/vitest`
+  - `cargo run -- tests-for computePlan --repo tests/fixtures/phase14/typescript_production/vitest --json`
+  - `cargo run -- verify-plan --changed-file src/service.ts --repo tests/fixtures/phase14/typescript_production/vitest --json`
+  - `cargo run -- index --repo tests/fixtures/phase14/typescript_production/jest`
+  - `cargo run -- verify-plan --changed-file src/service.ts --repo tests/fixtures/phase14/typescript_production/jest --json`
+  - `cargo run -- index --repo tests/fixtures/phase14/typescript_production/index_import`
+  - `cargo run -- diff-impact --changed-file src/util/index.ts --repo tests/fixtures/phase14/typescript_production/index_import --json`
+  - `cargo clippy --all-targets --all-features -- -D warnings`
+  - `cargo test`
+  - `bash scripts/validate_tdd_cycle.sh --base origin/main --allow-empty-range`
+  - `bash scripts/validate_evidence_packet.sh --pr-body .github/pull_request_template.md`
+- What helped:
+  - Strict `package.json` runner detection made command synthesis deterministic and prevented false
+    runnable-target assumptions in ambiguous Jest+Vitest repositories.
+  - Multi-candidate TypeScript import resolution (`<module>.ts` + `<module>/index.ts` and TSX
+    variants) preserved existing behavior while closing common directory-import attribution gaps.
+- What failed or felt weak:
+  - Single-path TypeScript import hinting was too narrow for `./module` directory imports and
+    dropped expected `called_by` rows in `diff-impact`.
+- Action taken:
+  - failing tests added:
+    - `tests/milestone61_typescript_production.rs`
+  - fixes implemented:
+    - strict Node runner detection and command synthesis in `src/query/mod.rs`
+    - TypeScript import hint candidate expansion in `src/indexer/languages/typescript.rs`
+    - repeatable fixture corpus in `tests/fixtures/phase14/typescript_production/`
+  - docs update:
+    - `README.md`, `docs/cli-reference.md`, `docs/architecture.md`, `docs/json-output.md`,
+      `docs/performance-baseline.md`, `docs/dogfood-log.md`,
+      `agents/plans/repo-scout-phase14-execplan.md`.
+- Status: `fixed`
+
+- Date: `2026-02-10`
 - Task: Phase 13 Python production-ready closure (`pytest` runner-aware recommendations +
   relative-import `diff-impact` attribution).
 - Commands run:

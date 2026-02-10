@@ -11,33 +11,37 @@ cross-language High-Bar/GA phase so the project is mostly complete and maintenan
 - Primary objectives: product capability + quality hardening.
 - Delivery mode: low-risk, gate-based sequencing (not broad parallel language development).
 - Language order: Rust first (depth), then Go, then Python, then TypeScript.
-- Go scope for next phase: minimal but useful (`find` definitions only).
+- Historical Phase 10 Go scope: minimal but useful (`find` definitions only).
 - Per-language exit bar: `Production-ready` (not just core parity).
 - Final release posture: one cross-language `High-Bar/GA` phase after all languages are
   production-ready.
 
-## Current State Review Snapshot (2026-02-09)
+## Current State Review Snapshot (2026-02-10)
 
 Evidence from local audit and commands:
 
 - Quality gates are currently green:
-  `cargo test`, `cargo clippy --all-targets --all-features -- -D warnings`, and evidence validator.
+  `cargo test`, `cargo clippy --all-targets --all-features -- -D warnings`,
+  `validate_tdd_cycle.sh --base origin/main --allow-empty-range`, and evidence validator.
 - Contract-TDD validator is healthy but requires commits for strict range checks:
   `validate_tdd_cycle.sh --base origin/main` fails on empty ranges unless `--allow-empty-range`.
 - Core architecture is stable with schema `v3`, deterministic query paths, and adapter-based
   extraction for Rust/TypeScript/Python/Go.
-- Recent Phase 10 updates:
-  - test-target synthesis now avoids emitting non-Rust `cargo test --test` targets and only maps
-    direct `tests/<file>.rs` paths to runnable Rust integration-test commands.
-  - test-like path classification now includes common TS/Python conventions
-    (`*.test.ts`, `*.spec.ts`, `test_*.py`, `*_test.py`) in addition to existing Rust/test-dir
-    patterns (`tests/`, `/tests/`, `*_test.rs`).
-  - Go adapter support exists for AST-backed definition indexing used by `find`.
-- Planned runner-aware recommendation expansion remains a residual hardening thread for later
-  production-readiness phases.
+- Recent phase-completion updates (11-14):
+  - Rust production-ready closure is complete with module-qualified call resolution hardening,
+    deterministic behavior checks, and Rust performance guardrails.
+  - Go production-ready closure is complete with AST-backed `refs` plus import-alias-aware
+    graph/impact attribution.
+  - Python production-ready closure is complete with strict explicit-`pytest` runner-aware
+    recommendations and relative-import caller attribution in `diff-impact`.
+  - TypeScript production-ready closure is complete with strict explicit Jest/Vitest
+    runner-aware recommendations and directory-import (`./module` -> `./module/index.ts`)
+    caller attribution in `diff-impact`.
+- All four language-specific production-ready closures are now complete; the next active work is
+  cross-language convergence (Phase 15), then GA hardening (Phase 16).
 
 Implication: the project has a strong base and can move quickly, but remaining work is mainly
-language-depth and hardening rather than new architectural foundations.
+cross-language convergence and release hardening rather than single-language capability depth.
 
 ## Definitions
 
@@ -62,7 +66,7 @@ The project is `High-Bar/GA` ready when all are true:
 
 ## Phase Roadmap
 
-## Phase 10 (Current): Rust Hardening + Go `find` MVP
+## Phase 10 (Completed): Rust Hardening + Go `find` MVP
 
 Purpose:
 Ship immediate Go value while continuing Rust reliability hardening.
@@ -83,7 +87,7 @@ Primary artifact:
 
 - `agents/plans/repo-scout-phase10-execplan.md`
 
-## Phase 11: Rust Production-Ready Closure
+## Phase 11 (Completed): Rust Production-Ready Closure
 
 Purpose:
 Finish Rust hardening to full production-ready bar.
@@ -104,7 +108,7 @@ Risk posture:
 
 - Tier 1 by default; escalate to Tier 2 if schema or persistence invariants are touched.
 
-## Phase 12: Go Production-Ready Closure
+## Phase 12 (Completed): Go Production-Ready Closure
 
 Purpose:
 Evolve Go from `find` MVP to production-ready language support.
@@ -121,7 +125,7 @@ Exit gate:
 - Go meets `Production-ready` definition.
 - Go commands are usable in day-to-day dogfooding.
 
-## Phase 13: Python Production-Ready Closure
+## Phase 13 (Completed): Python Production-Ready Closure
 
 Purpose:
 Take existing Python support to production-ready quality.
@@ -138,7 +142,7 @@ Exit gate:
 - Python meets `Production-ready` definition.
 - Targeted test recommendations are runnable and deterministic in explicit runner contexts.
 
-## Phase 14: TypeScript Production-Ready Closure
+## Phase 14 (Completed): TypeScript Production-Ready Closure
 
 Purpose:
 Take existing TypeScript support to production-ready quality.
@@ -155,7 +159,7 @@ Exit gate:
 - TypeScript meets `Production-ready` definition.
 - Node-targeted recommendation behavior is deterministic and strict-mode safe.
 
-## Phase 15: Cross-Language Production Convergence
+## Phase 15 (Current): Cross-Language Production Convergence
 
 Purpose:
 Unify behavior and operator experience across all four languages before GA hardening.
@@ -172,7 +176,7 @@ Exit gate:
 - All four languages simultaneously satisfy production-ready criteria under one integrated
   validation pack.
 
-## Phase 16: High-Bar / GA Hardening
+## Phase 16 (Upcoming): High-Bar / GA Hardening
 
 Purpose:
 Perform final release-grade hardening after production-ready parity exists.
@@ -203,10 +207,10 @@ Exit gate:
 Create one ExecPlan per phase:
 
 - `agents/plans/repo-scout-phase10-execplan.md` (created)
-- `agents/plans/repo-scout-phase11-execplan.md`
-- `agents/plans/repo-scout-phase12-execplan.md`
-- `agents/plans/repo-scout-phase13-execplan.md`
-- `agents/plans/repo-scout-phase14-execplan.md`
+- `agents/plans/repo-scout-phase11-execplan.md` (created)
+- `agents/plans/repo-scout-phase12-execplan.md` (created)
+- `agents/plans/repo-scout-phase13-execplan.md` (created)
+- `agents/plans/repo-scout-phase14-execplan.md` (created)
 - `agents/plans/repo-scout-phase15-execplan.md`
 - `agents/plans/repo-scout-phase16-execplan.md`
 
@@ -221,3 +225,7 @@ At roadmap completion, `repo-scout` will have:
 - One consolidated high-bar release-hardening pass completed.
 - Stable command/JSON contracts and deterministic behavior across languages.
 - Mature test, doc, and evidence artifacts sufficient for maintenance-mode operation.
+
+Current status (2026-02-10): Rust/Go/Python/TypeScript production-ready closures are complete
+(Phases 11-14). Remaining roadmap execution is Phase 15 (cross-language convergence) and
+Phase 16 (High-Bar/GA hardening).

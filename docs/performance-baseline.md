@@ -30,6 +30,9 @@ Track wall-clock timings for:
 - Phase 13 Python production-closure checks (explicit-pytest runner-aware `tests-for`/`verify-plan`
   and relative-import `diff-impact` traversal on fixture corpus under
   `tests/fixtures/phase13/python_recommendations`)
+- Phase 14 TypeScript production-closure checks (strict Node runner-aware `tests-for`/`verify-plan`
+  plus directory-import `diff-impact` attribution on fixture corpus under
+  `tests/fixtures/phase14/typescript_production`)
 - Phase 11 Rust production-closure guardrails (`scripts/check_rust_perf_guardrails.sh`,
   `docs/performance-thresholds-rust.md`, and fixture corpus under
   `tests/fixtures/phase11/rust_production/corpus`)
@@ -87,6 +90,13 @@ Equivalent manual commands:
 /usr/bin/time -p cargo run --release -- tests-for compute_plan --repo tests/fixtures/phase13/python_recommendations --json
 /usr/bin/time -p cargo run --release -- verify-plan --changed-file src/service.py --repo tests/fixtures/phase13/python_recommendations --json
 /usr/bin/time -p cargo run --release -- diff-impact --changed-file src/pkg/util.py --repo tests/fixtures/phase13/python_recommendations --json
+/usr/bin/time -p cargo run --release -- index --repo tests/fixtures/phase14/typescript_production/vitest
+/usr/bin/time -p cargo run --release -- tests-for computePlan --repo tests/fixtures/phase14/typescript_production/vitest --json
+/usr/bin/time -p cargo run --release -- verify-plan --changed-file src/service.ts --repo tests/fixtures/phase14/typescript_production/vitest --json
+/usr/bin/time -p cargo run --release -- index --repo tests/fixtures/phase14/typescript_production/jest
+/usr/bin/time -p cargo run --release -- verify-plan --changed-file src/service.ts --repo tests/fixtures/phase14/typescript_production/jest --json
+/usr/bin/time -p cargo run --release -- index --repo tests/fixtures/phase14/typescript_production/index_import
+/usr/bin/time -p cargo run --release -- diff-impact --changed-file src/util/index.ts --repo tests/fixtures/phase14/typescript_production/index_import --json
 bash scripts/check_rust_perf_guardrails.sh --repo . --fixture tests/fixtures/phase11/rust_production/corpus
 bash scripts/check_rust_perf_guardrails.sh --repo . --fixture tests/fixtures/phase11/rust_production/corpus --record
 ```

@@ -199,6 +199,11 @@ Runner-aware runnable target behavior:
 - Python targets map to `pytest <target>` only when explicit pytest configuration is detected
   (`pytest.ini`, `[tool.pytest.ini_options]` in `pyproject.toml`, `[pytest]` in `tox.ini`, or
   `[tool:pytest]` in `setup.cfg`).
+- TypeScript targets map to runner commands only when `package.json` unambiguously signals one
+  Node runner:
+  - Vitest: `npx vitest run <target>`
+  - Jest: `npx jest --runTestsByPath <target>`
+  - Ambiguous Jest+Vitest signals stay non-runnable by default (strict mode).
 
 Example:
 
@@ -222,12 +227,16 @@ Behavior:
 - Suggests runnable targeted commands only:
   - `cargo test --test <name>` for direct `tests/<file>.rs` targets.
   - `pytest <target>` for Python test targets when explicit pytest configuration is detected.
+  - `npx vitest run <target>` for TypeScript targets in explicit Vitest contexts.
+  - `npx jest --runTestsByPath <target>` for TypeScript targets in explicit Jest contexts.
 - Caps symbol-derived targeted rows to `8` by default.
 - `--max-targeted 0` suppresses symbol-derived targeted rows, while still preserving changed
   runnable test targets and the required full-suite gate.
 - Always appends a full-suite safety gate:
   - `cargo test` for Rust-scoped verification contexts (default).
   - `pytest` for explicit Python runner contexts when changed scope is Python-only.
+  - `npx vitest run` for explicit Vitest contexts when changed scope is TypeScript-only.
+  - `npx jest` for explicit Jest contexts when changed scope is TypeScript-only.
 
 Example:
 
@@ -257,6 +266,9 @@ Behavior:
 - Uses module-aware TypeScript/Python call resolution so namespace/member and module-alias attribute
   calls resolve to the intended module under duplicate symbol names, including Python relative
   imports (`from .module import symbol`) for identifier-call attribution.
+- TypeScript relative directory imports (`./module`) emit deterministic candidate paths for both
+  direct module files and `index.ts`/`index.tsx` files to preserve caller attribution when
+  repositories use `./module/index.ts` layouts.
 - Uses cycle-safe, deterministic dedupe to prevent duplicate growth and changed-symbol echo rows at
   non-zero distances.
 - `--exclude-changed` removes changed-symbol (`distance=0`) rows from final output while traversal
