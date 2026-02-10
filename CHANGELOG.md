@@ -13,11 +13,25 @@ All notable changes to this project are documented in this file.
 - Documentation consistency automation surface:
   `scripts/check_docs_consistency.sh`, `just docs-consistency`, and CI wiring in
   `.github/workflows/contract-gates.yml`.
+- Phase 18 maintenance backlog and freshness policy artifacts:
+  `docs/maintenance-backlog-phase18.md` and `docs/maintenance-cadence-phase18.md`.
+- Milestone coverage for Phase 18 maintenance governance:
+  `tests/milestone73_maintenance_backlog_policy.rs`,
+  `tests/milestone74_maintenance_gate_pack.rs`,
+  `tests/milestone75_docs_freshness_guardrails.rs`.
+- Phase 18 maintenance automation surface:
+  `scripts/check_phase18_maintenance_pack.sh`,
+  `scripts/check_phase18_docs_freshness.sh`,
+  `just phase18-maintenance-pack`,
+  `just phase18-docs-freshness`,
+  and CI invocation via `.github/workflows/contract-gates.yml`.
 
 ### Changed
 - Documentation truth-sync updates for current post-Phase-16 closure posture in:
   `README.md`, `docs/architecture.md`, `agents/plans/repo-scout-phase9-execplan.md`,
   `agents/plans/README.md`, and `docs/dogfood-log.md`.
+- Phase 18 closure evidence and progress tracking updates in:
+  `docs/dogfood-log.md`, `agents/plans/repo-scout-phase18-execplan.md`, and `CHANGELOG.md`.
 
 ## [0.1.0] - 2026-02-10
 

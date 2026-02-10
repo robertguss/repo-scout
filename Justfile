@@ -44,6 +44,14 @@ contract-check base="origin/main" pr_body=".github/pull_request_template.md": co
 docs-consistency repo=".":
     bash scripts/check_docs_consistency.sh --repo "{{repo}}"
 
+# Usage: just phase18-maintenance-pack [repo]
+phase18-maintenance-pack repo=".":
+    bash scripts/check_phase18_maintenance_pack.sh --repo "{{repo}}"
+
+# Usage: just phase18-docs-freshness [repo] [doc]
+phase18-docs-freshness repo="." doc="docs/maintenance-cadence-phase18.md":
+    bash scripts/check_phase18_docs_freshness.sh --repo "{{repo}}" --doc "{{doc}}"
+
 # Dogfood loops
 # Usage: just dogfood-pre <symbol> [repo]
 dogfood-pre symbol repo=".":

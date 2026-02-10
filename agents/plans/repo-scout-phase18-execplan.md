@@ -32,10 +32,24 @@ This phase does not introduce schema-version churn or new query command families
       `cargo run -- find docs_consistency --repo . --json`,
       `cargo run -- refs docs_consistency --repo . --json`.
 - [x] (2026-02-10) Authored this Phase 18 ExecPlan as planning-only work.
-- [ ] Milestone 73 strict TDD maintenance backlog policy artifact and contract tests.
-- [ ] Milestone 74 strict TDD maintenance gate-pack script + Just/CI wiring.
-- [ ] Milestone 75 strict TDD documentation freshness guardrails and cadence checks.
-- [ ] Milestone 76 docs, dogfood evidence, validator closure, and retrospective updates.
+- [x] (2026-02-10) Completed Milestone 73 via strict red/green contract tests and added
+      `docs/maintenance-backlog-phase18.md`.
+- [x] (2026-02-10) Completed Milestone 74 via strict red/green contract tests and added
+      `scripts/check_phase18_maintenance_pack.sh` plus Justfile/CI wiring.
+- [x] (2026-02-10) Completed Milestone 75 via strict red/green contract tests and added
+      `docs/maintenance-cadence-phase18.md`, `scripts/check_phase18_docs_freshness.sh`, and
+      maintenance-pack path integration.
+- [x] (2026-02-10) Completed Milestone 76 closure artifact updates:
+      `docs/dogfood-log.md`, `agents/plans/repo-scout-phase18-execplan.md`, and `CHANGELOG.md`.
+- [x] (2026-02-10) Ran closure validation stack and all required gates passed:
+      `cargo fmt`,
+      `cargo clippy --all-targets --all-features -- -D warnings`,
+      `cargo test`,
+      `bash scripts/check_docs_consistency.sh --repo .`,
+      `bash scripts/check_phase18_maintenance_pack.sh --repo .`,
+      `bash scripts/check_phase18_docs_freshness.sh --repo .`,
+      `bash scripts/validate_tdd_cycle.sh --base origin/main --allow-empty-range`,
+      `bash scripts/validate_evidence_packet.sh --pr-body .github/pull_request_template.md`.
 
 ## Surprises & Discoveries
 
@@ -44,6 +58,10 @@ This phase does not introduce schema-version churn or new query command families
 - Observation: `validate_tdd_cycle.sh --base origin/main` still requires
   `--allow-empty-range` on empty local ranges; maintenance workflows should explicitly account for
   that developer experience.
+- Observation: wiring docs freshness through the phase18 maintenance-pack script provided one CI
+  invocation path while preserving independent local entry points via Just targets.
+- Observation: enforcing freshness with invariant checks (`next_review_due >= last_reviewed`,
+  non-empty marker fields) kept checks deterministic and CI-friendly without clock-dependent logic.
 
 ## Decision Log
 
@@ -63,20 +81,26 @@ This phase does not introduce schema-version churn or new query command families
 
 ## Outcomes & Retrospective
 
-Planning outcome:
+Completion outcome:
 
-- Phase 18 scope is constrained to maintenance operations and governance guardrails.
-- Runtime feature expansion is explicitly out of scope.
+- Phase 18 maintenance governance artifacts are implemented and machine-checkable:
+  `docs/maintenance-backlog-phase18.md` and `docs/maintenance-cadence-phase18.md`.
+- New executable maintenance gates are in place:
+  `scripts/check_phase18_maintenance_pack.sh` and `scripts/check_phase18_docs_freshness.sh`.
+- Local/CI wiring is complete with deterministic invocation surfaces:
+  `just phase18-maintenance-pack`, `just phase18-docs-freshness`, and
+  `.github/workflows/contract-gates.yml` phase18 maintenance-pack gate.
+- Strict TDD coverage exists for all three Phase 18 implementation slices:
+  `tests/milestone73_maintenance_backlog_policy.rs`,
+  `tests/milestone74_maintenance_gate_pack.rs`,
+  `tests/milestone75_docs_freshness_guardrails.rs`.
+- Closure quality gates are green for formatting, linting, full tests, docs consistency, Phase 18
+  maintenance gates, and contract validators.
 
-Expected completion outcome:
+Residual work:
 
-- maintainers can run one maintenance pack command for routine confidence,
-- backlog ownership and priorities are explicit and machine-checkable,
-- docs freshness expectations are validated, reducing stale-status regressions.
-
-Expected residual work:
-
-- optional future feature phases only when backlog evidence justifies capability expansion.
+- Continue routine maintenance-only cadence updates to keep backlog and freshness-register markers
+  current; no schema or command-contract expansion is required for Phase 18 closure.
 
 ## Context and Orientation
 

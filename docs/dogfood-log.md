@@ -21,6 +21,75 @@ This log captures real `repo-scout` usage while building `repo-scout`.
 ## Entries
 
 - Date: `2026-02-10`
+- Task: Phase 18 maintenance governance hardening (milestones 73-76).
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find maintenance_backlog --repo . --json`
+  - `cargo run -- refs maintenance_backlog --repo . --json`
+  - `cargo test --test milestone73_maintenance_backlog_policy -- --nocapture` (red)
+  - `cargo test --test milestone73_maintenance_backlog_policy -- --nocapture` (green)
+  - `cargo run -- index --repo .`
+  - `cargo run -- find maintenance_backlog --repo .`
+  - `cargo run -- refs maintenance_backlog --repo .`
+  - `cargo test`
+  - `cargo run -- index --repo .`
+  - `cargo run -- find maintenance_backlog --repo . --json`
+  - `cargo run -- refs maintenance_backlog --repo . --json`
+  - `cargo fmt`
+  - `cargo clippy --all-targets --all-features -- -D warnings`
+  - `cargo test`
+  - `bash scripts/check_docs_consistency.sh --repo .`
+  - `bash scripts/check_phase18_maintenance_pack.sh --repo .`
+  - `bash scripts/check_phase18_docs_freshness.sh --repo .`
+  - `bash scripts/validate_tdd_cycle.sh --base origin/main --allow-empty-range`
+  - `bash scripts/validate_evidence_packet.sh --pr-body .github/pull_request_template.md`
+  - `cargo run -- index --repo .`
+  - `cargo run -- find maintenance_backlog --repo .`
+  - `cargo run -- refs maintenance_backlog --repo .`
+  - `cargo test`
+  - `cargo run -- index --repo .`
+  - `cargo run -- find maintenance_backlog --repo . --json`
+  - `cargo run -- refs maintenance_backlog --repo . --json`
+  - `cargo test --test milestone74_maintenance_gate_pack -- --nocapture` (red)
+  - `cargo test --test milestone74_maintenance_gate_pack -- --nocapture` (green)
+  - `cargo run -- index --repo .`
+  - `cargo run -- find maintenance_backlog --repo .`
+  - `cargo run -- refs maintenance_backlog --repo .`
+  - `cargo test`
+  - `cargo run -- index --repo .`
+  - `cargo run -- find maintenance_backlog --repo . --json`
+  - `cargo run -- refs maintenance_backlog --repo . --json`
+  - `cargo test --test milestone75_docs_freshness_guardrails -- --nocapture` (red)
+  - `cargo test --test milestone75_docs_freshness_guardrails -- --nocapture` (green)
+  - `cargo run -- index --repo .`
+  - `cargo run -- find maintenance_backlog --repo .`
+  - `cargo run -- refs maintenance_backlog --repo .`
+  - `cargo test`
+- What helped:
+  - Backlog and cadence policy artifacts used machine-checkable Markdown tables that were easy to
+    validate with deterministic scripts.
+  - Routing docs freshness via the phase18 maintenance-pack path kept CI wiring compact while still
+    enforcing both docs consistency and freshness.
+- What failed or felt weak:
+  - Full post-slice `cargo test` runs are repetitive but required for strict per-slice refactor
+    evidence.
+- Action taken:
+  - failing tests added:
+    - `tests/milestone73_maintenance_backlog_policy.rs`
+    - `tests/milestone74_maintenance_gate_pack.rs`
+    - `tests/milestone75_docs_freshness_guardrails.rs`
+  - fixes implemented:
+    - `docs/maintenance-backlog-phase18.md`
+    - `docs/maintenance-cadence-phase18.md`
+    - `scripts/check_phase18_maintenance_pack.sh`
+    - `scripts/check_phase18_docs_freshness.sh`
+    - `Justfile` targets `phase18-maintenance-pack`, `phase18-docs-freshness`
+    - `.github/workflows/contract-gates.yml` phase18 maintenance-pack invocation + script linting
+  - docs update:
+    - `docs/dogfood-log.md`, `agents/plans/repo-scout-phase18-execplan.md`, `CHANGELOG.md`.
+- Status: `fixed`
+
+- Date: `2026-02-10`
 - Task: Phase 17 documentation truth sync + automated docs-consistency gate (milestones 71/72).
 - Commands run:
   - `cargo run -- index --repo .`
