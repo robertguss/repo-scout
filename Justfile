@@ -186,3 +186,11 @@ phase16-release-checklist repo="." doc="docs/release-checklist-phase16.md":
 # Usage: just phase16-large-repo-replay [repo]
 phase16-large-repo-replay repo=".":
     bash scripts/check_phase16_large_repo_replay.sh --repo "{{repo}}"
+
+# Usage: just e2e-release-matrix [repo]
+e2e-release-matrix repo=".":
+    bash scripts/run_e2e_release_matrix.sh --repo "{{repo}}" --mode full
+
+# Usage: just e2e-release-matrix-record [repo]
+e2e-release-matrix-record repo=".":
+    bash scripts/run_e2e_release_matrix.sh --repo "{{repo}}" --mode full --record
