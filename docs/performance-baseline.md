@@ -33,6 +33,19 @@ Track wall-clock timings for:
 - Phase 14 TypeScript production-closure checks (strict Node runner-aware `tests-for`/`verify-plan`
   plus directory-import `diff-impact` attribution on fixture corpus under
   `tests/fixtures/phase14/typescript_production`)
+- Phase 15 convergence checks (Go runnable recommendation parity in `tests-for`/`verify-plan`
+  on fixture corpus under `tests/fixtures/phase15/go_recommendations`)
+- Phase 15 integrated convergence-pack checks (`scripts/check_phase15_convergence_pack.sh` over
+  fixture corpus under `tests/fixtures/phase15/convergence_pack`)
+- Phase 16 benchmark-pack checks (`scripts/check_phase16_benchmark_pack.sh` and
+  `docs/performance-thresholds-phase16.md` over workspace + fixture corpus under
+  `tests/fixtures/phase15/convergence_pack`)
+- Phase 16 large-repo benchmark checks (`scripts/check_phase16_large_repo_benchmark.sh` and
+  `docs/performance-thresholds-phase16-large-repo.md` over repository-scale workflows)
+- Phase 16 deterministic replay checks (`scripts/check_phase16_deterministic_replay.sh` over
+  fixture corpus under `tests/fixtures/phase15/convergence_pack`)
+- Phase 16 large-repo deterministic replay checks (`scripts/check_phase16_large_repo_replay.sh`
+  over repository-scale workflows)
 - Phase 11 Rust production-closure guardrails (`scripts/check_rust_perf_guardrails.sh`,
   `docs/performance-thresholds-rust.md`, and fixture corpus under
   `tests/fixtures/phase11/rust_production/corpus`)
@@ -46,6 +59,11 @@ just perf-baseline-core run
 just perf-baseline-full run src/query/mod.rs "update run and verify refs behavior"
 just perf-rust-guardrails .
 just perf-rust-record .
+just phase15-convergence-pack .
+just phase16-benchmark-pack .
+just phase16-large-repo-benchmark .
+just phase16-deterministic-replay .
+just phase16-large-repo-replay .
 ```
 
 Equivalent manual commands:
@@ -97,6 +115,14 @@ Equivalent manual commands:
 /usr/bin/time -p cargo run --release -- verify-plan --changed-file src/service.ts --repo tests/fixtures/phase14/typescript_production/jest --json
 /usr/bin/time -p cargo run --release -- index --repo tests/fixtures/phase14/typescript_production/index_import
 /usr/bin/time -p cargo run --release -- diff-impact --changed-file src/util/index.ts --repo tests/fixtures/phase14/typescript_production/index_import --json
+/usr/bin/time -p cargo run --release -- index --repo tests/fixtures/phase15/go_recommendations
+/usr/bin/time -p cargo run --release -- tests-for PlanPhase62 --repo tests/fixtures/phase15/go_recommendations --json
+/usr/bin/time -p cargo run --release -- verify-plan --changed-file src/service.go --repo tests/fixtures/phase15/go_recommendations --json
+bash scripts/check_phase15_convergence_pack.sh --repo . --fixtures tests/fixtures/phase15/convergence_pack
+bash scripts/check_phase16_benchmark_pack.sh --repo . --fixtures tests/fixtures/phase15/convergence_pack
+bash scripts/check_phase16_large_repo_benchmark.sh --repo .
+bash scripts/check_phase16_deterministic_replay.sh --repo . --fixtures tests/fixtures/phase15/convergence_pack
+bash scripts/check_phase16_large_repo_replay.sh --repo .
 bash scripts/check_rust_perf_guardrails.sh --repo . --fixture tests/fixtures/phase11/rust_production/corpus
 bash scripts/check_rust_perf_guardrails.sh --repo . --fixture tests/fixtures/phase11/rust_production/corpus --record
 ```

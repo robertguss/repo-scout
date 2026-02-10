@@ -65,8 +65,8 @@ Schema 1 remains unchanged when using Phase 4/6 controls (`--code-only`, `--excl
 `--max-results`). These options only affect result selection/ranking order:
 
 - scope flags filter text fallback rows only (`--code-only` includes `.rs`, `.ts`, `.tsx`, `.py`,
-  `.go`; `--exclude-tests` excludes `tests/`, `/tests/`, `*_test.rs`, `*.test.ts`, `*.test.tsx`,
-  `*.spec.ts`, `*.spec.tsx`, `test_*.py`, `*_test.py`),
+  `.go`; `--exclude-tests` excludes `tests/`, `/tests/`, `*_test.rs`, `*_test.go`, `*.test.ts`,
+  `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`, `test_*.py`, `*_test.py`),
 - fallback ties prefer code paths over test/docs at equal fallback score tiers,
 - `--max-results` applies deterministic truncation after ranking, while AST-priority rows and JSON
   envelope shape stay stable.
@@ -236,9 +236,10 @@ Top-level fields:
 
 Phase 5/6 keeps schema 2 stable and adds precision controls through CLI options: `--max-targeted`
 bounds symbol-derived targeted rows (default cap `8`, `0` means none), while changed runnable test
-targets and the full-suite gate remain preserved (`cargo test` by default, `pytest` for explicit
-Python runner contexts with Python-only changed scope, and `npx vitest run` / `npx jest` for
-explicit unambiguous TypeScript-only Node runner contexts). Phase 6 adds additive changed-scope
+targets and the full-suite gate remain preserved (`cargo test` by default, `go test ./...` for
+Go-only changed scope, `pytest` for explicit Python runner contexts with Python-only changed scope,
+and `npx vitest run` / `npx jest` for explicit unambiguous TypeScript-only Node runner contexts).
+Phase 6 adds additive changed-scope
 filters:
 
 - repeatable `--changed-line path:start[:end]` limits symbol-derived targeted rows by span overlap,
@@ -246,10 +247,13 @@ filters:
 
 Runner-aware notes:
 
+- Targeted `step` rows can include `go test ./<package_dir>` (or `go test .`) for Go `_test.go`
+  targets.
 - Targeted `step` rows can include `pytest <target>` when explicit pytest configuration is detected.
 - Targeted `step` rows can include `npx vitest run <target>` or
   `npx jest --runTestsByPath <target>` when `package.json` unambiguously signals one Node runner.
-- Full-suite `step` can be `pytest`, `npx vitest run`, or `npx jest` in explicit runner contexts.
+- Full-suite `step` can be `go test ./...`, `pytest`, `npx vitest run`, or `npx jest` in explicit
+  runner contexts.
 
 ## Schema 3 Contracts (Implemented, Frozen)
 

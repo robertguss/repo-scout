@@ -146,3 +146,31 @@ perf-rust-guardrails repo="." fixture="tests/fixtures/phase11/rust_production/co
 # Usage: just perf-rust-record [repo] [fixture]
 perf-rust-record repo="." fixture="tests/fixtures/phase11/rust_production/corpus":
     bash scripts/check_rust_perf_guardrails.sh --repo "{{repo}}" --fixture "{{fixture}}" --record
+
+# Usage: just phase15-convergence-pack [repo] [fixtures]
+phase15-convergence-pack repo="." fixtures="tests/fixtures/phase15/convergence_pack":
+    bash scripts/check_phase15_convergence_pack.sh --repo "{{repo}}" --fixtures "{{fixtures}}"
+
+# Usage: just phase16-deterministic-replay [repo] [fixtures]
+phase16-deterministic-replay repo="." fixtures="tests/fixtures/phase15/convergence_pack":
+    bash scripts/check_phase16_deterministic_replay.sh --repo "{{repo}}" --fixtures "{{fixtures}}"
+
+# Usage: just phase16-benchmark-pack [repo] [fixtures]
+phase16-benchmark-pack repo="." fixtures="tests/fixtures/phase15/convergence_pack":
+    bash scripts/check_phase16_benchmark_pack.sh --repo "{{repo}}" --fixtures "{{fixtures}}"
+
+# Usage: just phase16-known-issues-budget [repo] [doc]
+phase16-known-issues-budget repo="." doc="docs/known-issues-budget-phase16.md":
+    bash scripts/check_phase16_known_issues_budget.sh --repo "{{repo}}" --doc "{{doc}}"
+
+# Usage: just phase16-large-repo-benchmark [repo]
+phase16-large-repo-benchmark repo=".":
+    bash scripts/check_phase16_large_repo_benchmark.sh --repo "{{repo}}"
+
+# Usage: just phase16-release-checklist [repo] [doc]
+phase16-release-checklist repo="." doc="docs/release-checklist-phase16.md":
+    bash scripts/check_phase16_release_checklist.sh --repo "{{repo}}" --doc "{{doc}}"
+
+# Usage: just phase16-large-repo-replay [repo]
+phase16-large-repo-replay repo=".":
+    bash scripts/check_phase16_large_repo_replay.sh --repo "{{repo}}"

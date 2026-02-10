@@ -21,6 +21,389 @@ This log captures real `repo-scout` usage while building `repo-scout`.
 ## Entries
 
 - Date: `2026-02-10`
+- Task: Phase 16 Milestone 70 known-issues closure hardening (zero-deferred budget + PH16-003
+  closure evidence + release-checklist evidence sync).
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find select_full_suite_command --repo . --json`
+  - `cargo run -- refs select_full_suite_command --repo . --json`
+  - `cargo test --test milestone70_phase16_known_issues_closure -- --nocapture` (red)
+  - `cargo test --test milestone70_phase16_known_issues_closure -- --nocapture` (green)
+  - `bash scripts/check_phase16_known_issues_budget.sh --repo . --doc docs/known-issues-budget-phase16.md`
+  - `bash scripts/check_phase16_release_checklist.sh --repo . --doc docs/release-checklist-phase16.md`
+  - `cargo run -- index --repo .`
+  - `cargo run -- find select_full_suite_command --repo .`
+  - `cargo run -- refs select_full_suite_command --repo .`
+  - `cargo test`
+  - `cargo fmt`
+  - `cargo clippy --all-targets --all-features -- -D warnings`
+  - `bash scripts/validate_tdd_cycle.sh --base origin/main --allow-empty-range`
+  - `bash scripts/validate_evidence_packet.sh --pr-body .github/pull_request_template.md`
+- What helped:
+  - Tightening the existing known-issues budget doc (`max_deferred`) leveraged the existing gate
+    script without introducing new maintenance surface area.
+  - Requiring release-checklist evidence for deferred=0 keeps closure posture explicit and
+    auditable.
+- What failed or felt weak:
+  - Before this slice, Phase 16 closure still allowed deferred known issues despite all hardening
+    gates being implemented.
+- Action taken:
+  - failing tests added:
+    - `tests/milestone70_phase16_known_issues_closure.rs`
+  - fixes implemented:
+    - `docs/known-issues-budget-phase16.md` (`max_deferred: 0`, PH16-003 closure)
+    - `docs/release-checklist-phase16.md` (known-issues deferred=0 evidence)
+  - docs update:
+    - `docs/dogfood-log.md`, `agents/plans/repo-scout-phase16-execplan.md`.
+- Status: `fixed`
+
+- Date: `2026-02-10`
+- Task: Phase 16 Milestone 69 repository-scale deterministic replay scenarios (script + Just
+  wiring + docs/roadmap visibility).
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find select_full_suite_command --repo . --json`
+  - `cargo run -- refs select_full_suite_command --repo . --json`
+  - `cargo test --test milestone69_phase16_large_repo_replay -- --nocapture` (red)
+  - `cargo test --test milestone69_phase16_large_repo_replay -- --nocapture` (green)
+  - `bash scripts/check_phase16_large_repo_replay.sh --repo .`
+  - `just phase16-large-repo-replay .`
+  - `cargo run -- index --repo .`
+  - `cargo run -- find select_full_suite_command --repo .`
+  - `cargo run -- refs select_full_suite_command --repo .`
+  - `cargo test`
+  - `cargo fmt`
+  - `cargo clippy --all-targets --all-features -- -D warnings`
+  - `bash scripts/validate_tdd_cycle.sh --base origin/main --allow-empty-range`
+  - `bash scripts/validate_evidence_packet.sh --pr-body .github/pull_request_template.md`
+- What helped:
+  - A dedicated repository-scale replay gate avoids coupling real-workspace scenarios to the
+    fixture-pack replay script.
+  - Reusing `select_full_suite_command` + `src/query/mod.rs` kept command inputs stable while
+    expanding deterministic replay coverage to `context`.
+- What failed or felt weak:
+  - Before this slice, Phase 16 deterministic replay checks covered fixture repositories but not
+    repository-scale command paths.
+- Action taken:
+  - failing tests added:
+    - `tests/milestone69_phase16_large_repo_replay.rs`
+  - fixes implemented:
+    - `scripts/check_phase16_large_repo_replay.sh`
+    - `Justfile` target `phase16-large-repo-replay`
+  - docs update:
+    - `README.md`, `docs/performance-baseline.md`, `docs/dogfood-log.md`,
+      `agents/plans/repo-scout-phase16-execplan.md`,
+      `agents/plans/repo-scout-roadmap-to-production-and-ga.md`.
+- Status: `fixed`
+
+- Date: `2026-02-10`
+- Task: Phase 16 Milestone 68 release-checklist closure gate (artifact + validator + Just wiring).
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find select_full_suite_command --repo . --json`
+  - `cargo run -- refs select_full_suite_command --repo . --json`
+  - `cargo test --test milestone68_phase16_release_checklist_gate -- --nocapture` (red)
+  - `cargo test --test milestone68_phase16_release_checklist_gate -- --nocapture` (green)
+  - `bash scripts/check_phase16_release_checklist.sh --repo . --doc docs/release-checklist-phase16.md`
+  - `just phase16-release-checklist .`
+  - `cargo run -- index --repo .`
+  - `cargo run -- find select_full_suite_command --repo .`
+  - `cargo run -- refs select_full_suite_command --repo .`
+  - `cargo test`
+  - `cargo fmt`
+  - `cargo clippy --all-targets --all-features -- -D warnings`
+  - `bash scripts/validate_tdd_cycle.sh --base origin/main --allow-empty-range`
+  - `bash scripts/validate_evidence_packet.sh --pr-body .github/pull_request_template.md`
+- What helped:
+  - Explicit gate keys (`quality_gate`, `evidence_gate`, `rollback_plan`, `docs_gate`, `ci_gate`)
+    made closure criteria deterministic and script-enforceable.
+  - `--record` mode in the checklist gate supports low-friction status capture without changing
+    pass/fail defaults.
+- What failed or felt weak:
+  - Before this slice, Phase 16 had no executable release-checklist closure gate.
+- Action taken:
+  - failing tests added:
+    - `tests/milestone68_phase16_release_checklist_gate.rs`
+  - fixes implemented:
+    - `docs/release-checklist-phase16.md`
+    - `scripts/check_phase16_release_checklist.sh`
+    - `Justfile` target `phase16-release-checklist`
+  - docs update:
+    - `README.md`, `docs/dogfood-log.md`,
+      `agents/plans/repo-scout-phase16-execplan.md`,
+      `agents/plans/repo-scout-roadmap-to-production-and-ga.md`.
+- Status: `fixed`
+
+- Date: `2026-02-10`
+- Task: Phase 16 Milestone 67 larger-repo benchmark guardrails (threshold doc + validator +
+  Just workflow wiring).
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find select_full_suite_command --repo . --json`
+  - `cargo run -- refs select_full_suite_command --repo . --json`
+  - `cargo test --test milestone67_phase16_large_repo_benchmark -- --nocapture` (red)
+  - `cargo test --test milestone67_phase16_large_repo_benchmark -- --nocapture` (green)
+  - `bash scripts/check_phase16_large_repo_benchmark.sh --repo .`
+  - `just phase16-large-repo-benchmark .`
+  - `cargo run -- index --repo .`
+  - `cargo run -- find select_full_suite_command --repo .`
+  - `cargo run -- refs select_full_suite_command --repo .`
+  - `cargo test`
+  - `cargo fmt`
+  - `cargo clippy --all-targets --all-features -- -D warnings`
+  - `bash scripts/validate_tdd_cycle.sh --base origin/main --allow-empty-range`
+  - `bash scripts/validate_evidence_packet.sh --pr-body .github/pull_request_template.md`
+- What helped:
+  - Parsing threshold keys from the Phase 16 large-repo doc kept script logic and documented
+    budgets synchronized.
+  - Running repository-scale commands (`index`, `context`, `verify-plan`, `diff-impact`) provided
+    a practical gate beyond fixture-pack-only timing checks.
+- What failed or felt weak:
+  - Before this slice, Phase 16 had no executable larger-repo benchmark guardrail.
+- Action taken:
+  - failing tests added:
+    - `tests/milestone67_phase16_large_repo_benchmark.rs`
+  - fixes implemented:
+    - `docs/performance-thresholds-phase16-large-repo.md`
+    - `scripts/check_phase16_large_repo_benchmark.sh`
+    - `Justfile` target `phase16-large-repo-benchmark`
+  - docs update:
+    - `README.md`, `docs/performance-baseline.md`, `docs/dogfood-log.md`,
+      `agents/plans/repo-scout-phase16-execplan.md`,
+      `agents/plans/repo-scout-roadmap-to-production-and-ga.md`.
+- Status: `fixed`
+
+- Date: `2026-02-10`
+- Task: Phase 16 Milestone 66 known-issues budget triage/ownership gate (artifact + validator +
+  Just workflow wiring).
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find select_full_suite_command --repo . --json`
+  - `cargo run -- refs select_full_suite_command --repo . --json`
+  - `cargo test --test milestone66_phase16_known_issues_budget -- --nocapture` (red)
+  - `cargo test --test milestone66_phase16_known_issues_budget -- --nocapture` (green)
+  - `bash scripts/check_phase16_known_issues_budget.sh --repo . --doc docs/known-issues-budget-phase16.md`
+  - `just phase16-known-issues-budget .`
+  - `cargo run -- index --repo .`
+  - `cargo run -- find select_full_suite_command --repo .`
+  - `cargo run -- refs select_full_suite_command --repo .`
+  - `cargo test`
+  - `cargo fmt`
+  - `cargo clippy --all-targets --all-features -- -D warnings`
+  - `bash scripts/validate_tdd_cycle.sh --base origin/main --allow-empty-range`
+  - `bash scripts/validate_evidence_packet.sh --pr-body .github/pull_request_template.md`
+- What helped:
+  - Explicit threshold keys (`max_open`, `max_deferred`, `max_unowned`) made triage policy
+    script-enforceable without extra tooling.
+  - A simple markdown row contract (`| PH16-... |`) keeps ownership/decision data human-readable
+    while remaining machine-checkable.
+- What failed or felt weak:
+  - Before this slice, known-issues triage had no executable gate and no explicit budget artifact.
+- Action taken:
+  - failing tests added:
+    - `tests/milestone66_phase16_known_issues_budget.rs`
+  - fixes implemented:
+    - `docs/known-issues-budget-phase16.md`
+    - `scripts/check_phase16_known_issues_budget.sh`
+    - `Justfile` target `phase16-known-issues-budget`
+  - docs update:
+    - `README.md`, `docs/dogfood-log.md`,
+      `agents/plans/repo-scout-phase16-execplan.md`,
+      `agents/plans/repo-scout-roadmap-to-production-and-ga.md`.
+- Status: `fixed`
+
+- Date: `2026-02-10`
+- Task: Phase 16 Milestone 65 benchmark-pack timing guardrails (script + threshold budgets +
+  Just workflow wiring).
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find select_full_suite_command --repo . --json`
+  - `cargo run -- refs select_full_suite_command --repo . --json`
+  - `cargo test --test milestone65_phase16_benchmark_pack -- --nocapture` (red)
+  - `cargo test --test milestone65_phase16_benchmark_pack -- --nocapture` (green)
+  - `bash scripts/check_phase16_benchmark_pack.sh --repo . --fixtures tests/fixtures/phase15/convergence_pack`
+  - `just phase16-benchmark-pack .`
+  - `cargo run -- index --repo .`
+  - `cargo run -- find select_full_suite_command --repo .`
+  - `cargo run -- refs select_full_suite_command --repo .`
+  - `cargo test`
+  - `cargo fmt`
+  - `cargo clippy --all-targets --all-features -- -D warnings`
+  - `bash scripts/validate_tdd_cycle.sh --base origin/main --allow-empty-range`
+  - `bash scripts/validate_evidence_packet.sh --pr-body .github/pull_request_template.md`
+- What helped:
+  - Reusing the Phase 15 convergence fixture pack enabled cross-language timing checks without new
+    fixture drift.
+  - Adding `--record` mode to the benchmark script created a low-friction path for recalibrating
+    thresholds while keeping default gate behavior strict.
+- What failed or felt weak:
+  - Before this slice, Phase 16 had no executable timing-budget gate beyond deterministic replay.
+- Action taken:
+  - failing tests added:
+    - `tests/milestone65_phase16_benchmark_pack.rs`
+  - fixes implemented:
+    - `scripts/check_phase16_benchmark_pack.sh`
+    - `docs/performance-thresholds-phase16.md`
+    - `Justfile` target `phase16-benchmark-pack`
+  - docs update:
+    - `README.md`, `docs/performance-baseline.md`, `docs/dogfood-log.md`,
+      `agents/plans/repo-scout-phase16-execplan.md`,
+      `agents/plans/repo-scout-roadmap-to-production-and-ga.md`.
+- Status: `fixed`
+
+- Date: `2026-02-10`
+- Task: Phase 16 Milestone 64 High-Bar deterministic replay gate (script + Just workflow +
+  phase plan/docs wiring).
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find verify_plan_for_changed_files --repo . --json`
+  - `cargo run -- refs verify_plan_for_changed_files --repo . --json`
+  - `cargo test --test milestone64_phase16_ga_replay -- --nocapture` (red)
+  - `cargo test --test milestone64_phase16_ga_replay -- --nocapture` (green)
+  - `bash scripts/check_phase16_deterministic_replay.sh --repo . --fixtures tests/fixtures/phase15/convergence_pack`
+  - `just phase16-deterministic-replay .`
+- What helped:
+  - Reusing the integrated Phase 15 convergence fixture pack made it possible to add cross-language
+    replay determinism checks without introducing more fixture drift risk.
+  - A single script gate with `cmp -s` replay assertions keeps deterministic checks executable and
+    repeatable for future GA slices.
+- What failed or felt weak:
+  - Before this slice, deterministic replay verification depended on manual command reruns and had
+    no reusable automated gate.
+- Action taken:
+  - failing tests added:
+    - `tests/milestone64_phase16_ga_replay.rs`
+  - fixes implemented:
+    - `scripts/check_phase16_deterministic_replay.sh`
+    - `Justfile` target `phase16-deterministic-replay`
+    - `agents/plans/repo-scout-phase16-execplan.md`
+  - docs update:
+    - `README.md`, `docs/performance-baseline.md`, `docs/dogfood-log.md`,
+      `agents/plans/repo-scout-roadmap-to-production-and-ga.md`.
+- Status: `fixed`
+
+- Date: `2026-02-10`
+- Task: Phase 15 Milestone 64 integrated cross-language convergence pack (fixture corpus +
+  executable validation gate).
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find select_full_suite_command --repo . --json`
+  - `cargo run -- refs select_full_suite_command --repo . --json`
+  - `cargo test --test milestone63_cross_language_convergence_pack -- --nocapture` (red)
+  - `cargo test --test milestone63_cross_language_convergence_pack -- --nocapture` (green)
+  - `cargo run -- index --repo .`
+  - `cargo run -- find select_full_suite_command --repo .`
+  - `cargo run -- refs select_full_suite_command --repo .`
+  - `bash scripts/check_phase15_convergence_pack.sh`
+  - `cargo fmt`
+  - `cargo clippy --all-targets --all-features -- -D warnings`
+  - `cargo test`
+  - `bash scripts/validate_tdd_cycle.sh --base origin/main --allow-empty-range`
+  - `bash scripts/validate_evidence_packet.sh --pr-body .github/pull_request_template.md`
+- What helped:
+  - Isolated per-language fixture repositories kept runner detection deterministic and made
+    command-contract assertions explicit.
+  - One gate script covering all fixtures (`check_phase15_convergence_pack.sh`) is easier to rerun
+    during Phase 16 than ad-hoc manual command lists.
+- What failed or felt weak:
+  - Before fixture files existed, milestone63 failed at compile time because `include_str!` paths
+    were unresolved.
+- Action taken:
+  - failing tests added:
+    - `tests/milestone63_cross_language_convergence_pack.rs`
+  - fixes implemented:
+    - fixture corpus under `tests/fixtures/phase15/convergence_pack/`
+    - script `scripts/check_phase15_convergence_pack.sh`
+    - Just target `phase15-convergence-pack`
+  - docs update:
+    - `README.md`, `docs/performance-baseline.md`, `docs/dogfood-log.md`,
+      `agents/plans/repo-scout-phase15-execplan.md`,
+      `agents/plans/repo-scout-roadmap-to-production-and-ga.md`.
+- Status: `fixed`
+
+- Date: `2026-02-10`
+- Task: Phase 15 Milestone 63 cross-language convergence slice (Go runnable recommendation parity
+  in `tests-for` and `verify-plan`).
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find test_command_for_target --repo . --json`
+  - `cargo run -- refs test_command_for_target --repo . --json`
+  - `cargo test --test milestone62_cross_language_convergence -- --nocapture` (red)
+  - `cargo test --test milestone62_cross_language_convergence -- --nocapture` (green)
+  - `cargo test --test milestone22_recommendation_quality -- --nocapture`
+  - `cargo test --test milestone23_verify_plan_precision -- --nocapture`
+  - `cargo test --test milestone60_python_recommendations -- --nocapture`
+  - `cargo test --test milestone61_typescript_production -- --nocapture`
+  - `cargo run -- index --repo .`
+  - `cargo run -- find go_test_command_for_target --repo .`
+  - `cargo run -- refs go_test_command_for_target --repo .`
+  - `cargo run -- index --repo tests/fixtures/phase15/go_recommendations`
+  - `cargo run -- tests-for PlanPhase62 --repo tests/fixtures/phase15/go_recommendations --json`
+  - `cargo run -- verify-plan --changed-file src/service.go --repo tests/fixtures/phase15/go_recommendations --json`
+  - `cargo fmt`
+  - `cargo clippy --all-targets --all-features -- -D warnings`
+  - `cargo test`
+  - `bash scripts/validate_tdd_cycle.sh --base origin/main --allow-empty-range`
+  - `bash scripts/validate_evidence_packet.sh --pr-body .github/pull_request_template.md`
+- What helped:
+  - Deterministic package-level Go command synthesis (`go test ./<dir>`) enabled runnable target
+    parity without needing per-test-function parsing.
+  - Reusing the expanded milestone62 integration corpus preserved strict TDD and reduced test
+    sprawl while adding Go recommendation behavior checks.
+- What failed or felt weak:
+  - Parallel fixture dogfooding (`index` + queries in one parallel call) produced transient empty
+    `tests-for` output because commands depended on index completion.
+- Action taken:
+  - failing tests added:
+    - `tests/milestone62_cross_language_convergence.rs`
+  - fixes implemented:
+    - Go runnable target command synthesis and Go-only full-suite gate selection in
+      `src/query/mod.rs`
+    - reusable fixture corpus under `tests/fixtures/phase15/go_recommendations/`
+  - docs update:
+    - `README.md`, `docs/cli-reference.md`, `docs/architecture.md`, `docs/json-output.md`,
+      `docs/performance-baseline.md`, `docs/dogfood-log.md`,
+      `agents/plans/repo-scout-phase15-execplan.md`,
+      `agents/plans/repo-scout-roadmap-to-production-and-ga.md`.
+- Status: `fixed`
+
+- Date: `2026-02-10`
+- Task: Phase 15 Milestone 62 cross-language convergence slice (normalize Go `_test.go`
+  test-like filtering semantics across query scope and `tests-for` support discovery).
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find is_test_like_file_name --repo . --json`
+  - `cargo run -- refs is_test_like_file_name --repo . --json`
+  - `cargo test --test milestone62_cross_language_convergence -- --nocapture` (red)
+  - `cargo test --test milestone62_cross_language_convergence -- --nocapture` (green)
+  - `cargo run -- index --repo .`
+  - `cargo run -- find is_test_like_file_name --repo .`
+  - `cargo run -- refs is_test_like_file_name --repo .`
+  - `cargo fmt`
+  - `cargo test`
+  - `bash scripts/validate_tdd_cycle.sh --base origin/main --allow-empty-range`
+  - `bash scripts/validate_evidence_packet.sh --pr-body .github/pull_request_template.md`
+- What helped:
+  - Reusing one shared classifier (`is_test_like_path`) for both query scope filtering and
+    `tests-for` target discovery removed duplicate rule drift and made behavior deterministic across
+    commands.
+  - An integrated mixed-language scope test (Rust/Go/Python/TypeScript) caught regressions in one
+    place instead of language-specific one-offs.
+- What failed or felt weak:
+  - `tests-for` used a separate SQL pattern list and did not classify Go `_test.go` paths as test
+    targets even with `--include-support`.
+- Action taken:
+  - failing tests added:
+    - `tests/milestone62_cross_language_convergence.rs`
+  - fixes implemented:
+    - shared Go `_test.go` test-like classification in `src/query/mod.rs`
+    - `tests-for` discovery now filters through shared test-like path logic in `src/query/mod.rs`
+  - docs update:
+    - `docs/cli-reference.md`, `docs/architecture.md`, `docs/json-output.md`,
+      `docs/dogfood-log.md`, `agents/plans/repo-scout-phase15-execplan.md`.
+- Status: `fixed`
+
+- Date: `2026-02-10`
 - Task: Phase 14 TypeScript production-ready closure (strict Jest/Vitest runner-aware
   recommendations + directory-import caller attribution).
 - Commands run:

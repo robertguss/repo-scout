@@ -97,8 +97,8 @@ schema migration safety.
 - Fall back to text exact token, then text substring.
 - Optional fallback-only scope controls:
   - `--code-only` keeps `.rs`, `.ts`, `.tsx`, `.py`, `.go` paths.
-  - `--exclude-tests` drops test-like paths (`tests/`, `/tests/`, `*_test.rs`, `*.test.ts`,
-    `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`, `test_*.py`, `*_test.py`, `*_tests.py`).
+  - `--exclude-tests` drops test-like paths (`tests/`, `/tests/`, `*_test.rs`, `*_test.go`,
+    `*.test.ts`, `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`, `test_*.py`, `*_test.py`, `*_tests.py`).
 - Fallback ties are path-class ranked (`code`, then `test-like`, then `docs/other`).
 - Optional deterministic output cap: `--max-results <N>`.
 
@@ -132,6 +132,8 @@ schema migration safety.
 - Classify targets as runnable integration test files or support paths.
 - By default return runnable targets only; `--include-support` restores support paths additively.
 - Runner-aware command synthesis is strict:
+  - Go `_test.go` targets are runnable via deterministic package commands (`go test ./<dir>` or
+    `go test .` for root package tests).
   - Python targets are runnable only in explicit pytest contexts.
   - TypeScript targets are runnable only when `package.json` unambiguously signals one Node runner
     (`jest` or `vitest`).
@@ -150,9 +152,9 @@ schema migration safety.
   override).
 - Preserve changed runnable test targets regardless cap value.
 - Keep best evidence for duplicate commands.
-- Append deterministic full-suite gate by runner context (`cargo test` by default; `pytest` in
-  explicit Python runner contexts for Python-only scope; `npx vitest run` / `npx jest` in explicit
-  unambiguous TypeScript-only Node runner contexts).
+- Append deterministic full-suite gate by runner context (`cargo test` by default; `go test ./...`
+  in Go-only scopes; `pytest` in explicit Python runner contexts for Python-only scope; `npx vitest run`
+  / `npx jest` in explicit unambiguous TypeScript-only Node runner contexts).
 
 ### `diff-impact`
 

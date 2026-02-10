@@ -3,10 +3,10 @@
 `repo-scout` is a local, deterministic CLI for indexing a repository and answering code-navigation
 questions fast.
 
-Phase 14 is fully implemented and closes TypeScript production-ready behavior with strict
-`jest`/`vitest` runner-aware command synthesis in `tests-for`/`verify-plan` plus
-directory-import caller attribution (`./module` -> `./module/index.ts`) in `diff-impact`, while
-preserving prior Rust, Go, and Python production-closure guarantees.
+Phases 11-15 are fully implemented (Rust/Go/Python/TypeScript production-ready closures plus
+cross-language convergence). Phase 16 is now in progress with the first four High-Bar hardening
+slices: deterministic replay checks, benchmark-pack timing guardrails, known-issues budget gating,
+and large-repo benchmark guardrails for critical command scenarios.
 
 ## What It Does
 
@@ -108,6 +108,7 @@ cargo run -- explain impact_matches --repo /path/to/repo --json
     set.
   - Runner-aware detection is strict and explicit:
     - Rust: `cargo test --test <file_stem>` for direct `tests/<file>.rs`.
+    - Go: `go test ./<package_dir>` for `_test.go` files (`go test .` for root package tests).
     - Python: `pytest <target>` when explicit pytest configuration is detected.
     - TypeScript: Vitest/Jest runnable targets only when `package.json` signals exactly one runner.
 - `verify-plan --changed-file <PATH> --repo <PATH> [--changed-line <path:start[:end]>] [--changed-symbol <symbol> ...] [--max-targeted <N>] [--json]`
@@ -162,6 +163,13 @@ just test
 just contract-check
 just perf-rust-guardrails
 just perf-rust-record
+just phase15-convergence-pack .
+just phase16-benchmark-pack .
+just phase16-large-repo-benchmark .
+just phase16-known-issues-budget .
+just phase16-release-checklist .
+just phase16-deterministic-replay .
+just phase16-large-repo-replay .
 just dogfood-pre launch
 just dogfood-post launch
 
@@ -246,6 +254,39 @@ TypeScript test files when `package.json` unambiguously signals exactly one runn
 `npx jest --runTestsByPath <target>` / `npx jest` for Jest. Ambiguous Jest+Vitest contexts remain
 conservative. TypeScript directory imports (`./module`) now include `index.ts`/`index.tsx`
 candidate paths for stable `diff-impact` caller attribution.
+
+Phase 15 note: `tests-for` and `verify-plan` now synthesize runnable Go commands for `_test.go`
+targets (`go test ./<package_dir>` or `go test .`) and choose `go test ./...` as the full-suite
+gate for Go-only changed scopes. Phase 15 also adds an integrated convergence-pack gate
+(`scripts/check_phase15_convergence_pack.sh`, `just phase15-convergence-pack`) that validates
+`tests-for`/`verify-plan` command contracts across Rust, Go, Python, and TypeScript fixtures.
+
+Phase 16 note: deterministic replay checks now run via
+`scripts/check_phase16_deterministic_replay.sh` (or `just phase16-deterministic-replay`) to assert
+stable repeated JSON outputs for `find`, `refs`, `tests-for`, `verify-plan`, and `diff-impact`
+across the integrated cross-language fixture pack.
+
+Phase 16 benchmark note: cross-language timing guardrails now run via
+`scripts/check_phase16_benchmark_pack.sh` (or `just phase16-benchmark-pack`) with conservative
+budgets defined in `docs/performance-thresholds-phase16.md`.
+
+Phase 16 known-issues note: issue-budget and ownership gating now runs via
+`scripts/check_phase16_known_issues_budget.sh` (or `just phase16-known-issues-budget`) against
+`docs/known-issues-budget-phase16.md` to enforce `max_open`, `max_deferred`, and `max_unowned`
+thresholds (`max_deferred` is now `0` at closure).
+
+Phase 16 large-repo note: repository-scale benchmark guardrails now run via
+`scripts/check_phase16_large_repo_benchmark.sh` (or `just phase16-large-repo-benchmark`) with
+budgets defined in `docs/performance-thresholds-phase16-large-repo.md`.
+
+Phase 16 release-checklist note: closure gating now runs via
+`scripts/check_phase16_release_checklist.sh` (or `just phase16-release-checklist`) against
+`docs/release-checklist-phase16.md` to enforce quality/evidence/rollback/docs/CI gate statuses.
+
+Phase 16 large-repo replay note: repository-scale deterministic replay checks now run via
+`scripts/check_phase16_large_repo_replay.sh` (or `just phase16-large-repo-replay`) to assert
+stable repeated JSON outputs for `find`, `refs`, `tests-for`, `verify-plan`, `diff-impact`, and
+`context` against the workspace repo path.
 
 ## Error Recovery
 

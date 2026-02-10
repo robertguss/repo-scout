@@ -78,7 +78,8 @@ Scope controls for fallback rows:
 
 - `--code-only`: restricts fallback matches to `.rs`, `.ts`, `.tsx`, `.py`, `.go` paths.
 - `--exclude-tests`: omits fallback matches in test-like paths (`tests/`, `/tests/`,
-  `*_test.rs`, `*.test.ts`, `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`, `test_*.py`, `*_test.py`).
+  `*_test.rs`, `*_test.go`, `*.test.ts`, `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`, `test_*.py`,
+  `*_test.py`).
 - `--max-results <N>`: deterministic truncation after ranking (`0` yields empty results).
 
 AST definition matches remain highest priority and are returned unchanged when present.
@@ -108,7 +109,8 @@ Scope controls for fallback rows:
 
 - `--code-only`: restricts fallback matches to `.rs`, `.ts`, `.tsx`, `.py`, `.go` paths.
 - `--exclude-tests`: omits fallback matches in test-like paths (`tests/`, `/tests/`,
-  `*_test.rs`, `*.test.ts`, `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`, `test_*.py`, `*_test.py`).
+  `*_test.rs`, `*_test.go`, `*.test.ts`, `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`, `test_*.py`,
+  `*_test.py`).
 - `--max-results <N>`: deterministic truncation after ranking (`0` yields empty results).
 
 AST reference matches remain highest priority and are returned unchanged when present.
@@ -157,8 +159,8 @@ Behavior:
 - Prioritizes direct symbol definition hits (typically `context_high`, score up to `0.98`).
 - Adds one-hop graph neighbors (`context_medium`, score derived from direct match score).
 - `--code-only` keeps only `.rs`, `.ts`, `.tsx`, `.py`, `.go` paths.
-- `--exclude-tests` removes test-like paths (`tests/`, `/tests/`, `*_test.rs`, `*.test.ts`,
-  `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`, `test_*.py`, `*_test.py`, `*_tests.py`).
+- `--exclude-tests` removes test-like paths (`tests/`, `/tests/`, `*_test.rs`, `*_test.go`,
+  `*.test.ts`, `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`, `test_*.py`, `*_test.py`, `*_tests.py`).
 - Truncates to `max(1, budget / 200)` results.
 
 Example:
@@ -178,6 +180,7 @@ Current target discovery:
 - file path under `tests/`
 - file path containing `/tests/`
 - file name matching `*_test.rs`
+- file name matching `*_test.go`
 - file name matching `*.test.ts`, `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`
 - file name matching `test_*.py` or `*_test.py`
 - file name matching `*_tests.py`
@@ -196,6 +199,8 @@ support paths (for example `tests/common/mod.rs`) in deterministic ranked order.
 Runner-aware runnable target behavior:
 
 - Rust direct `tests/<file>.rs` targets map to `cargo test --test <file_stem>`.
+- Go `_test.go` targets map to package commands (`go test ./<package_dir>`; `go test .` for
+  repository-root test files).
 - Python targets map to `pytest <target>` only when explicit pytest configuration is detected
   (`pytest.ini`, `[tool.pytest.ini_options]` in `pyproject.toml`, `[pytest]` in `tox.ini`, or
   `[tool:pytest]` in `setup.cfg`).
@@ -226,6 +231,7 @@ Behavior:
 - Dampens high-frequency generic changed symbols (for example `Path`, `output`) for better signal.
 - Suggests runnable targeted commands only:
   - `cargo test --test <name>` for direct `tests/<file>.rs` targets.
+  - `go test ./<package_dir>` (or `go test .` for root package tests) for Go `_test.go` targets.
   - `pytest <target>` for Python test targets when explicit pytest configuration is detected.
   - `npx vitest run <target>` for TypeScript targets in explicit Vitest contexts.
   - `npx jest --runTestsByPath <target>` for TypeScript targets in explicit Jest contexts.
@@ -234,6 +240,7 @@ Behavior:
   runnable test targets and the required full-suite gate.
 - Always appends a full-suite safety gate:
   - `cargo test` for Rust-scoped verification contexts (default).
+  - `go test ./...` when changed scope is Go-only.
   - `pytest` for explicit Python runner contexts when changed scope is Python-only.
   - `npx vitest run` for explicit Vitest contexts when changed scope is TypeScript-only.
   - `npx jest` for explicit Jest contexts when changed scope is TypeScript-only.

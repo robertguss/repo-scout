@@ -37,11 +37,30 @@ Evidence from local audit and commands:
   - TypeScript production-ready closure is complete with strict explicit Jest/Vitest
     runner-aware recommendations and directory-import (`./module` -> `./module/index.ts`)
     caller attribution in `diff-impact`.
-- All four language-specific production-ready closures are now complete; the next active work is
-  cross-language convergence (Phase 15), then GA hardening (Phase 16).
+- All four language-specific production-ready closures are complete, and cross-language convergence
+  (Phase 15) is complete with three slices:
+  Go `_test.go` filtering parity, Go runnable recommendation parity, and the integrated
+  convergence-pack command-contract gate.
+- Phase 16 High-Bar hardening closure includes deterministic replay validation via
+  `scripts/check_phase16_deterministic_replay.sh` and `just phase16-deterministic-replay`.
+- Phase 16 also includes benchmark-pack regression budgets:
+  `scripts/check_phase16_benchmark_pack.sh`, `just phase16-benchmark-pack`, and
+  `docs/performance-thresholds-phase16.md`.
+- Phase 16 also includes known-issues budget enforcement:
+  `scripts/check_phase16_known_issues_budget.sh`, `just phase16-known-issues-budget`, and
+  `docs/known-issues-budget-phase16.md` (closure posture now enforces `max_deferred: 0`).
+- Phase 16 also includes larger-repo benchmark guardrails:
+  `scripts/check_phase16_large_repo_benchmark.sh`, `just phase16-large-repo-benchmark`, and
+  `docs/performance-thresholds-phase16-large-repo.md`.
+- Phase 16 also includes release-checklist closure gating:
+  `scripts/check_phase16_release_checklist.sh`, `just phase16-release-checklist`, and
+  `docs/release-checklist-phase16.md`.
+- Phase 16 also includes large-repo deterministic replay scenarios:
+  `scripts/check_phase16_large_repo_replay.sh`, `just phase16-large-repo-replay`, and
+  `docs/performance-baseline.md`.
 
-Implication: the project has a strong base and can move quickly, but remaining work is mainly
-cross-language convergence and release hardening rather than single-language capability depth.
+Implication: the project has a strong base and can move quickly; remaining work is now
+maintenance/backlog rather than core capability delivery.
 
 ## Definitions
 
@@ -159,7 +178,7 @@ Exit gate:
 - TypeScript meets `Production-ready` definition.
 - Node-targeted recommendation behavior is deterministic and strict-mode safe.
 
-## Phase 15 (Current): Cross-Language Production Convergence
+## Phase 15 (Completed): Cross-Language Production Convergence
 
 Purpose:
 Unify behavior and operator experience across all four languages before GA hardening.
@@ -176,7 +195,7 @@ Exit gate:
 - All four languages simultaneously satisfy production-ready criteria under one integrated
   validation pack.
 
-## Phase 16 (Upcoming): High-Bar / GA Hardening
+## Phase 16 (Completed): High-Bar / GA Hardening
 
 Purpose:
 Perform final release-grade hardening after production-ready parity exists.
@@ -211,8 +230,8 @@ Create one ExecPlan per phase:
 - `agents/plans/repo-scout-phase12-execplan.md` (created)
 - `agents/plans/repo-scout-phase13-execplan.md` (created)
 - `agents/plans/repo-scout-phase14-execplan.md` (created)
-- `agents/plans/repo-scout-phase15-execplan.md`
-- `agents/plans/repo-scout-phase16-execplan.md`
+- `agents/plans/repo-scout-phase15-execplan.md` (created, complete)
+- `agents/plans/repo-scout-phase16-execplan.md` (created, complete)
 
 Each plan should include `Contract Inputs`, `AGENTS.md Constraints`, and `Risk Tier and Required
 Controls` per Tiger-era policy.
@@ -227,5 +246,10 @@ At roadmap completion, `repo-scout` will have:
 - Mature test, doc, and evidence artifacts sufficient for maintenance-mode operation.
 
 Current status (2026-02-10): Rust/Go/Python/TypeScript production-ready closures are complete
-(Phases 11-14). Remaining roadmap execution is Phase 15 (cross-language convergence) and
-Phase 16 (High-Bar/GA hardening).
+(Phases 11-14). Phase 15 convergence is complete (Go `_test.go` cross-language filtering parity,
+Go runnable recommendation parity, and integrated convergence-pack validation gate). Phase 16
+High-Bar/GA hardening is complete with six closure slices: integrated deterministic replay gate for
+repeated `find`/`refs`/`tests-for`/`verify-plan`/`diff-impact` outputs, benchmark-pack timing gate
+and threshold budgets, known-issues budget triage/ownership gate, larger-repo benchmark
+guardrails, release-checklist closure gating, and large-repo deterministic replay scenarios; zero
+deferred known issues remain at closure.

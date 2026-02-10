@@ -1861,6 +1861,13 @@ fn select_full_suite_command(
     {
         return command.to_string();
     }
+    if targeted_steps
+        .iter()
+        .any(|step| step.step.starts_with("go test "))
+        || changed_files.iter().any(|file| is_go_source_file(file))
+    {
+        return "go test ./...".to_string();
+    }
     "cargo test".to_string()
 }
 
@@ -2047,6 +2054,7 @@ fn is_test_like_path(file_path: &str) -> bool {
 
 fn is_test_like_file_name(file_name: &str) -> bool {
     file_name.ends_with("_test.rs")
+        || file_name.ends_with("_test.go")
         || file_name.ends_with("_test.py")
         || file_name.ends_with("_tests.py")
         || (file_name.starts_with("test_") && file_name.ends_with(".py"))
@@ -2248,19 +2256,6 @@ fn test_targets_for_symbol(
         "SELECT file_path, COUNT(*) AS hit_count
          FROM text_occurrences
          WHERE symbol = ?1
-           AND (
-               file_path LIKE 'tests/%'
-               OR file_path LIKE '%/tests/%'
-               OR file_path GLOB '*_test.rs'
-               OR file_path GLOB '*_test.py'
-               OR file_path GLOB '*_tests.py'
-               OR file_path LIKE 'test_%.py'
-               OR file_path LIKE '%/test_%.py'
-               OR file_path LIKE '%.test.ts'
-               OR file_path LIKE '%.test.tsx'
-               OR file_path LIKE '%.spec.ts'
-               OR file_path LIKE '%.spec.tsx'
-           )
          GROUP BY file_path
          ORDER BY hit_count DESC, file_path ASC",
     )?;
@@ -2271,7 +2266,10 @@ fn test_targets_for_symbol(
 
     let mut targets = Vec::new();
     for row in rows {
-        targets.push(row?);
+        let (file_path, hit_count) = row?;
+        if is_test_like_path(&file_path) {
+            targets.push((file_path, hit_count));
+        }
     }
     Ok(targets)
 }
@@ -2299,6 +2297,7 @@ fn test_targets_for_symbol(
 fn test_command_for_target(target: &str, runners: &RecommendationRunners) -> Option<String> {
     cargo_test_command_for_target(target)
         .or_else(|| pytest_test_command_for_target(target, runners))
+        .or_else(|| go_test_command_for_target(target))
         .or_else(|| node_test_command_for_target(target, runners))
 }
 
@@ -2334,6 +2333,32 @@ fn node_test_command_for_target(target: &str, runners: &RecommendationRunners) -
     runners.node.targeted_command_for(target)
 }
 
+fn go_test_command_for_target(target: &str) -> Option<String> {
+    if !is_go_test_file(target) {
+        return None;
+    }
+    let package_target = go_package_target_for_test_file(target)?;
+    Some(format!("go test {package_target}"))
+}
+
+fn go_package_target_for_test_file(target: &str) -> Option<String> {
+    let normalized = target.replace('\\', "/");
+    let parent = Path::new(&normalized).parent()?.to_str()?;
+    let trimmed = parent.trim_start_matches("./").trim_matches('/');
+    if trimmed.is_empty() || trimmed == "." {
+        Some(".".to_string())
+    } else {
+        Some(format!("./{trimmed}"))
+    }
+}
+
+fn is_go_test_file(target: &str) -> bool {
+    Path::new(target)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|file_name| file_name.ends_with("_test.go"))
+}
+
 fn is_pytest_test_file(target: &str) -> bool {
     if !target.ends_with(".py") {
         return false;
@@ -2357,6 +2382,10 @@ fn is_typescript_test_file(target: &str) -> bool {
 
 fn is_typescript_source_file(target: &str) -> bool {
     target.ends_with(".ts") || target.ends_with(".tsx")
+}
+
+fn is_go_source_file(target: &str) -> bool {
+    target.ends_with(".go")
 }
 
 fn is_runnable_test_target(target: &str, runners: &RecommendationRunners) -> bool {
