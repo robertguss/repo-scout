@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the current `repo-scout` architecture after Phase 12.
+This document describes the current `repo-scout` architecture after Phase 13.
 
 ## High-Level Flow
 
@@ -97,7 +97,7 @@ schema migration safety.
 - Optional fallback-only scope controls:
   - `--code-only` keeps `.rs`, `.ts`, `.tsx`, `.py`, `.go` paths.
   - `--exclude-tests` drops test-like paths (`tests/`, `/tests/`, `*_test.rs`, `*.test.ts`,
-    `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`, `test_*.py`, `*_test.py`).
+    `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`, `test_*.py`, `*_test.py`, `*_tests.py`).
 - Fallback ties are path-class ranked (`code`, then `test-like`, then `docs/other`).
 - Optional deterministic output cap: `--max-results <N>`.
 
@@ -130,6 +130,7 @@ schema migration safety.
 - Find direct symbol occurrences in test-like files.
 - Classify targets as runnable integration test files or support paths.
 - By default return runnable targets only; `--include-support` restores support paths additively.
+- Runner-aware command synthesis treats Python targets as runnable only in explicit pytest contexts.
 - Score and sort deterministically with runnable targets first.
 
 ### `verify-plan`
@@ -145,7 +146,8 @@ schema migration safety.
   override).
 - Preserve changed runnable test targets regardless cap value.
 - Keep best evidence for duplicate commands.
-- Always append `cargo test` full-suite gate.
+- Append deterministic full-suite gate by runner context (`cargo test` by default; `pytest` in
+  explicit Python runner contexts when changed scope is Python-only).
 
 ### `diff-impact`
 
@@ -162,6 +164,8 @@ schema migration safety.
   deterministic file-path candidates for both `<module>.rs` and `<module>/mod.rs`.
 - Resolve TypeScript namespace/member and Python module-alias attribute calls with module-aware
   hints so duplicate-name callees do not cross-link ambiguously.
+- Resolve Python relative-import identifier calls (`from .module import symbol`) to preserve
+  caller attribution in changed-file impact walks.
 - Resolve Go import-alias selector calls with deterministic import-path candidate files so duplicate
   function names across packages remain attributable.
 - Optionally remove changed-symbol output rows with `--exclude-changed`.

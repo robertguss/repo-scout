@@ -1,5 +1,6 @@
 use anyhow::Context;
 use std::collections::HashMap;
+use std::path::Path;
 use tree_sitter::{Node, Parser};
 
 use crate::indexer::languages::{
@@ -286,6 +287,21 @@ fn collect_call_symbols(
                                 call_hint.import_path, call_hint.imported_symbol
                             )),
                             file_path: Some(call_hint.import_path.clone()),
+                            language: Some(language.to_string()),
+                        },
+                        edge_kind: "calls".to_string(),
+                        confidence: 0.95,
+                        provenance: "call_resolution".to_string(),
+                    });
+                } else if let Some(caller_symbol) = caller
+                    && let Some(import_path) = import_target_hints.get(&symbol)
+                {
+                    edges.push(ExtractedEdge {
+                        from_symbol_key: scoped_symbol_key(file_path, language, caller_symbol),
+                        to_symbol_key: SymbolKey {
+                            symbol: symbol.clone(),
+                            qualified_symbol: Some(format!("{language}:{import_path}::{symbol}")),
+                            file_path: Some(import_path.clone()),
                             language: Some(language.to_string()),
                         },
                         edge_kind: "calls".to_string(),
@@ -678,12 +694,16 @@ fn import_call_hints(file_path: &str, source: &str) -> HashMap<String, ImportCal
 
 fn resolve_python_import_path(from_file_path: &str, module_name: &str) -> Option<String> {
     let module_path = module_name.trim();
-    if module_path.is_empty() || module_path.starts_with('.') {
+    if module_path.is_empty() {
         return None;
     }
 
+    if module_path.starts_with('.') {
+        return resolve_relative_python_import_path(from_file_path, module_path);
+    }
+
     let normalized_module_path = module_path.replace('.', "/");
-    let mut components = std::path::Path::new(from_file_path).components();
+    let mut components = Path::new(from_file_path).components();
     let first_component = components
         .next()
         .and_then(|component| component.as_os_str().to_str())
@@ -694,6 +714,27 @@ fn resolve_python_import_path(from_file_path: &str, module_name: &str) -> Option
     } else {
         Some(format!("{normalized_module_path}.py"))
     }
+}
+
+fn resolve_relative_python_import_path(from_file_path: &str, module_path: &str) -> Option<String> {
+    let levels = module_path.chars().take_while(|ch| *ch == '.').count();
+    if levels == 0 {
+        return None;
+    }
+
+    let suffix = module_path[levels..].trim_matches('.');
+    let mut resolved_path = Path::new(from_file_path).parent()?.to_path_buf();
+    for _ in 1..levels {
+        resolved_path = resolved_path.parent()?.to_path_buf();
+    }
+
+    if !suffix.is_empty() {
+        for segment in suffix.split('.').filter(|segment| !segment.is_empty()) {
+            resolved_path.push(segment);
+        }
+    }
+    resolved_path.set_extension("py");
+    Some(resolved_path.to_string_lossy().replace('\\', "/"))
 }
 
 fn last_identifier(text: &str) -> Option<String> {
@@ -733,4 +774,26 @@ fn start_position(node: Node<'_>) -> (u32, u32) {
 fn end_position(node: Node<'_>) -> (u32, u32) {
     let position = node.end_position();
     (position.row as u32 + 1, position.column as u32 + 1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{import_call_hints, resolve_python_import_path};
+
+    #[test]
+    fn resolve_python_import_path_supports_relative_module_paths() {
+        let resolved = resolve_python_import_path("src/pkg/consumer.py", ".util");
+        assert_eq!(resolved.as_deref(), Some("src/pkg/util.py"));
+    }
+
+    #[test]
+    fn import_call_hints_capture_relative_from_import_paths() {
+        let source = "from .util import helper\n\n\ndef run():\n    return helper()\n";
+        let hints = import_call_hints("src/pkg/consumer.py", source);
+        let hint = hints
+            .get("helper")
+            .expect("helper import should produce call hint");
+        assert_eq!(hint.import_path, "src/pkg/util.py");
+        assert_eq!(hint.imported_symbol, "helper");
+    }
 }

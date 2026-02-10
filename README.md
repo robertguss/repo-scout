@@ -3,9 +3,10 @@
 `repo-scout` is a local, deterministic CLI for indexing a repository and answering code-navigation
 questions fast.
 
-Phase 12 is fully implemented and closes Go production-ready behavior for AST-backed references,
-import-alias-aware call-edge resolution, and deterministic `impact`/`diff-impact` traversal, while
-preserving Rust Phase 11 module-qualified reliability and schema stability.
+Phase 13 is fully implemented and closes Python production-ready recommendation behavior with
+strict `pytest` runner-aware command synthesis in `tests-for`/`verify-plan`, expanded Python
+test-path matching (`*_tests.py`), and relative-import call attribution in `diff-impact`, while
+preserving prior Rust and Go production-closure guarantees.
 
 ## What It Does
 
@@ -225,6 +226,11 @@ module-prefix calls targeting `mod.rs`) now emit stable candidate-target edges f
 
 Phase 12 note: Go call references now populate `ast_references`, and Go selector calls using import
 aliases now emit stable call edges for `impact` and `diff-impact`.
+
+Phase 13 note: `tests-for` and `verify-plan` now synthesize `pytest` commands only when explicit
+pytest configuration is detected (`pytest.ini`, `pyproject.toml` `[tool.pytest.ini_options]`,
+`tox.ini` `[pytest]`, or `setup.cfg` `[tool:pytest]`), and Python relative imports
+(`from .module import symbol`) preserve caller attribution in `diff-impact`.
 
 ## Error Recovery
 
