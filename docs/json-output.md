@@ -160,7 +160,7 @@ Per-result fields:
 Phase 5/6 keeps schema 2 stable and upgrades matching/ranking only: context rows now use
 token-overlap rationale text (for example `token-overlap relevance`) and deterministic
 definition-first scoring, with optional additive scope controls (`--code-only`, `--exclude-tests`)
-that filter rows without changing the schema envelope (`--code-only` includes `.go` in Phase 10).
+that filter rows without changing the schema envelope (`--code-only` includes `.go` since Phase 10).
 
 ## `tests-for --json` (Schema 2)
 

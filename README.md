@@ -3,16 +3,15 @@
 `repo-scout` is a local, deterministic CLI for indexing a repository and answering code-navigation
 questions fast.
 
-Phase 11 is fully implemented and closes Rust production-ready behavior for module-qualified impact
-resolution (`crate::`, `self::`, `super::`, and `mod.rs` layouts), while preserving deterministic
-output and schema stability.
+Phase 12 is fully implemented and closes Go production-ready behavior for AST-backed references,
+import-alias-aware call-edge resolution, and deterministic `impact`/`diff-impact` traversal, while
+preserving Rust Phase 11 module-qualified reliability and schema stability.
 
 ## What It Does
 
 - Incrementally indexes repositories into `<repo>/.repo-scout/index.db`.
 - Extracts language-agnostic token occurrences from all files.
-- Extracts Rust, TypeScript, Python, and Go symbol metadata through language adapters
-  (Go is definition-focused in this phase).
+- Extracts Rust, TypeScript, Python, and Go symbol metadata through language adapters.
 - Supports deterministic terminal and JSON output for automation.
 
 Available commands:
@@ -91,6 +90,7 @@ cargo run -- explain impact_matches --repo /path/to/repo --json
   - Includes Go AST definitions in addition to Rust/TypeScript/Python definitions.
 - `refs <SYMBOL> --repo <PATH> [--json] [--code-only] [--exclude-tests] [--max-results <N>]`
   - Prefers AST references (`ast_reference`), then falls back to text ranking.
+  - Go `refs` now include AST-backed identifier/selector call references when extractable.
   - Fallback ties now prefer code paths over test/docs paths at equal score tiers.
   - `--max-results` applies deterministic truncation after ranking.
   - Scope flags apply to text fallback only; AST-priority behavior is unchanged.
@@ -116,6 +116,8 @@ cargo run -- explain impact_matches --repo /path/to/repo --json
     `<module>/mod.rs`, reducing dropped `called_by` rows in duplicate-name graphs.
   - TypeScript namespace/member calls and Python module-alias attribute calls now resolve with
     module-aware context to avoid duplicate-name cross-link ambiguity.
+  - Go import-alias selector calls now resolve deterministic candidate targets so duplicate function
+    names across packages do not drop expected `called_by` rows.
   - Test-target emission remains default-on (`include_tests = true` in schema 3); use
     `--exclude-tests` for symbol-only output, or `--include-tests` for explicit default behavior.
   - By default, changed-symbol seeds exclude import definitions unless `--include-imports` is set.
@@ -220,6 +222,9 @@ then refactor with the full suite green.
 Phase 11 note: Rust module-qualified call paths (`crate::`, `self::`, `super::`, and
 module-prefix calls targeting `mod.rs`) now emit stable candidate-target edges for `impact` and
 `diff-impact` traversal.
+
+Phase 12 note: Go call references now populate `ast_references`, and Go selector calls using import
+aliases now emit stable call edges for `impact` and `diff-impact`.
 
 ## Error Recovery
 

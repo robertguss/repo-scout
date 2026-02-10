@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the current `repo-scout` architecture after Phase 11.
+This document describes the current `repo-scout` architecture after Phase 12.
 
 ## High-Level Flow
 
@@ -33,8 +33,8 @@ This document describes the current `repo-scout` architecture after Phase 11.
     `crate::`/`self::`/`super::` prefixes and both `<module>.rs` + `<module>/mod.rs` layouts.
   - TypeScript/Python adapters now include module-aware alias hints for namespace/member and
     module-alias attribute call resolution.
-  - Go adapter currently provides definition extraction only (no Go AST reference/edge extraction
-    in this phase).
+  - Go adapter now provides definition extraction plus AST-backed call references and deterministic
+    import-alias-aware selector call-edge candidates.
 - `src/indexer/mod.rs`
   - Incremental indexing coordinator, stale-row pruning, adapter dispatch, deferred edge resolution,
     and symbol/edge persistence.
@@ -104,6 +104,7 @@ schema migration safety.
 ### `refs`
 
 - Prefer exact AST references.
+- Go call identifiers/selector fields now contribute AST reference rows.
 - Fall back to text exact token, then text substring.
 - Uses the same fallback-only scope controls as `find` (`--code-only`, `--exclude-tests`).
 - Uses the same fallback path-class tie-break and deterministic cap behavior as `find`
@@ -161,6 +162,8 @@ schema migration safety.
   deterministic file-path candidates for both `<module>.rs` and `<module>/mod.rs`.
 - Resolve TypeScript namespace/member and Python module-alias attribute calls with module-aware
   hints so duplicate-name callees do not cross-link ambiguously.
+- Resolve Go import-alias selector calls with deterministic import-path candidate files so duplicate
+  function names across packages remain attributable.
 - Optionally remove changed-symbol output rows with `--exclude-changed`.
 - Optionally cap results deterministically with `--max-results`.
 - Attach ranked test targets by default (`include_tests = true`), disable with `--exclude-tests`, or

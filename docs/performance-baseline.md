@@ -25,6 +25,8 @@ Track wall-clock timings for:
   `tests/fixtures/phase8/semantic_precision`)
 - Phase 10 Go `find` MVP checks (Go AST-backed definition indexing and deterministic `find` JSON
   on fixture corpus under `tests/fixtures/phase10/go_find`)
+- Phase 12 Go production-closure checks (Go AST-backed `refs` plus import-alias-aware
+  `impact`/`diff-impact` traversal on fixture corpus under `tests/fixtures/phase12/go_refs`)
 - Phase 11 Rust production-closure guardrails (`scripts/check_rust_perf_guardrails.sh`,
   `docs/performance-thresholds-rust.md`, and fixture corpus under
   `tests/fixtures/phase11/rust_production/corpus`)
@@ -74,6 +76,10 @@ Equivalent manual commands:
 /usr/bin/time -p cargo run --release -- index --repo tests/fixtures/phase10/go_find
 /usr/bin/time -p cargo run --release -- find SayHello --repo tests/fixtures/phase10/go_find --json
 /usr/bin/time -p cargo run --release -- find Greeter --repo tests/fixtures/phase10/go_find --code-only --exclude-tests --json
+/usr/bin/time -p cargo run --release -- index --repo tests/fixtures/phase12/go_refs
+/usr/bin/time -p cargo run --release -- refs Helper --repo tests/fixtures/phase12/go_refs --json
+/usr/bin/time -p cargo run --release -- impact SayHello --repo tests/fixtures/phase12/go_refs --json
+/usr/bin/time -p cargo run --release -- diff-impact --changed-file src/util/util.go --repo tests/fixtures/phase12/go_refs --json
 bash scripts/check_rust_perf_guardrails.sh --repo . --fixture tests/fixtures/phase11/rust_production/corpus
 bash scripts/check_rust_perf_guardrails.sh --repo . --fixture tests/fixtures/phase11/rust_production/corpus --record
 ```

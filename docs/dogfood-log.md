@@ -20,6 +20,45 @@ This log captures real `repo-scout` usage while building `repo-scout`.
 
 ## Entries
 
+- Date: `2026-02-10`
+- Task: Phase 12 Go production-ready closure (`refs` + graph/impact compatibility hardening).
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find GoLanguageAdapter --repo . --json`
+  - `cargo run -- refs GoLanguageAdapter --repo . --json`
+  - `cargo test --test milestone59_go_refs -- --nocapture` (red)
+  - `cargo test --test milestone59_go_refs -- --nocapture` (green)
+  - `cargo test --test milestone50_go_find -- --nocapture`
+  - `cargo test --test milestone49_rust_hardening -- --nocapture`
+  - `cargo run -- index --repo tests/fixtures/phase12/go_refs`
+  - `cargo run -- find Helper --repo tests/fixtures/phase12/go_refs --json`
+  - `cargo run -- refs Helper --repo tests/fixtures/phase12/go_refs --json`
+  - `cargo run -- impact SayHello --repo tests/fixtures/phase12/go_refs --json`
+  - `cargo run -- diff-impact --changed-file src/util/util.go --repo tests/fixtures/phase12/go_refs --json`
+  - `cargo clippy --all-targets --all-features -- -D warnings`
+  - `cargo test`
+- What helped:
+  - Import-alias target hints plus deterministic Go import candidate paths (`<import>.go`,
+    `<import>/<stem>.go`, `<import>/main.go`) resolved duplicate `Helper` symbols without schema
+    changes.
+  - Keeping fallback language-scoped call targets preserved method-call attribution when selector
+    qualifiers were not import aliases.
+- What failed or felt weak:
+  - Pre-change Go `refs` remained text fallback, and duplicate package functions caused dropped
+    `called_by` rows for `diff-impact`.
+- Action taken:
+  - failing tests added:
+    - `tests/milestone59_go_refs.rs`
+  - fixes implemented:
+    - `src/indexer/languages/go.rs` now emits AST call references and deterministic call edges.
+    - Go type extraction now records `interface` and `type_alias` kinds.
+    - phase fixtures added under `tests/fixtures/phase12/go_refs/`.
+  - docs update:
+    - `README.md`, `docs/cli-reference.md`, `docs/architecture.md`, `docs/json-output.md`,
+      `docs/performance-baseline.md`, `docs/dogfood-log.md`,
+      `agents/plans/repo-scout-phase12-execplan.md`.
+- Status: `fixed`
+
 - Date: `2026-02-09`
 - Task: Phase 10 Milestones 51/52 Go `find` MVP (adapter wiring + deterministic JSON behavior).
 - Commands run:

@@ -71,8 +71,8 @@ Ranking strategy:
 4. At equal fallback score tiers, tie-break by path class (`code` before `test-like` before
    `docs/other`), then by file/position/symbol.
 
-Phase 10 note: Go definitions are now indexed into AST definitions, so `find` returns Go symbols
-with `why_matched=ast_definition` when available.
+Phase 12 note: Go definitions are indexed into AST definitions, so `find` returns Go symbols with
+`why_matched=ast_definition` when available.
 
 Scope controls for fallback rows:
 
@@ -100,6 +100,9 @@ Ranking strategy:
 1. AST reference matches (`why_matched=ast_reference`, `confidence=ast_likely`, `score=0.95`).
 2. Same text fallback sequence as `find`.
 3. Same fallback path-class tie-break behavior as `find`.
+
+Phase 12 note: Go call identifiers and selector-call fields now contribute AST reference rows, so
+Go `refs` is no longer definition-only/text-fallback in common call-site cases.
 
 Scope controls for fallback rows:
 
