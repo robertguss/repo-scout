@@ -4,6 +4,7 @@ use std::path::Path;
 
 use rusqlite::{Connection, params};
 use serde::Serialize;
+use serde_json::Value as JsonValue;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct QueryMatch {
@@ -1485,7 +1486,8 @@ pub fn tests_for_symbol(
 ///
 /// The function inspects the symbol and test information stored in the SQLite database at
 /// `db_path` and produces a list of `VerificationStep` entries describing which test commands
-/// to run and why. The returned steps always include a final full-suite step (`"cargo test"`).
+/// to run and why. The returned steps always include a final full-suite safety gate whose command
+/// depends on detected runner context (`cargo test` by default).
 ///
 /// Parameters:
 /// - `db_path`: path to the SQLite database containing symbols, references, and test metadata.
@@ -1502,7 +1504,7 @@ pub fn tests_for_symbol(
 /// let changed = vec!["src/lib.rs".to_string(), "tests/my_test.rs".to_string()];
 /// let steps = verify_plan_for_changed_files(db, &changed, &VerifyPlanOptions::default()).unwrap();
 /// // `steps` is a Vec<VerificationStep> describing targeted test commands and a final
-/// // "cargo test" full-suite step.
+/// // full-suite safety-gate step.
 /// ```
 #[must_use = "verification plans should be consumed by callers"]
 pub fn verify_plan_for_changed_files(
@@ -1542,6 +1544,34 @@ pub fn verify_plan_for_changed_files(
 #[derive(Debug, Clone, Copy, Default)]
 struct RecommendationRunners {
     pytest: bool,
+    node: NodeTestRunner,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum NodeTestRunner {
+    #[default]
+    None,
+    Jest,
+    Vitest,
+    Ambiguous,
+}
+
+impl NodeTestRunner {
+    fn targeted_command_for(self, target: &str) -> Option<String> {
+        match self {
+            Self::Jest => Some(format!("npx jest --runTestsByPath {target}")),
+            Self::Vitest => Some(format!("npx vitest run {target}")),
+            Self::None | Self::Ambiguous => None,
+        }
+    }
+
+    fn full_suite_command(self) -> Option<&'static str> {
+        match self {
+            Self::Jest => Some("npx jest"),
+            Self::Vitest => Some("npx vitest run"),
+            Self::None | Self::Ambiguous => None,
+        }
+    }
 }
 
 impl RecommendationRunners {
@@ -1551,6 +1581,7 @@ impl RecommendationRunners {
         };
         Self {
             pytest: is_pytest_explicitly_configured(repo_root),
+            node: detect_node_test_runner(repo_root),
         }
     }
 }
@@ -1575,6 +1606,56 @@ fn is_pytest_explicitly_configured(repo_root: &Path) -> bool {
         )
         || file_contains(repo_root.join("tox.ini"), "[pytest]")
         || file_contains(repo_root.join("setup.cfg"), "[tool:pytest]")
+}
+
+fn detect_node_test_runner(repo_root: &Path) -> NodeTestRunner {
+    let package_json_path = repo_root.join("package.json");
+    let Ok(contents) = fs::read_to_string(package_json_path) else {
+        return NodeTestRunner::None;
+    };
+    let Ok(package_json) = serde_json::from_str::<JsonValue>(&contents) else {
+        return NodeTestRunner::None;
+    };
+
+    let has_jest = package_json_signals_runner(&package_json, "jest");
+    let has_vitest = package_json_signals_runner(&package_json, "vitest");
+    match (has_jest, has_vitest) {
+        (true, false) => NodeTestRunner::Jest,
+        (false, true) => NodeTestRunner::Vitest,
+        (true, true) => NodeTestRunner::Ambiguous,
+        (false, false) => NodeTestRunner::None,
+    }
+}
+
+fn package_json_signals_runner(package_json: &JsonValue, runner: &str) -> bool {
+    script_test_contains_runner(package_json, runner)
+        || dependency_declares_runner(package_json, "dependencies", runner)
+        || dependency_declares_runner(package_json, "devDependencies", runner)
+        || dependency_declares_runner(package_json, "peerDependencies", runner)
+        || dependency_declares_runner(package_json, "optionalDependencies", runner)
+}
+
+fn script_test_contains_runner(package_json: &JsonValue, runner: &str) -> bool {
+    package_json
+        .get("scripts")
+        .and_then(JsonValue::as_object)
+        .and_then(|scripts| scripts.get("test"))
+        .and_then(JsonValue::as_str)
+        .is_some_and(|script| command_contains_token(script, runner))
+}
+
+fn dependency_declares_runner(package_json: &JsonValue, section: &str, runner: &str) -> bool {
+    package_json
+        .get(section)
+        .and_then(JsonValue::as_object)
+        .is_some_and(|deps| deps.contains_key(runner))
+}
+
+fn command_contains_token(command: &str, token: &str) -> bool {
+    command
+        .split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_' || ch == '-'))
+        .filter(|part| !part.is_empty())
+        .any(|part| part.eq_ignore_ascii_case(token))
 }
 
 fn file_contains(path: impl AsRef<Path>, marker: &str) -> bool {
@@ -1766,6 +1847,19 @@ fn select_full_suite_command(
             || changed_files.iter().any(|file| file.ends_with(".py")))
     {
         return "pytest".to_string();
+    }
+    if let Some(command) = runners.node.full_suite_command()
+        && (targeted_steps
+            .iter()
+            .any(|step| step.step.starts_with("npx jest --runTestsByPath"))
+            || targeted_steps
+                .iter()
+                .any(|step| step.step.starts_with("npx vitest run "))
+            || changed_files
+                .iter()
+                .any(|file| is_typescript_source_file(file)))
+    {
+        return command.to_string();
     }
     "cargo test".to_string()
 }
@@ -2205,6 +2299,7 @@ fn test_targets_for_symbol(
 fn test_command_for_target(target: &str, runners: &RecommendationRunners) -> Option<String> {
     cargo_test_command_for_target(target)
         .or_else(|| pytest_test_command_for_target(target, runners))
+        .or_else(|| node_test_command_for_target(target, runners))
 }
 
 fn cargo_test_command_for_target(target: &str) -> Option<String> {
@@ -2232,6 +2327,13 @@ fn pytest_test_command_for_target(target: &str, runners: &RecommendationRunners)
     Some(format!("pytest {target}"))
 }
 
+fn node_test_command_for_target(target: &str, runners: &RecommendationRunners) -> Option<String> {
+    if !is_typescript_test_file(target) {
+        return None;
+    }
+    runners.node.targeted_command_for(target)
+}
+
 fn is_pytest_test_file(target: &str) -> bool {
     if !target.ends_with(".py") {
         return false;
@@ -2244,6 +2346,17 @@ fn is_pytest_test_file(target: &str) -> bool {
                 || file_name.ends_with("_test.py")
                 || file_name.ends_with("_tests.py")
         })
+}
+
+fn is_typescript_test_file(target: &str) -> bool {
+    target.ends_with(".test.ts")
+        || target.ends_with(".test.tsx")
+        || target.ends_with(".spec.ts")
+        || target.ends_with(".spec.tsx")
+}
+
+fn is_typescript_source_file(target: &str) -> bool {
+    target.ends_with(".ts") || target.ends_with(".tsx")
 }
 
 fn is_runnable_test_target(target: &str, runners: &RecommendationRunners) -> bool {

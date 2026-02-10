@@ -10,7 +10,7 @@ pub struct TypeScriptLanguageAdapter;
 
 #[derive(Debug, Clone)]
 struct ImportCallHint {
-    import_path: String,
+    import_paths: Vec<String>,
     imported_symbol: String,
 }
 
@@ -91,28 +91,40 @@ impl LanguageAdapter for TypeScriptLanguageAdapter {
 
                     if let Some(class_symbol) = class_name {
                         for implemented in implemented_types(node, source) {
-                            let to_symbol_key = import_target_hints
-                                .get(&implemented)
-                                .map(|import_path| SymbolKey {
-                                    symbol: implemented.clone(),
-                                    qualified_symbol: Some(format!(
-                                        "{language}:{import_path}::{implemented}"
-                                    )),
-                                    file_path: Some(import_path.clone()),
-                                    language: Some(language.clone()),
-                                })
-                                .unwrap_or_else(|| language_symbol_key(&implemented, &language));
-                            edges.push(ExtractedEdge {
-                                from_symbol_key: scoped_symbol_key(
-                                    file_path,
-                                    &language,
-                                    &class_symbol,
-                                ),
-                                to_symbol_key,
-                                edge_kind: "implements".to_string(),
-                                confidence: 0.95,
-                                provenance: "ast_reference".to_string(),
-                            });
+                            if let Some(import_paths) = import_target_hints.get(&implemented) {
+                                for import_path in import_paths {
+                                    edges.push(ExtractedEdge {
+                                        from_symbol_key: scoped_symbol_key(
+                                            file_path,
+                                            &language,
+                                            &class_symbol,
+                                        ),
+                                        to_symbol_key: SymbolKey {
+                                            symbol: implemented.clone(),
+                                            qualified_symbol: Some(format!(
+                                                "{language}:{import_path}::{implemented}"
+                                            )),
+                                            file_path: Some(import_path.clone()),
+                                            language: Some(language.clone()),
+                                        },
+                                        edge_kind: "implements".to_string(),
+                                        confidence: 0.95,
+                                        provenance: "ast_reference".to_string(),
+                                    });
+                                }
+                            } else {
+                                edges.push(ExtractedEdge {
+                                    from_symbol_key: scoped_symbol_key(
+                                        file_path,
+                                        &language,
+                                        &class_symbol,
+                                    ),
+                                    to_symbol_key: language_symbol_key(&implemented, &language),
+                                    edge_kind: "implements".to_string(),
+                                    confidence: 0.95,
+                                    provenance: "ast_reference".to_string(),
+                                });
+                            }
                         }
                     }
                 }
@@ -208,20 +220,6 @@ impl LanguageAdapter for TypeScriptLanguageAdapter {
                 }
                 "import_statement" => {
                     for binding in import_bindings(node, source) {
-                        let to_symbol_key = import_target_hints
-                            .get(&binding.local_symbol)
-                            .map(|import_path| SymbolKey {
-                                symbol: binding.imported_symbol.clone(),
-                                qualified_symbol: Some(format!(
-                                    "{language}:{import_path}::{}",
-                                    binding.imported_symbol
-                                )),
-                                file_path: Some(import_path.clone()),
-                                language: Some(language.clone()),
-                            })
-                            .unwrap_or_else(|| {
-                                language_symbol_key(&binding.imported_symbol, &language)
-                            });
                         symbols.push(ExtractedSymbol {
                             symbol: binding.local_symbol.clone(),
                             qualified_symbol: Some(format!(
@@ -237,17 +235,44 @@ impl LanguageAdapter for TypeScriptLanguageAdapter {
                             end_column: binding.end_column,
                             signature: Some(format!("import {}", binding.local_symbol)),
                         });
-                        edges.push(ExtractedEdge {
-                            from_symbol_key: scoped_symbol_key(
-                                file_path,
-                                &language,
-                                &binding.local_symbol,
-                            ),
-                            to_symbol_key,
-                            edge_kind: "imports".to_string(),
-                            confidence: 0.9,
-                            provenance: "import_resolution".to_string(),
-                        });
+                        if let Some(import_paths) = import_target_hints.get(&binding.local_symbol) {
+                            for import_path in import_paths {
+                                edges.push(ExtractedEdge {
+                                    from_symbol_key: scoped_symbol_key(
+                                        file_path,
+                                        &language,
+                                        &binding.local_symbol,
+                                    ),
+                                    to_symbol_key: SymbolKey {
+                                        symbol: binding.imported_symbol.clone(),
+                                        qualified_symbol: Some(format!(
+                                            "{language}:{import_path}::{}",
+                                            binding.imported_symbol
+                                        )),
+                                        file_path: Some(import_path.clone()),
+                                        language: Some(language.clone()),
+                                    },
+                                    edge_kind: "imports".to_string(),
+                                    confidence: 0.9,
+                                    provenance: "import_resolution".to_string(),
+                                });
+                            }
+                        } else {
+                            edges.push(ExtractedEdge {
+                                from_symbol_key: scoped_symbol_key(
+                                    file_path,
+                                    &language,
+                                    &binding.local_symbol,
+                                ),
+                                to_symbol_key: language_symbol_key(
+                                    &binding.imported_symbol,
+                                    &language,
+                                ),
+                                edge_kind: "imports".to_string(),
+                                confidence: 0.9,
+                                provenance: "import_resolution".to_string(),
+                            });
+                        }
                     }
                 }
                 _ => {}
@@ -396,7 +421,7 @@ fn collect_call_symbols(
     caller: Option<&str>,
     file_path: &str,
     language: &str,
-    import_target_hints: &HashMap<String, String>,
+    import_target_hints: &HashMap<String, Vec<String>>,
     import_call_hints: &HashMap<String, ImportCallHint>,
     references: &mut Vec<ExtractedReference>,
     edges: &mut Vec<ExtractedEdge>,
@@ -413,21 +438,23 @@ fn collect_call_symbols(
                 if let Some(caller_symbol) = caller
                     && let Some(call_hint) = import_call_hints.get(&symbol)
                 {
-                    edges.push(ExtractedEdge {
-                        from_symbol_key: scoped_symbol_key(file_path, language, caller_symbol),
-                        to_symbol_key: SymbolKey {
-                            symbol: call_hint.imported_symbol.clone(),
-                            qualified_symbol: Some(format!(
-                                "{language}:{}::{}",
-                                call_hint.import_path, call_hint.imported_symbol
-                            )),
-                            file_path: Some(call_hint.import_path.clone()),
-                            language: Some(language.to_string()),
-                        },
-                        edge_kind: "calls".to_string(),
-                        confidence: 0.95,
-                        provenance: "call_resolution".to_string(),
-                    });
+                    for import_path in &call_hint.import_paths {
+                        edges.push(ExtractedEdge {
+                            from_symbol_key: scoped_symbol_key(file_path, language, caller_symbol),
+                            to_symbol_key: SymbolKey {
+                                symbol: call_hint.imported_symbol.clone(),
+                                qualified_symbol: Some(format!(
+                                    "{language}:{import_path}::{}",
+                                    call_hint.imported_symbol
+                                )),
+                                file_path: Some(import_path.clone()),
+                                language: Some(language.to_string()),
+                            },
+                            edge_kind: "calls".to_string(),
+                            confidence: 0.95,
+                            provenance: "call_resolution".to_string(),
+                        });
+                    }
                 }
                 if let Some(caller_symbol) = caller {
                     edges.push(ExtractedEdge {
@@ -460,22 +487,28 @@ fn collect_call_symbols(
 
                     if let Some(caller_symbol) = caller
                         && let Some(object_symbol) = object_symbol
-                        && let Some(import_path) = import_target_hints.get(&object_symbol)
+                        && let Some(import_paths) = import_target_hints.get(&object_symbol)
                     {
-                        edges.push(ExtractedEdge {
-                            from_symbol_key: scoped_symbol_key(file_path, language, caller_symbol),
-                            to_symbol_key: SymbolKey {
-                                symbol: property_symbol.clone(),
-                                qualified_symbol: Some(format!(
-                                    "{language}:{import_path}::{property_symbol}"
-                                )),
-                                file_path: Some(import_path.clone()),
-                                language: Some(language.to_string()),
-                            },
-                            edge_kind: "calls".to_string(),
-                            confidence: 0.95,
-                            provenance: "call_resolution".to_string(),
-                        });
+                        for import_path in import_paths {
+                            edges.push(ExtractedEdge {
+                                from_symbol_key: scoped_symbol_key(
+                                    file_path,
+                                    language,
+                                    caller_symbol,
+                                ),
+                                to_symbol_key: SymbolKey {
+                                    symbol: property_symbol.clone(),
+                                    qualified_symbol: Some(format!(
+                                        "{language}:{import_path}::{property_symbol}"
+                                    )),
+                                    file_path: Some(import_path.clone()),
+                                    language: Some(language.to_string()),
+                                },
+                                edge_kind: "calls".to_string(),
+                                confidence: 0.95,
+                                provenance: "call_resolution".to_string(),
+                            });
+                        }
                         return;
                     }
                 }
@@ -615,7 +648,7 @@ fn import_bindings(node: Node<'_>, source: &str) -> Vec<ImportBinding> {
     bindings
 }
 
-fn import_target_hints(file_path: &str, source: &str) -> HashMap<String, String> {
+fn import_target_hints(file_path: &str, source: &str) -> HashMap<String, Vec<String>> {
     let mut hints = HashMap::new();
 
     for line in source.lines() {
@@ -629,9 +662,10 @@ fn import_target_hints(file_path: &str, source: &str) -> HashMap<String, String>
         let Some(module_specifier) = quoted_text(from_tail) else {
             continue;
         };
-        let Some(import_path) = resolve_typescript_import_path(file_path, &module_specifier) else {
+        let import_paths = resolve_typescript_import_paths(file_path, &module_specifier);
+        if import_paths.is_empty() {
             continue;
-        };
+        }
         let clause = head.trim_start_matches("import").trim();
 
         if let Some(namespace_clause) = clause
@@ -640,7 +674,7 @@ fn import_target_hints(file_path: &str, source: &str) -> HashMap<String, String>
         {
             let alias = namespace_clause.trim().trim_start_matches("* as ").trim();
             if !alias.is_empty() {
-                hints.insert(alias.to_string(), import_path.clone());
+                extend_import_hint(&mut hints, alias, &import_paths);
             }
 
             let default_binding = clause
@@ -649,7 +683,7 @@ fn import_target_hints(file_path: &str, source: &str) -> HashMap<String, String>
                 .map(str::trim)
                 .filter(|candidate| !candidate.is_empty() && !candidate.starts_with("* as "));
             if let Some(default_binding) = default_binding {
-                hints.insert(default_binding.to_string(), import_path.clone());
+                extend_import_hint(&mut hints, default_binding, &import_paths);
             }
             continue;
         }
@@ -669,7 +703,7 @@ fn import_target_hints(file_path: &str, source: &str) -> HashMap<String, String>
                 if local_symbol.is_empty() {
                     continue;
                 }
-                hints.insert(local_symbol.to_string(), import_path.clone());
+                extend_import_hint(&mut hints, local_symbol, &import_paths);
             }
             let default_binding = head[..left_brace]
                 .trim_start_matches("import")
@@ -677,7 +711,7 @@ fn import_target_hints(file_path: &str, source: &str) -> HashMap<String, String>
                 .trim_end_matches(',')
                 .trim();
             if !default_binding.is_empty() {
-                hints.insert(default_binding.to_string(), import_path.clone());
+                extend_import_hint(&mut hints, default_binding, &import_paths);
             }
             continue;
         }
@@ -690,11 +724,22 @@ fn import_target_hints(file_path: &str, source: &str) -> HashMap<String, String>
             .map(str::trim)
             .filter(|symbol| !symbol.is_empty());
         if let Some(local_symbol) = default_binding {
-            hints.insert(local_symbol.to_string(), import_path);
+            extend_import_hint(&mut hints, local_symbol, &import_paths);
         }
     }
 
     hints
+}
+
+fn extend_import_hint(
+    hints: &mut HashMap<String, Vec<String>>,
+    local_symbol: &str,
+    import_paths: &[String],
+) {
+    let entry = hints.entry(local_symbol.to_string()).or_default();
+    entry.extend(import_paths.iter().cloned());
+    entry.sort();
+    entry.dedup();
 }
 
 fn import_call_hints(file_path: &str, source: &str) -> HashMap<String, ImportCallHint> {
@@ -711,9 +756,10 @@ fn import_call_hints(file_path: &str, source: &str) -> HashMap<String, ImportCal
         let Some(module_specifier) = quoted_text(from_tail) else {
             continue;
         };
-        let Some(import_path) = resolve_typescript_import_path(file_path, &module_specifier) else {
+        let import_paths = resolve_typescript_import_paths(file_path, &module_specifier);
+        if import_paths.is_empty() {
             continue;
-        };
+        }
         let Some((left_brace, right_brace)) = head
             .find('{')
             .and_then(|left| head.find('}').map(|right| (left, right)))
@@ -742,7 +788,7 @@ fn import_call_hints(file_path: &str, source: &str) -> HashMap<String, ImportCal
             hints.insert(
                 local_symbol.to_string(),
                 ImportCallHint {
-                    import_path: import_path.clone(),
+                    import_paths: import_paths.clone(),
                     imported_symbol: imported_symbol.to_string(),
                 },
             );
@@ -760,17 +806,33 @@ fn quoted_text(segment: &str) -> Option<String> {
     Some(tail[..end].to_string())
 }
 
-fn resolve_typescript_import_path(from_file_path: &str, module_specifier: &str) -> Option<String> {
+fn resolve_typescript_import_paths(from_file_path: &str, module_specifier: &str) -> Vec<String> {
     if !module_specifier.starts_with('.') {
-        return None;
+        return Vec::new();
     }
 
-    let base = std::path::Path::new(from_file_path).parent()?;
-    let mut candidate = base.join(module_specifier);
-    if candidate.extension().is_none() {
-        candidate.set_extension("ts");
+    let Some(base) = std::path::Path::new(from_file_path).parent() else {
+        return Vec::new();
+    };
+    let candidate = base.join(module_specifier);
+    let mut resolved = Vec::new();
+
+    if candidate.extension().is_some() {
+        resolved.push(normalize_relative_path(&candidate));
+    } else {
+        for extension in ["ts", "tsx"] {
+            let mut direct = candidate.clone();
+            direct.set_extension(extension);
+            resolved.push(normalize_relative_path(&direct));
+            resolved.push(normalize_relative_path(
+                &candidate.join(format!("index.{extension}")),
+            ));
+        }
     }
-    Some(normalize_relative_path(&candidate))
+
+    resolved.sort();
+    resolved.dedup();
+    resolved
 }
 
 fn normalize_relative_path(path: &std::path::Path) -> String {
