@@ -21,6 +21,52 @@ This log captures real `repo-scout` usage while building `repo-scout`.
 ## Entries
 
 - Date: `2026-02-10`
+- Task: Phase 17 documentation truth sync + automated docs-consistency gate (milestones 71/72).
+- Commands run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find docs_consistency_check --repo . --json`
+  - `cargo run -- refs docs_consistency_check --repo . --json`
+  - `cargo test --test milestone71_docs_status_alignment -- --nocapture` (red)
+  - `cargo test --test milestone71_docs_status_alignment -- --nocapture` (green)
+  - `cargo run -- index --repo .`
+  - `cargo run -- find check_docs_consistency --repo . --json`
+  - `cargo run -- refs check_docs_consistency --repo . --json`
+  - `cargo test --test milestone72_docs_consistency_gate -- --nocapture` (red)
+  - `cargo test --test milestone72_docs_consistency_gate -- --nocapture` (green)
+  - `bash scripts/check_docs_consistency.sh --repo .`
+  - `just docs-consistency .`
+  - `cargo run -- index --repo .`
+  - `cargo run -- find check_docs_consistency --repo .`
+  - `cargo run -- refs check_docs_consistency --repo .`
+  - `cargo test`
+  - `cargo clippy --all-targets --all-features -- -D warnings`
+  - `bash scripts/validate_tdd_cycle.sh --base origin/main` (empty-range fail without
+    `--allow-empty-range`)
+  - `bash scripts/validate_tdd_cycle.sh --base origin/main --allow-empty-range`
+  - `bash scripts/validate_evidence_packet.sh --pr-body .github/pull_request_template.md`
+- What helped:
+  - Locking status-alignment expectations in milestone71 avoided ad-hoc text updates and kept
+    phase-state changes deterministic.
+  - A small dedicated gate script (`check_docs_consistency.sh`) gave one repeatable pass/fail entry
+    point for local and CI docs consistency checks.
+- What failed or felt weak:
+  - `validate_tdd_cycle.sh --base origin/main` still hard-fails on empty commit ranges, so local
+    maintenance runs need `--allow-empty-range` until commit ranges exist.
+- Action taken:
+  - failing tests added:
+    - `tests/milestone71_docs_status_alignment.rs`
+    - `tests/milestone72_docs_consistency_gate.rs`
+  - fixes implemented:
+    - `scripts/check_docs_consistency.sh`
+    - `Justfile` target `docs-consistency`
+    - `.github/workflows/contract-gates.yml` docs-consistency step
+  - docs update:
+    - `README.md`, `CHANGELOG.md`, `docs/architecture.md`, `docs/release-checklist-phase16.md`,
+      `agents/plans/repo-scout-phase9-execplan.md`, `agents/plans/README.md`,
+      `agents/plans/repo-scout-phase17-execplan.md`, `docs/dogfood-log.md`.
+- Status: `fixed`
+
+- Date: `2026-02-10`
 - Task: Phase 16 Milestone 70 known-issues closure hardening (zero-deferred budget + PH16-003
   closure evidence + release-checklist evidence sync).
 - Commands run:

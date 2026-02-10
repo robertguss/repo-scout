@@ -3,10 +3,14 @@
 `repo-scout` is a local, deterministic CLI for indexing a repository and answering code-navigation
 questions fast.
 
-Phases 11-15 are fully implemented (Rust/Go/Python/TypeScript production-ready closures plus
-cross-language convergence). Phase 16 is now in progress with the first four High-Bar hardening
-slices: deterministic replay checks, benchmark-pack timing guardrails, known-issues budget gating,
-and large-repo benchmark guardrails for critical command scenarios.
+## Current Status
+
+Phase 16 High-Bar/GA hardening is complete. `repo-scout` currently ships production-ready
+Rust/Go/Python/TypeScript support, cross-language convergence coverage, and release-grade
+deterministic replay/benchmark/known-issues/release-checklist gates.
+
+Roadmap and phase artifacts are tracked in
+`agents/plans/repo-scout-roadmap-to-production-and-ga.md`.
 
 ## What It Does
 
@@ -55,7 +59,7 @@ cargo run -- verify-plan --changed-file src/lib.rs --repo /path/to/repo
 cargo run -- diff-impact --changed-file src/lib.rs --repo /path/to/repo
 cargo run -- explain impact_matches --repo /path/to/repo
 
-# Phase 5/6/7/8 controls
+# focused query controls
 cargo run -- refs launch --repo /path/to/repo --code-only --exclude-tests
 cargo run -- refs launch --repo /path/to/repo --code-only --exclude-tests --max-results 10
 cargo run -- find launch --repo /path/to/repo --max-results 10
@@ -65,7 +69,7 @@ cargo run -- verify-plan --changed-file src/lib.rs --changed-line src/lib.rs:20:
 cargo run -- diff-impact --changed-file src/lib.rs --changed-line src/lib.rs:20:80 --changed-symbol launch --exclude-changed --max-results 12 --repo /path/to/repo
 cargo run -- diff-impact --changed-file src/lib.rs --include-imports --repo /path/to/repo
 cargo run -- diff-impact --changed-file src/lib.rs --repo /path/to/repo --max-distance 3
-# semantic-precision examples (TypeScript/Python module aliases)
+# semantic precision examples (TypeScript/Python module aliases)
 cargo run -- diff-impact --changed-file src/util_a.ts --repo tests/fixtures/phase8/semantic_precision --json
 cargo run -- diff-impact --changed-file src/pkg_a/util.py --repo tests/fixtures/phase8/semantic_precision --json
 ```
@@ -161,6 +165,7 @@ just fmt
 just clippy
 just test
 just contract-check
+just docs-consistency
 just perf-rust-guardrails
 just perf-rust-record
 just phase15-convergence-pack .
@@ -197,6 +202,7 @@ enforcement.
 Run these checks before opening a PR:
 
 ```bash
+bash scripts/check_docs_consistency.sh --repo .
 bash scripts/validate_tdd_cycle.sh --base origin/main
 bash scripts/validate_evidence_packet.sh --pr-body .github/pull_request_template.md
 cargo test
@@ -206,6 +212,7 @@ Equivalent `just` wrappers:
 
 ```bash
 just contract-lint
+just docs-consistency
 just contract-tdd origin/main
 just contract-evidence-pr .github/pull_request_template.md
 just contract-check

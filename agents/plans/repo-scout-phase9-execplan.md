@@ -10,6 +10,24 @@ This plan builds on `agents/repo-scout-phase8-execplan.md`, which delivered sema
 closure and `diff-impact` hardening, and explicitly left language-specific test-runner
 recommendations as residual work.
 
+## Superseded Status
+
+This plan is now a **historical planning artifact**. Its intended outcomes were closed via later
+implemented phases and convergence/hardening milestones:
+
+- Phase 10 (`tests/milestone49_rust_hardening.rs`) removed invalid non-Rust `cargo test --test`
+  targeting behavior.
+- Phase 13 (`tests/milestone60_python_recommendations.rs`) shipped strict explicit-`pytest`
+  detection and runnable Python recommendation synthesis.
+- Phase 14 (`tests/milestone61_typescript_production.rs`) shipped strict unambiguous Jest/Vitest
+  detection and runnable Node recommendation synthesis.
+- Phase 15 (`tests/milestone62_cross_language_convergence.rs`,
+  `tests/milestone63_cross_language_convergence_pack.rs`) shipped shared cross-language
+  test-path/scope convergence and integrated recommendation contract validation.
+
+Status statement: Phase 9 is **closed via later implemented phases** and retained for historical
+context only.
+
 ## Purpose / Big Picture
 
 Phase 9 makes test recommendations runnable across Rust, Python, and TypeScript/JavaScript while
@@ -33,11 +51,16 @@ changes.
       `tests/` currently produce `cargo test --test ...` steps; nested Python tests default to
       support-only; TS/JS `.spec/.test` files outside `tests/` are not discovered as test targets.
 - [x] (2026-02-08 04:28Z) Authored this Phase 9 ExecPlan as planning-only work.
-- [ ] Milestone 42 strict TDD contract/fixture baseline for runner-aware command generation.
-- [ ] Milestone 43 strict TDD Python `pytest` detection and runnable command synthesis.
-- [ ] Milestone 44 strict TDD Jest/Vitest detection and deterministic strict-mode handling.
-- [ ] Milestone 45 strict TDD shared cross-language test-path classifier and scope consistency.
-- [ ] Milestone 46 docs, dogfood evidence, baseline refresh, and contract validator closure.
+- [x] (2026-02-10 00:29Z) Milestone 42 closure objective delivered via later strict-TDD
+      implementation phases and integration suites (see superseded status mapping).
+- [x] (2026-02-10 00:29Z) Milestone 43 closure objective delivered in Phase 13 strict
+      explicit-`pytest` runner-aware recommendation implementation.
+- [x] (2026-02-10 00:57Z) Milestone 44 closure objective delivered in Phase 14 strict Jest/Vitest
+      runner-aware recommendation implementation.
+- [x] (2026-02-10 02:17Z) Milestone 45 closure objective delivered in Phase 15 shared
+      cross-language test-like path convergence.
+- [x] (2026-02-10 03:21Z) Milestone 46 closure objective delivered through later docs/evidence
+      refresh and contract-validator closure in Phases 13-16.
 
 ## Surprises & Discoveries
 
@@ -91,16 +114,15 @@ changes.
 
 ## Outcomes & Retrospective
 
-Planning outcome: Phase 9 is scoped to recommendation correctness and scope consistency, not schema
-or command-surface expansion.
+Historical planning outcome: Phase 9 correctly identified recommendation and scope-consistency gaps
+without requiring schema or command-surface changes.
 
-Expected completion outcome: `verify-plan` targeted steps are runnable and language-aware in
-explicit runner contexts, nested/common cross-language test patterns are discoverable consistently,
-and `diff-impact`/scope filters treat test-like paths uniformly across Rust/Python/TS/JS.
+Closure outcome (superseded by later implementation phases): targeted runner-aware recommendations
+and shared cross-language test-path behaviors are now shipped and validated across Phases 13-15,
+with convergence and GA hardening coverage extended in Phases 15-16.
 
-Expected residual work after this plan: optional repository-level runner override configuration,
-richer Python environment command inference (`python -m pytest` variants), and broader benchmark
-corpora for mixed monorepos.
+Residual work after closure remains optional maintenance/backlog scope (for example repository-level
+runner overrides, richer environment-specific command synthesis, and additional benchmark corpora).
 
 ## Context and Orientation
 

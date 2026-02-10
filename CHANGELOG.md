@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Added
+- Phase 17 documentation-consistency planning artifact:
+  `agents/plans/repo-scout-phase17-execplan.md`.
+- Milestone coverage for docs consistency gates:
+  `tests/milestone71_docs_status_alignment.rs`,
+  `tests/milestone72_docs_consistency_gate.rs`.
+- Documentation consistency automation surface:
+  `scripts/check_docs_consistency.sh`, `just docs-consistency`, and CI wiring in
+  `.github/workflows/contract-gates.yml`.
+
+### Changed
+- Documentation truth-sync updates for current post-Phase-16 closure posture in:
+  `README.md`, `docs/architecture.md`, `agents/plans/repo-scout-phase9-execplan.md`,
+  `agents/plans/README.md`, and `docs/dogfood-log.md`.
+
 ## [0.1.0] - 2026-02-10
 
 First production-ready release of `repo-scout`.
@@ -26,4 +43,5 @@ First production-ready release of `repo-scout`.
 ### Quality
 - Full integration suite, clippy, formatting, TDD cycle validator, and evidence validator are green at release cut.
 
+[Unreleased]: https://github.com/robertguss/repo-scout/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/robertguss/repo-scout/releases/tag/v0.1.0

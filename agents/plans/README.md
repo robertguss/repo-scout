@@ -27,3 +27,10 @@ conformance scope and must include:
 
 Future plans should also map task/test/evidence intent to `templates/` and run contract validators
 before implementation.
+
+## Phase 9 Superseded Status
+
+`agents/plans/repo-scout-phase9-execplan.md` is retained as a **historical planning artifact**.
+Its milestone intent was closed through later implemented phases (13-15) and subsequent
+documentation/validation closure (16+). It remains in Tiger-era conformance scope for structure, but
+should not be treated as an active open implementation phase.

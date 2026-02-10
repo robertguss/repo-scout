@@ -89,8 +89,12 @@ jobs:
 
       - name: Lint shell scripts
         run: |
+          bash -n scripts/check_docs_consistency.sh
           bash -n scripts/validate_tdd_cycle.sh
           bash -n scripts/validate_evidence_packet.sh
+
+      - name: Run docs consistency gate
+        run: scripts/check_docs_consistency.sh --repo .
 
       - name: Validate TDD commit sequence
         shell: bash

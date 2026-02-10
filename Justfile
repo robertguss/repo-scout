@@ -40,6 +40,10 @@ contract-check base="origin/main" pr_body=".github/pull_request_template.md": co
     bash scripts/validate_tdd_cycle.sh --base "{{base}}"
     bash scripts/validate_evidence_packet.sh --pr-body "{{pr_body}}"
 
+# Usage: just docs-consistency [repo]
+docs-consistency repo=".":
+    bash scripts/check_docs_consistency.sh --repo "{{repo}}"
+
 # Dogfood loops
 # Usage: just dogfood-pre <symbol> [repo]
 dogfood-pre symbol repo=".":

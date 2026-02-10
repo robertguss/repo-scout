@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the current `repo-scout` architecture after Phase 14.
+This document describes the current `repo-scout` architecture as of Phase 16 closure.
 
 ## High-Level Flow
 
@@ -204,7 +204,7 @@ Determinism is enforced by:
 
 ## Quality Gates
 
-Phase 8 requires both quality gates to stay green for release-readiness:
+Current release-readiness baseline requires both quality gates to stay green:
 
 - `cargo clippy --all-targets --all-features -- -D warnings`
 - `cargo test`
