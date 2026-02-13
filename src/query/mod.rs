@@ -2805,6 +2805,47 @@ pub fn file_deps(db_path: &Path, file_path: &str) -> anyhow::Result<FileDeps> {
     })
 }
 
+#[derive(Debug, serde::Serialize)]
+pub struct HotspotEntry {
+    pub symbol: String,
+    pub file_path: String,
+    pub kind: String,
+    pub fan_in: i64,
+    pub fan_out: i64,
+    pub total: i64,
+}
+
+pub fn hotspots(db_path: &Path, limit: u32) -> anyhow::Result<Vec<HotspotEntry>> {
+    let connection = Connection::open(db_path)?;
+    let mut stmt = connection.prepare(
+        "SELECT s.symbol, s.file_path, s.kind,
+                COUNT(DISTINCT e_in.from_symbol_id) as fan_in,
+                COUNT(DISTINCT e_out.to_symbol_id) as fan_out,
+                (COUNT(DISTINCT e_in.from_symbol_id) + COUNT(DISTINCT e_out.to_symbol_id)) as total
+         FROM symbols_v2 s
+         LEFT JOIN symbol_edges_v2 e_in ON e_in.to_symbol_id = s.symbol_id
+         LEFT JOIN symbol_edges_v2 e_out ON e_out.from_symbol_id = s.symbol_id
+         GROUP BY s.symbol_id
+         HAVING total > 0
+         ORDER BY total DESC, s.file_path ASC, s.symbol ASC
+         LIMIT ?1",
+    )?;
+    let entries = stmt
+        .query_map([limit], |row| {
+            Ok(HotspotEntry {
+                symbol: row.get(0)?,
+                file_path: row.get(1)?,
+                kind: row.get(2)?,
+                fan_in: row.get(3)?,
+                fan_out: row.get(4)?,
+                total: row.get(5)?,
+            })
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(entries)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

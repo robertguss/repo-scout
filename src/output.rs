@@ -1,8 +1,9 @@
 use std::path::Path;
 
 use crate::query::{
-    ContextMatch, DiffImpactMatch, EdgeMatch, ExplainMatch, FileDeps, ImpactMatch,
-    OutlineEntry, QueryMatch, SnippetMatch, StatusSummary, TestTarget, VerificationStep,
+    ContextMatch, DiffImpactMatch, EdgeMatch, ExplainMatch, FileDeps, HotspotEntry,
+    ImpactMatch, OutlineEntry, QueryMatch, SnippetMatch, StatusSummary, TestTarget,
+    VerificationStep,
 };
 use serde::Serialize;
 
@@ -729,6 +730,44 @@ pub fn print_deps_json(file: &str, deps: &FileDeps) -> anyhow::Result<()> {
         file,
         depends_on: &deps.depends_on,
         depended_on_by: &deps.depended_on_by,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}
+
+pub fn print_hotspots(entries: &[HotspotEntry]) {
+    if entries.is_empty() {
+        println!("No hotspots found.");
+        return;
+    }
+    println!("hotspots:");
+    for (i, e) in entries.iter().enumerate() {
+        println!(
+            "  #{}: {} ({}) in {} — fan_in: {}, fan_out: {}, total: {}",
+            i + 1,
+            e.symbol,
+            e.kind,
+            e.file_path,
+            e.fan_in,
+            e.fan_out,
+            e.total
+        );
+    }
+}
+
+#[derive(Serialize)]
+struct JsonHotspotOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    results: &'a [HotspotEntry],
+}
+
+pub fn print_hotspots_json(entries: &[HotspotEntry]) -> anyhow::Result<()> {
+    let payload = JsonHotspotOutput {
+        schema_version: JSON_SCHEMA_VERSION_V2,
+        command: "hotspots",
+        results: entries,
     };
     let serialized = serde_json::to_string_pretty(&payload)?;
     println!("{serialized}");

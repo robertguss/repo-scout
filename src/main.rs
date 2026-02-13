@@ -13,8 +13,9 @@ use crate::query::{
     ChangedLineRange, DiffImpactChangedMode, DiffImpactImportMode, DiffImpactOptions,
     DiffImpactTestMode, QueryScope, VerifyPlanOptions, context_matches, context_matches_scoped,
     diff_impact_for_changed_files, explain_symbol, find_matches_scoped, impact_matches,
-    callees_of, callers_of, file_deps, outline_file, refs_matches_scoped, repo_entry_points,
-    snippet_for_symbol, status_summary, tests_for_symbol, verify_plan_for_changed_files,
+    callees_of, callers_of, file_deps, hotspots, outline_file, refs_matches_scoped,
+    repo_entry_points, snippet_for_symbol, status_summary, tests_for_symbol,
+    verify_plan_for_changed_files,
 };
 use crate::store::ensure_store;
 
@@ -70,6 +71,7 @@ fn run() -> anyhow::Result<()> {
         Command::Callers(args) => run_callers(args),
         Command::Callees(args) => run_callees(args),
         Command::Deps(args) => run_deps(args),
+        Command::Hotspots(args) => run_hotspots(args),
     }
 }
 
@@ -521,6 +523,17 @@ fn run_deps(args: crate::cli::DepsArgs) -> anyhow::Result<()> {
         output::print_deps_json(&args.file, &deps)?;
     } else {
         output::print_deps(&args.file, &deps);
+    }
+    Ok(())
+}
+
+fn run_hotspots(args: crate::cli::HotspotsArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let entries = hotspots(&store.db_path, args.limit)?;
+    if args.json {
+        output::print_hotspots_json(&entries)?;
+    } else {
+        output::print_hotspots(&entries);
     }
     Ok(())
 }

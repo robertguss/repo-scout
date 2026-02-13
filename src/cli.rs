@@ -44,6 +44,8 @@ pub enum Command {
     Callees(QueryArgs),
     #[command(about = "Show file-level dependency graph")]
     Deps(DepsArgs),
+    #[command(about = "Show most-connected symbols (hotspots)")]
+    Hotspots(HotspotsArgs),
 }
 
 #[derive(Debug, Args)]
@@ -208,4 +210,14 @@ pub struct ExplainArgs {
     pub json: bool,
     #[arg(long, default_value_t = false)]
     pub include_snippets: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct HotspotsArgs {
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long, default_value_t = 10)]
+    pub limit: u32,
 }
