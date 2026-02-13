@@ -7,8 +7,8 @@
 ## Changelog policy
 
 - Keep a Changelog format in `CHANGELOG.md`
-- update `Unreleased` continuously
-- cut a dated release section at tag time
+- Update `Unreleased` continuously
+- Cut a dated release section at tag time
 
 ## Release checklist
 

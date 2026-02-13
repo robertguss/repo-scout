@@ -29,11 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/cli-reference.md`, `docs/json-output.md`, and `docs/architecture.md` rewritten for current behavior and terminology.
 - `docs/SUMMARY.md` reorganized into a user-first navigation model with explicit legacy sectioning.
 - `Justfile` modernized with a cleaner workflow surface, docs automation commands, and reorganized gate recipes.
+- `docs/plans/` restored to preserve planning artifacts and implementation audit history.
 
 ### Removed
 
 - Obsolete planning and report docs removed from `docs/`:
-  - `docs/plans/` (entire directory)
   - `docs/claude-dogfood-report.md`
   - `docs/dogfood-log.md`
   - `docs/phase7-semantic-precision.md`

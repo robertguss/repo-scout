@@ -15,7 +15,12 @@ repo="."
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --repo)
-            repo="${2:-}"
+            if [[ -z "${2:-}" ]]; then
+                echo "--repo requires a non-empty path argument" >&2
+                usage >&2
+                exit 2
+            fi
+            repo="$2"
             shift 2
             ;;
         -h|--help)

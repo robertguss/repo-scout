@@ -50,6 +50,10 @@ check_file() {
     while IFS= read -r link; do
         local target="$link"
 
+        # Strip optional `<...>` wrapper and optional title segment.
+        target="${target#<}"
+        target="${target%>}"
+        target="${target%%[[:space:]]*}"
         target="${target%%#*}"
         [[ -z "$target" ]] && continue
 
@@ -70,7 +74,13 @@ check_file() {
             echo "BROKEN LINK: $file -> $target" >&2
             failures=$((failures + 1))
         fi
-    done < <(sed -nE 's/.*\[[^][]+\]\(([^)]+)\).*/\1/p' "$file")
+    done < <(
+        {
+            perl -ne 'while (/\[[^][]+\]\(([^)]+)\)/g) { print "$1\n"; }' "$file"
+            sed -nE 's/^[[:space:]]*\[[^]]+\]:[[:space:]]*(<[^>]+>|[^[:space:]]+).*/\1/p' "$file"
+        } \
+        | sed '/^[[:space:]]*$/d'
+    )
 }
 
 while IFS= read -r md; do
