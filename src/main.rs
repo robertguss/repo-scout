@@ -13,9 +13,9 @@ use crate::query::{
     ChangedLineRange, DiffImpactChangedMode, DiffImpactImportMode, DiffImpactOptions,
     DiffImpactTestMode, QueryScope, VerifyPlanOptions, context_matches, context_matches_scoped,
     diff_impact_for_changed_files, explain_symbol, find_matches_scoped, impact_matches,
-    callees_of, callers_of, file_deps, hotspots, outline_file, refs_matches_scoped,
-    repo_entry_points, snippet_for_symbol, status_summary, tests_for_symbol,
-    verify_plan_for_changed_files,
+    callees_of, callers_of, file_deps, find_call_path, hotspots, outline_file,
+    refs_matches_scoped, related_symbols, repo_entry_points, snippet_for_symbol,
+    status_summary, tests_for_symbol, verify_plan_for_changed_files,
 };
 use crate::store::ensure_store;
 
@@ -72,6 +72,8 @@ fn run() -> anyhow::Result<()> {
         Command::Callees(args) => run_callees(args),
         Command::Deps(args) => run_deps(args),
         Command::Hotspots(args) => run_hotspots(args),
+        Command::CallPath(args) => run_call_path(args),
+        Command::Related(args) => run_related(args),
     }
 }
 
@@ -142,7 +144,7 @@ fn run_refs(args: crate::cli::RefsArgs) -> anyhow::Result<()> {
     if args.json {
         output::print_query_json("refs", &args.symbol, &matches)?;
     } else {
-        output::print_query("refs", &args.symbol, &matches);
+        output::print_refs_grouped(&args.symbol, &matches);
     }
     Ok(())
 }
@@ -534,6 +536,33 @@ fn run_hotspots(args: crate::cli::HotspotsArgs) -> anyhow::Result<()> {
         output::print_hotspots_json(&entries)?;
     } else {
         output::print_hotspots(&entries);
+    }
+    Ok(())
+}
+
+fn run_call_path(args: crate::cli::CallPathArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let path = find_call_path(
+        &store.db_path,
+        &args.from,
+        &args.to,
+        args.max_depth,
+    )?;
+    if args.json {
+        output::print_call_path_json(&args.from, &args.to, &path)?;
+    } else {
+        output::print_call_path(&args.from, &args.to, &path);
+    }
+    Ok(())
+}
+
+fn run_related(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let results = related_symbols(&store.db_path, &args.symbol)?;
+    if args.json {
+        output::print_related_json(&args.symbol, &results)?;
+    } else {
+        output::print_related(&args.symbol, &results);
     }
     Ok(())
 }

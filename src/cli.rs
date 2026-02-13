@@ -46,6 +46,10 @@ pub enum Command {
     Deps(DepsArgs),
     #[command(about = "Show most-connected symbols (hotspots)")]
     Hotspots(HotspotsArgs),
+    #[command(name = "call-path", about = "Find call path between two symbols")]
+    CallPath(CallPathArgs),
+    #[command(about = "Show structurally related symbols")]
+    Related(QueryArgs),
 }
 
 #[derive(Debug, Args)]
@@ -220,4 +224,16 @@ pub struct HotspotsArgs {
     pub json: bool,
     #[arg(long, default_value_t = 10)]
     pub limit: u32,
+}
+
+#[derive(Debug, Args)]
+pub struct CallPathArgs {
+    pub from: String,
+    pub to: String,
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long, default_value_t = 10)]
+    pub max_depth: u32,
 }

@@ -2,8 +2,8 @@ use std::path::Path;
 
 use crate::query::{
     ContextMatch, DiffImpactMatch, EdgeMatch, ExplainMatch, FileDeps, HotspotEntry,
-    ImpactMatch, OutlineEntry, QueryMatch, SnippetMatch, StatusSummary, TestTarget,
-    VerificationStep,
+    ImpactMatch, OutlineEntry, QueryMatch, RelatedSymbol, SnippetMatch, StatusSummary,
+    TestTarget, VerificationStep,
 };
 use serde::Serialize;
 
@@ -768,6 +768,150 @@ pub fn print_hotspots_json(entries: &[HotspotEntry]) -> anyhow::Result<()> {
         schema_version: JSON_SCHEMA_VERSION_V2,
         command: "hotspots",
         results: entries,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}
+
+pub fn print_refs_grouped(
+    symbol: &str,
+    matches: &[QueryMatch],
+) {
+    println!("command: refs");
+    println!("query: {symbol}");
+    println!("results: {}", matches.len());
+
+    let mut definitions = Vec::new();
+    let mut source = Vec::new();
+    let mut tests = Vec::new();
+    let mut docs = Vec::new();
+    let mut other = Vec::new();
+
+    for m in matches {
+        if m.why_matched.contains("ast_definition") {
+            definitions.push(m);
+        } else if m.file_path.ends_with(".md") {
+            docs.push(m);
+        } else if m.file_path.starts_with("tests/")
+            || m.file_path.contains("_test.")
+            || m.file_path.contains(".test.")
+        {
+            tests.push(m);
+        } else if m.file_path.starts_with("src/") {
+            source.push(m);
+        } else {
+            other.push(m);
+        }
+    }
+
+    let sections: &[(&str, &[&QueryMatch])] = &[
+        ("Definitions", &definitions),
+        ("Source", &source),
+        ("Test", &tests),
+        ("Documentation", &docs),
+        ("Other", &other),
+    ];
+
+    for (label, items) in sections {
+        if items.is_empty() {
+            continue;
+        }
+        println!("\n{label}:");
+        for r in *items {
+            println!(
+                "  {}:{}:{} {} [{} {}]",
+                r.file_path,
+                r.line,
+                r.column,
+                r.symbol,
+                r.why_matched,
+                r.confidence,
+            );
+        }
+    }
+}
+
+pub fn print_call_path(
+    from: &str,
+    to: &str,
+    path: &Option<Vec<String>>,
+) {
+    println!("command: call-path");
+    println!("from: {from}");
+    println!("to: {to}");
+    match path {
+        Some(steps) => {
+            println!("path_length: {}", steps.len());
+            println!(
+                "path: {}",
+                steps.join(" -> ")
+            );
+        }
+        None => {
+            println!("path: none (no call path found)");
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct JsonCallPathOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    from: &'a str,
+    to: &'a str,
+    path: &'a Option<Vec<String>>,
+}
+
+pub fn print_call_path_json(
+    from: &str,
+    to: &str,
+    path: &Option<Vec<String>>,
+) -> anyhow::Result<()> {
+    let payload = JsonCallPathOutput {
+        schema_version: JSON_SCHEMA_VERSION_V2,
+        command: "call-path",
+        from,
+        to,
+        path,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}
+
+pub fn print_related(
+    symbol: &str,
+    results: &[RelatedSymbol],
+) {
+    println!("command: related");
+    println!("query: {symbol}");
+    println!("results: {}", results.len());
+    for r in results {
+        println!(
+            "  {} ({}) in {} [{}]",
+            r.symbol, r.kind, r.file_path, r.relationship,
+        );
+    }
+}
+
+#[derive(Serialize)]
+struct JsonRelatedOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    query: &'a str,
+    results: &'a [RelatedSymbol],
+}
+
+pub fn print_related_json(
+    symbol: &str,
+    results: &[RelatedSymbol],
+) -> anyhow::Result<()> {
+    let payload = JsonRelatedOutput {
+        schema_version: JSON_SCHEMA_VERSION_V2,
+        command: "related",
+        query: symbol,
+        results,
     };
     let serialized = serde_json::to_string_pretty(&payload)?;
     println!("{serialized}");

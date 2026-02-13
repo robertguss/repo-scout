@@ -2858,6 +2858,194 @@ pub fn file_deps(db_path: &Path, file_path: &str) -> anyhow::Result<FileDeps> {
 }
 
 #[derive(Debug, serde::Serialize)]
+pub struct RelatedSymbol {
+    pub symbol: String,
+    pub file_path: String,
+    pub kind: String,
+    pub relationship: String,
+}
+
+pub fn related_symbols(
+    db_path: &Path,
+    symbol: &str,
+) -> anyhow::Result<Vec<RelatedSymbol>> {
+    let connection = Connection::open(db_path)?;
+    let mut results: Vec<RelatedSymbol> = Vec::new();
+    let mut seen = HashSet::new();
+
+    // Find the target symbol's file_path and symbol_id
+    let mut sym_stmt = connection.prepare(
+        "SELECT symbol_id, file_path FROM symbols_v2
+         WHERE symbol = ?1
+         ORDER BY file_path, symbol_id LIMIT 1",
+    )?;
+    let sym_info: Option<(i64, String)> = sym_stmt
+        .query_map(params![symbol], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })?
+        .filter_map(|r| r.ok())
+        .next();
+
+    let (symbol_id, file_path) = match sym_info {
+        Some(v) => v,
+        None => return Ok(results),
+    };
+    seen.insert(symbol.to_string());
+
+    // 1. Siblings: same file, different symbol
+    let mut sib_stmt = connection.prepare(
+        "SELECT symbol, file_path, kind FROM symbols_v2
+         WHERE file_path = ?1 AND symbol != ?2
+         ORDER BY symbol",
+    )?;
+    let siblings = sib_stmt
+        .query_map(params![&file_path, symbol], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })?
+        .filter_map(|r| r.ok());
+    for (s, fp, k) in siblings {
+        if seen.insert(s.clone()) {
+            results.push(RelatedSymbol {
+                symbol: s,
+                file_path: fp,
+                kind: k,
+                relationship: "sibling".to_string(),
+            });
+        }
+    }
+
+    // 2. Shared callers: symbols called by the same caller
+    let mut shared_stmt = connection.prepare(
+        "SELECT DISTINCT s2.symbol, s2.file_path, s2.kind
+         FROM symbol_edges_v2 e1
+         JOIN symbol_edges_v2 e2
+           ON e1.from_symbol_id = e2.from_symbol_id
+         JOIN symbols_v2 s2
+           ON s2.symbol_id = e2.to_symbol_id
+         WHERE e1.to_symbol_id = ?1
+           AND e2.to_symbol_id != ?1
+           AND e1.edge_kind = 'calls'
+           AND e2.edge_kind = 'calls'
+         ORDER BY s2.symbol",
+    )?;
+    let shared = shared_stmt
+        .query_map(params![symbol_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })?
+        .filter_map(|r| r.ok());
+    for (s, fp, k) in shared {
+        if seen.insert(s.clone()) {
+            results.push(RelatedSymbol {
+                symbol: s,
+                file_path: fp,
+                kind: k,
+                relationship: "shared_caller".to_string(),
+            });
+        }
+    }
+
+    Ok(results)
+}
+
+pub fn find_call_path(
+    db_path: &Path,
+    from: &str,
+    to: &str,
+    max_depth: u32,
+) -> anyhow::Result<Option<Vec<String>>> {
+    let connection = Connection::open(db_path)?;
+
+    let mut from_stmt = connection.prepare(
+        "SELECT symbol_id, symbol FROM symbols_v2
+         WHERE symbol = ?1
+         ORDER BY file_path, symbol_id LIMIT 1",
+    )?;
+    let from_id: Option<(i64, String)> = from_stmt
+        .query_map(params![from], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })?
+        .filter_map(|r| r.ok())
+        .next();
+
+    let (start_id, start_name) = match from_id {
+        Some(v) => v,
+        None => return Ok(None),
+    };
+
+    let mut visited: HashMap<i64, (i64, String)> = HashMap::new();
+    visited.insert(start_id, (-1, start_name));
+    let mut queue: VecDeque<(i64, u32)> = VecDeque::new();
+    queue.push_back((start_id, 0));
+
+    let mut found_id: Option<i64> = None;
+
+    while let Some((current_id, depth)) = queue.pop_front() {
+        if depth >= max_depth {
+            continue;
+        }
+        let mut edge_stmt = connection.prepare(
+            "SELECT e.to_symbol_id, s.symbol
+             FROM symbol_edges_v2 e
+             JOIN symbols_v2 s
+               ON s.symbol_id = e.to_symbol_id
+             WHERE e.from_symbol_id = ?1
+               AND e.edge_kind = 'calls'
+             ORDER BY s.symbol, s.file_path",
+        )?;
+        let neighbors: Vec<(i64, String)> = edge_stmt
+            .query_map(params![current_id], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        for (neighbor_id, neighbor_name) in neighbors {
+            if visited.contains_key(&neighbor_id) {
+                continue;
+            }
+            visited.insert(
+                neighbor_id,
+                (current_id, neighbor_name.clone()),
+            );
+            if neighbor_name == to {
+                found_id = Some(neighbor_id);
+                break;
+            }
+            queue.push_back((neighbor_id, depth + 1));
+        }
+        if found_id.is_some() {
+            break;
+        }
+    }
+
+    match found_id {
+        None => Ok(None),
+        Some(end_id) => {
+            let mut path = Vec::new();
+            let mut cur = end_id;
+            while cur != -1 {
+                if let Some((prev, name)) = visited.get(&cur) {
+                    path.push(name.clone());
+                    cur = *prev;
+                } else {
+                    break;
+                }
+            }
+            path.reverse();
+            Ok(Some(path))
+        }
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
 pub struct HotspotEntry {
     pub symbol: String,
     pub file_path: String,
