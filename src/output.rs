@@ -501,6 +501,12 @@ pub fn print_explain(symbol: &str, matches: &[ExplainMatch]) {
             result.outbound.implements,
             result.outbound.contains
         );
+        if let Some(snippet) = &result.snippet {
+            println!("snippet:");
+            for line in snippet.lines() {
+                println!("  {line}");
+            }
+        }
     }
 }
 
