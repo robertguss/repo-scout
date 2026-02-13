@@ -88,7 +88,7 @@ User-visible outcome: a tighter “what should I run next” loop with higher-si
       `cargo run -- refs verify_plan_for_changed_files --repo . --json`.
 - [x] (2026-02-07 23:07Z) Updated Phase 5 docs and evidence artifacts: `README.md`,
       `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`, `docs/dogfood-log.md`,
-      `docs/performance-baseline.md`.
+      `legacy performance baseline doc (removed)`.
 - [x] (2026-02-07 23:07Z) Re-ran required post-milestone dogfood checks after docs refresh:
       `cargo run -- index --repo .`, `cargo run -- tests-for Path --repo . --json`,
       `cargo run -- tests-for Path --repo . --include-support --json`,
@@ -238,7 +238,7 @@ duplicate growth while preserving schema-3 output shape.
 
 Milestone 26 outcome: user and contributor docs now reflect Phase 5 recommendation-quality and
 multi-hop traversal behavior, with updated command examples, schema notes, dogfood transcripts, and
-performance-baseline command coverage.
+legacy performance command coverage.
 
 ## Context and Orientation
 
@@ -390,7 +390,7 @@ Update:
 - `docs/json-output.md`
 - `docs/architecture.md`
 - `docs/dogfood-log.md`
-- `docs/performance-baseline.md`
+- `legacy performance baseline doc (removed)`
 
 Document new options and default recommendation behavior, including support-path handling,
 verify-plan cap/filter semantics, context relevance improvements, and multi-hop diff-impact rules.

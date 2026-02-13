@@ -57,7 +57,7 @@ editing loops, especially in repositories where repeated symbol names exist acro
       AST-priority determinism.
 - [x] (2026-02-07 16:02Z) Updated Phase 4 docs and evidence artifacts: `README.md`,
       `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`, `docs/dogfood-log.md`,
-      `docs/performance-baseline.md`.
+      `legacy performance baseline doc (removed)`.
 - [x] (2026-02-07 16:03Z) Executed post-milestone dogfood checks exactly as specified in this plan
       (including `diff-impact --changed-line` and scoped `refs`) and re-ran final `cargo fmt` +
       `cargo test` gates.
@@ -312,7 +312,7 @@ Feature slice 21C finalizes docs and dogfood evidence updates in:
 - `docs/json-output.md`,
 - `docs/architecture.md`,
 - `docs/dogfood-log.md`,
-- `docs/performance-baseline.md`.
+- `legacy performance baseline doc (removed)`.
 
 ## Concrete Steps
 

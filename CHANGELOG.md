@@ -1,63 +1,66 @@
 # Changelog
 
-All notable changes to this project are documented in this file.
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
 ### Added
-- Phase 17 documentation-consistency planning artifact:
-  `agents/plans/repo-scout-phase17-execplan.md`.
-- Milestone coverage for docs consistency gates:
-  `tests/milestone71_docs_status_alignment.rs`,
-  `tests/milestone72_docs_consistency_gate.rs`.
-- Documentation consistency automation surface:
-  `scripts/check_docs_consistency.sh`, `just docs-consistency`, and CI wiring in
-  `.github/workflows/contract-gates.yml`.
-- Phase 18 maintenance backlog and freshness policy artifacts:
-  `docs/maintenance-backlog-phase18.md` and `docs/maintenance-cadence-phase18.md`.
-- Milestone coverage for Phase 18 maintenance governance:
-  `tests/milestone73_maintenance_backlog_policy.rs`,
-  `tests/milestone74_maintenance_gate_pack.rs`,
-  `tests/milestone75_docs_freshness_guardrails.rs`.
-- Phase 18 maintenance automation surface:
-  `scripts/check_phase18_maintenance_pack.sh`,
-  `scripts/check_phase18_docs_freshness.sh`,
-  `just phase18-maintenance-pack`,
-  `just phase18-docs-freshness`,
-  and CI invocation via `.github/workflows/contract-gates.yml`.
+
+- New mdBook-first documentation architecture with dedicated sections for quickstart, agent workflows, contributor guidance, maintainer operations, and troubleshooting.
+- Dedicated agent playbooks for Codex and Claude Code with reusable instruction templates.
+- New docs pages:
+  - `docs/introduction.md`
+  - `docs/quickstart.md`
+  - `docs/agent-workflows.md`
+  - `docs/agent-playbook-codex.md`
+  - `docs/agent-playbook-claude-code.md`
+  - `docs/contributing.md`
+  - `docs/maintainer-guide.md`
+  - `docs/release-process.md`
+  - `docs/troubleshooting.md`
+  - `legacy gates doc (removed)`
 
 ### Changed
-- Documentation truth-sync updates for current post-Phase-16 closure posture in:
-  `README.md`, `docs/architecture.md`, `agents/plans/repo-scout-phase9-execplan.md`,
-  `agents/plans/README.md`, and `docs/dogfood-log.md`.
-- Phase 18 closure evidence and progress tracking updates in:
-  `docs/dogfood-log.md`, `agents/plans/repo-scout-phase18-execplan.md`, and `CHANGELOG.md`.
-- Status and operator docs now reflect Phase 18 completion and maintenance-mode workflows in:
-  `README.md` and `agents/plans/repo-scout-roadmap-to-production-and-ga.md`.
+
+- `README.md` rewritten to reflect current command surface and to prioritize first-time onboarding plus agent-driven usage.
+- `docs/cli-reference.md`, `docs/json-output.md`, and `docs/architecture.md` rewritten for current behavior and terminology.
+- `docs/SUMMARY.md` reorganized into a user-first navigation model with explicit legacy sectioning.
+- `Justfile` modernized with a cleaner workflow surface, docs automation commands, and reorganized gate recipes.
+- `docs/plans/` restored to preserve planning artifacts and implementation audit history.
+
+### Removed
+
+- Obsolete planning and report docs removed from `docs/`:
+  - `docs/claude-dogfood-report.md`
+  - `docs/dogfood-log.md`
+  - `docs/phase7-semantic-precision.md`
 
 ## [0.1.0] - 2026-02-10
 
-First production-ready release of `repo-scout`.
-
 ### Added
+
+- First production-ready release of `repo-scout`.
 - Production-ready language support for Rust, Go, Python, and TypeScript.
-- Cross-language convergence fixtures and validation pack under `tests/fixtures/phase15/convergence_pack`.
-- Phase 16 High-Bar/GA hardening gates:
-  - `scripts/check_phase16_deterministic_replay.sh`
-  - `scripts/check_phase16_benchmark_pack.sh`
-  - `scripts/check_phase16_known_issues_budget.sh`
-  - `scripts/check_phase16_large_repo_benchmark.sh`
-  - `scripts/check_phase16_release_checklist.sh`
-  - `scripts/check_phase16_large_repo_replay.sh`
-- `just` workflows for convergence and GA hardening checks.
-- Phase-specific execplans and roadmap closure artifacts for phases 10 through 16.
+- Cross-language convergence fixtures and validation pack in `tests/fixtures/phase15/convergence_pack`.
+- Phase 16 hardening gates:
+  - deterministic replay
+  - benchmark pack
+  - known-issues budget
+  - large-repo benchmark
+  - release checklist
+  - large-repo replay
 
 ### Changed
-- Documentation and operator workflows were consolidated for production/GA posture.
+
+- Documentation and operator workflows consolidated for production/GA posture.
 - Known-issues closure posture tightened to zero deferred issues for Phase 16.
 
 ### Quality
-- Full integration suite, clippy, formatting, TDD cycle validator, and evidence validator are green at release cut.
+
+- Integration suite, formatting/linting, TDD cycle validation, and evidence validation passed at release cut.
 
 [Unreleased]: https://github.com/robertguss/repo-scout/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/robertguss/repo-scout/releases/tag/v0.1.0

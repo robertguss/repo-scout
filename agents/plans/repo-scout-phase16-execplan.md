@@ -45,7 +45,7 @@ repository-scale deterministic replay checks for critical commands.
       `cargo test --test milestone64_phase16_ga_replay -- --nocapture` (3 failures).
 - [x] (2026-02-10 02:33Z) Implemented deterministic replay gate assets:
       `scripts/check_phase16_deterministic_replay.sh`, `Justfile` target
-      `phase16-deterministic-replay`, `docs/performance-baseline.md`, and
+      `phase16-deterministic-replay`, `legacy performance baseline doc (removed)`, and
       `agents/plans/repo-scout-phase16-execplan.md`.
 - [x] (2026-02-10 02:35Z) Observed Green and gate viability via
       `cargo test --test milestone64_phase16_ga_replay -- --nocapture`,
@@ -65,7 +65,7 @@ repository-scale deterministic replay checks for critical commands.
 - [x] (2026-02-10 02:38Z) Observed strict Red via
       `cargo test --test milestone65_phase16_benchmark_pack -- --nocapture` (3 failures).
 - [x] (2026-02-10 02:39Z) Implemented benchmark-pack gate assets:
-      `scripts/check_phase16_benchmark_pack.sh`, `docs/performance-thresholds-phase16.md`,
+      `scripts/check_phase16_benchmark_pack.sh`, `legacy phase16 thresholds doc (removed)`,
       `Justfile` target `phase16-benchmark-pack`, and docs updates.
 - [x] (2026-02-10 02:39Z) Observed Green and gate viability via
       `cargo test --test milestone65_phase16_benchmark_pack -- --nocapture`,
@@ -85,12 +85,12 @@ repository-scale deterministic replay checks for critical commands.
 - [x] (2026-02-10 02:40Z) Observed strict Red via
       `cargo test --test milestone66_phase16_known_issues_budget -- --nocapture` (3 failures).
 - [x] (2026-02-10 02:43Z) Implemented known-issues budget assets:
-      `docs/known-issues-budget-phase16.md`,
+      `legacy known-issues budget doc (removed)`,
       `scripts/check_phase16_known_issues_budget.sh`,
       `Justfile` target `phase16-known-issues-budget`, and roadmap/docs updates.
 - [x] (2026-02-10 02:43Z) Observed Green and gate viability via
       `cargo test --test milestone66_phase16_known_issues_budget -- --nocapture`,
-      `bash scripts/check_phase16_known_issues_budget.sh --repo . --doc docs/known-issues-budget-phase16.md`,
+      `bash scripts/check_phase16_known_issues_budget.sh --repo . --doc legacy known-issues budget doc (removed)`,
       and `just phase16-known-issues-budget .`.
 - [x] (2026-02-10 02:43Z) Completed post-slice dogfood and full validation gates:
       `cargo run -- index --repo .`, `cargo run -- find select_full_suite_command --repo .`,
@@ -106,7 +106,7 @@ repository-scale deterministic replay checks for critical commands.
 - [x] (2026-02-10 02:45Z) Observed strict Red via
       `cargo test --test milestone67_phase16_large_repo_benchmark -- --nocapture` (4 failures).
 - [x] (2026-02-10 02:47Z) Implemented large-repo benchmark assets:
-      `docs/performance-thresholds-phase16-large-repo.md`,
+      `legacy large-repo thresholds doc (removed)`,
       `scripts/check_phase16_large_repo_benchmark.sh`,
       `Justfile` target `phase16-large-repo-benchmark`, and roadmap/docs updates.
 - [x] (2026-02-10 02:47Z) Observed Green and gate viability via
@@ -127,12 +127,12 @@ repository-scale deterministic replay checks for critical commands.
 - [x] (2026-02-10 02:48Z) Observed strict Red via
       `cargo test --test milestone68_phase16_release_checklist_gate -- --nocapture` (3 failures).
 - [x] (2026-02-10 02:50Z) Implemented release-checklist gate assets:
-      `docs/release-checklist-phase16.md`,
+      `legacy release checklist doc (removed)`,
       `scripts/check_phase16_release_checklist.sh`,
       `Justfile` target `phase16-release-checklist`, and roadmap/docs updates.
 - [x] (2026-02-10 02:50Z) Observed Green and gate viability via
       `cargo test --test milestone68_phase16_release_checklist_gate -- --nocapture`,
-      `bash scripts/check_phase16_release_checklist.sh --repo . --doc docs/release-checklist-phase16.md`,
+      `bash scripts/check_phase16_release_checklist.sh --repo . --doc legacy release checklist doc (removed)`,
       and `just phase16-release-checklist .`.
 - [x] (2026-02-10 03:02Z) Declared risk tier `1` for Phase 16 Milestone 69 and ran required
       pre-slice dogfooding commands for symbol `select_full_suite_command`.
@@ -162,12 +162,12 @@ repository-scale deterministic replay checks for critical commands.
 - [x] (2026-02-10 03:14Z) Observed strict Red via
       `cargo test --test milestone70_phase16_known_issues_closure -- --nocapture` (3 failures).
 - [x] (2026-02-10 03:15Z) Implemented known-issues closure updates:
-      `docs/known-issues-budget-phase16.md` (`max_deferred: 0`, PH16-003 `closed`) and
-      `docs/release-checklist-phase16.md` (known-issues deferred=0 evidence).
+      `legacy known-issues budget doc (removed)` (`max_deferred: 0`, PH16-003 `closed`) and
+      `legacy release checklist doc (removed)` (known-issues deferred=0 evidence).
 - [x] (2026-02-10 03:15Z) Observed Green and gate viability via
       `cargo test --test milestone70_phase16_known_issues_closure -- --nocapture`,
-      `bash scripts/check_phase16_known_issues_budget.sh --repo . --doc docs/known-issues-budget-phase16.md`,
-      and `bash scripts/check_phase16_release_checklist.sh --repo . --doc docs/release-checklist-phase16.md`.
+      `bash scripts/check_phase16_known_issues_budget.sh --repo . --doc legacy known-issues budget doc (removed)`,
+      and `bash scripts/check_phase16_release_checklist.sh --repo . --doc legacy release checklist doc (removed)`.
 - [x] (2026-02-10 03:21Z) Completed post-slice dogfood and full validation gates:
       `cargo run -- index --repo .`, `cargo run -- find select_full_suite_command --repo .`,
       `cargo run -- refs select_full_suite_command --repo .`, `cargo test`, `cargo fmt`,
@@ -188,7 +188,7 @@ repository-scale deterministic replay checks for critical commands.
 - Observation: milestone65 Red failed immediately with missing script and threshold documentation,
   confirming the benchmark gate assets were not present before this slice.
   Evidence: missing-file failures for
-  `scripts/check_phase16_benchmark_pack.sh` and `docs/performance-thresholds-phase16.md`.
+  `scripts/check_phase16_benchmark_pack.sh` and `legacy phase16 thresholds doc (removed)`.
 - Observation: known-issues budget gating needed explicit machine-checkable thresholds and an
   unambiguous row format to avoid drift between human triage and script enforcement.
   Evidence: milestone66 Red failed on missing budget artifact/script and was resolved by adding
@@ -196,13 +196,13 @@ repository-scale deterministic replay checks for critical commands.
 - Observation: repository-scale benchmark checks needed doc-parsed threshold keys to avoid script
   drift as Phase 16 budgets evolve.
   Evidence: milestone67 Red failed on missing threshold doc/script and was resolved by adding
-  `max_*_seconds` keys in `docs/performance-thresholds-phase16-large-repo.md` parsed by the
+  `max_*_seconds` keys in `legacy large-repo thresholds doc (removed)` parsed by the
   benchmark gate script.
 - Observation: release checklist closure gating needed explicit pass/fail status keys rather than
   prose-only completion notes to keep release readiness script-checkable.
   Evidence: milestone68 Red failed on missing checklist/script and was resolved by adding
   `quality_gate`/`evidence_gate`/`rollback_plan`/`docs_gate`/`ci_gate` keys in
-  `docs/release-checklist-phase16.md` parsed by `check_phase16_release_checklist.sh`.
+  `legacy release checklist doc (removed)` parsed by `check_phase16_release_checklist.sh`.
 - Observation: fixture-pack deterministic replay alone did not cover repository-scale command
   determinism for `context` and workspace-wide query paths.
   Evidence: milestone69 introduced a dedicated repository-scale replay gate script with
@@ -232,7 +232,7 @@ repository-scale deterministic replay checks for critical commands.
   Date/Author: 2026-02-10 / Codex
 
 - Decision: implement known-issues budget enforcement as a markdown artifact +
-  lightweight shell validator (`docs/known-issues-budget-phase16.md` +
+  lightweight shell validator (`legacy known-issues budget doc (removed)` +
   `scripts/check_phase16_known_issues_budget.sh`) rather than introducing new schema/tooling.
   Rationale: this keeps triage ownership visible in-doc while still enabling deterministic local/CI
   gating with minimal operational overhead.
@@ -244,7 +244,7 @@ repository-scale deterministic replay checks for critical commands.
   and low-maintenance for contributors.
   Date/Author: 2026-02-10 / Codex
 - Decision: implement release-checklist closure enforcement as a markdown artifact +
-  lightweight shell validator (`docs/release-checklist-phase16.md` +
+  lightweight shell validator (`legacy release checklist doc (removed)` +
   `scripts/check_phase16_release_checklist.sh`) instead of adding new schema or storage.
   Rationale: this keeps release readiness transparent in-document while adding deterministic local
   and CI gating with minimal operational overhead.
@@ -276,25 +276,25 @@ Implemented outcomes for these slices:
 - `scripts/check_phase16_benchmark_pack.sh` enforces threshold budgets for `index`, `find`,
   `refs`, `tests-for`, `verify-plan`, and `diff-impact` across workspace + cross-language fixtures.
 - `just phase16-benchmark-pack` exposes the benchmark-pack timing gate for local and CI usage.
-- `docs/performance-thresholds-phase16.md` defines conservative benchmark budgets for the Phase 16
+- `legacy phase16 thresholds doc (removed)` defines conservative benchmark budgets for the Phase 16
   guardrail script.
-- `docs/performance-baseline.md` documents both Phase 16 replay and benchmark commands.
+- `legacy performance baseline doc (removed)` documents both Phase 16 replay and benchmark commands.
 - `scripts/check_phase16_known_issues_budget.sh` enforces `max_open`, `max_deferred`, and
   `max_unowned` thresholds for Phase 16 issue triage.
 - `just phase16-known-issues-budget` exposes the known-issues budget gate for routine local and CI
   usage.
-- `docs/known-issues-budget-phase16.md` now enforces `max_deferred: 0` and records PH16-003 as
+- `legacy known-issues budget doc (removed)` now enforces `max_deferred: 0` and records PH16-003 as
   closed with repository-scale hardening evidence.
 - `scripts/check_phase16_large_repo_benchmark.sh` enforces repository-scale benchmark thresholds
   for `index`, `find`, `refs`, `context`, `verify-plan`, and `diff-impact`.
 - `just phase16-large-repo-benchmark` exposes the large-repo benchmark gate for routine local and
   CI usage.
-- `docs/performance-thresholds-phase16-large-repo.md` defines repository-scale benchmark budgets.
+- `legacy large-repo thresholds doc (removed)` defines repository-scale benchmark budgets.
 - `scripts/check_phase16_release_checklist.sh` enforces quality/evidence/rollback/docs/CI release
   status gates.
 - `just phase16-release-checklist` exposes the release checklist gate for routine local and CI
   usage.
-- `docs/release-checklist-phase16.md` defines explicit release checklist gate statuses and
+- `legacy release checklist doc (removed)` defines explicit release checklist gate statuses and
   evidence links.
 - `scripts/check_phase16_large_repo_replay.sh` validates repeated JSON output equality for
   repository-scale `find`, `refs`, `tests-for`, `verify-plan`, `diff-impact`, and `context`.
@@ -323,11 +323,11 @@ This Phase 16 slice touches:
 - `tests/milestone68_phase16_release_checklist_gate.rs` (integration-level Red/Green coverage),
 - `tests/milestone69_phase16_large_repo_replay.rs` (integration-level Red/Green coverage),
 - `tests/milestone70_phase16_known_issues_closure.rs` (integration-level Red/Green coverage),
-- `docs/performance-baseline.md` (command contract docs),
-- `docs/performance-thresholds-phase16.md` (Phase 16 benchmark budgets),
-- `docs/performance-thresholds-phase16-large-repo.md` (Phase 16 repository-scale benchmark budgets),
-- `docs/release-checklist-phase16.md` (Phase 16 release checklist status gates),
-- `docs/known-issues-budget-phase16.md` (Phase 16 triage/ownership budgets),
+- `legacy performance baseline doc (removed)` (command contract docs),
+- `legacy phase16 thresholds doc (removed)` (Phase 16 benchmark budgets),
+- `legacy large-repo thresholds doc (removed)` (Phase 16 repository-scale benchmark budgets),
+- `legacy release checklist doc (removed)` (Phase 16 release checklist status gates),
+- `legacy known-issues budget doc (removed)` (Phase 16 triage/ownership budgets),
 - `agents/plans/repo-scout-roadmap-to-production-and-ga.md` (phase status updates),
 - `docs/dogfood-log.md` and `README.md` (operator guidance refresh).
 
@@ -508,9 +508,9 @@ Phase 16 slice 70 feature slices:
 - Green:
   - `cargo test --test milestone70_phase16_known_issues_closure -- --nocapture` passed.
 - Refactor/non-regression:
-  - `bash scripts/check_phase16_known_issues_budget.sh --repo . --doc docs/known-issues-budget-phase16.md`
+  - `bash scripts/check_phase16_known_issues_budget.sh --repo . --doc legacy known-issues budget doc (removed)`
     passed.
-  - `bash scripts/check_phase16_release_checklist.sh --repo . --doc docs/release-checklist-phase16.md`
+  - `bash scripts/check_phase16_release_checklist.sh --repo . --doc legacy release checklist doc (removed)`
     passed.
   - `cargo run -- index --repo .` passed.
   - `cargo run -- find select_full_suite_command --repo .` passed.
@@ -534,7 +534,7 @@ Phase 16 slice 70 feature slices:
 - Green:
   - `cargo test --test milestone68_phase16_release_checklist_gate -- --nocapture` passed.
 - Refactor/non-regression:
-  - `bash scripts/check_phase16_release_checklist.sh --repo . --doc docs/release-checklist-phase16.md`
+  - `bash scripts/check_phase16_release_checklist.sh --repo . --doc legacy release checklist doc (removed)`
     passed.
   - `just phase16-release-checklist .` passed.
 - Red:
@@ -561,7 +561,7 @@ Phase 16 slice 70 feature slices:
 - Green:
   - `cargo test --test milestone66_phase16_known_issues_budget -- --nocapture` passed.
 - Refactor/non-regression:
-  - `bash scripts/check_phase16_known_issues_budget.sh --repo . --doc docs/known-issues-budget-phase16.md`
+  - `bash scripts/check_phase16_known_issues_budget.sh --repo . --doc legacy known-issues budget doc (removed)`
     passed.
   - `just phase16-known-issues-budget .` passed.
   - `cargo run -- index --repo .` passed.
@@ -614,7 +614,7 @@ Run from repository root:
     just phase16-benchmark-pack .
     cargo test --test milestone66_phase16_known_issues_budget -- --nocapture
     cargo test --test milestone66_phase16_known_issues_budget -- --nocapture
-    bash scripts/check_phase16_known_issues_budget.sh --repo . --doc docs/known-issues-budget-phase16.md
+    bash scripts/check_phase16_known_issues_budget.sh --repo . --doc legacy known-issues budget doc (removed)
     just phase16-known-issues-budget .
     cargo test --test milestone67_phase16_large_repo_benchmark -- --nocapture
     cargo test --test milestone67_phase16_large_repo_benchmark -- --nocapture
@@ -622,7 +622,7 @@ Run from repository root:
     just phase16-large-repo-benchmark .
     cargo test --test milestone68_phase16_release_checklist_gate -- --nocapture
     cargo test --test milestone68_phase16_release_checklist_gate -- --nocapture
-    bash scripts/check_phase16_release_checklist.sh --repo . --doc docs/release-checklist-phase16.md
+    bash scripts/check_phase16_release_checklist.sh --repo . --doc legacy release checklist doc (removed)
     just phase16-release-checklist .
     cargo test --test milestone69_phase16_large_repo_replay -- --nocapture
     cargo test --test milestone69_phase16_large_repo_replay -- --nocapture
@@ -630,8 +630,8 @@ Run from repository root:
     just phase16-large-repo-replay .
     cargo test --test milestone70_phase16_known_issues_closure -- --nocapture
     cargo test --test milestone70_phase16_known_issues_closure -- --nocapture
-    bash scripts/check_phase16_known_issues_budget.sh --repo . --doc docs/known-issues-budget-phase16.md
-    bash scripts/check_phase16_release_checklist.sh --repo . --doc docs/release-checklist-phase16.md
+    bash scripts/check_phase16_known_issues_budget.sh --repo . --doc legacy known-issues budget doc (removed)
+    bash scripts/check_phase16_release_checklist.sh --repo . --doc legacy release checklist doc (removed)
     cargo fmt
     cargo clippy --all-targets --all-features -- -D warnings
     cargo run -- index --repo .
@@ -655,7 +655,7 @@ Acceptance criteria for this slice:
 - `tests/milestone66_phase16_known_issues_budget.rs` passes and asserts known-issues
   script/Just/docs/roadmap wiring.
 - `scripts/check_phase16_known_issues_budget.sh` passes against
-  `docs/known-issues-budget-phase16.md`.
+  `legacy known-issues budget doc (removed)`.
 - `just phase16-known-issues-budget` executes the same gate successfully.
 - `tests/milestone67_phase16_large_repo_benchmark.rs` passes and asserts large-repo benchmark
   script/Just/docs/roadmap wiring.
@@ -665,7 +665,7 @@ Acceptance criteria for this slice:
 - `tests/milestone68_phase16_release_checklist_gate.rs` passes and asserts release-checklist
   script/Just/docs/roadmap wiring.
 - `scripts/check_phase16_release_checklist.sh` passes against
-  `docs/release-checklist-phase16.md`.
+  `legacy release checklist doc (removed)`.
 - `just phase16-release-checklist` executes the same gate successfully.
 - `tests/milestone69_phase16_large_repo_replay.rs` passes and asserts large-repo replay
   script/Just/docs/roadmap wiring.
@@ -685,16 +685,16 @@ Validation evidence is satisfied by:
 - passing `cargo test --test milestone65_phase16_benchmark_pack -- --nocapture`,
 - passing `bash scripts/check_phase16_benchmark_pack.sh --repo . --fixtures tests/fixtures/phase15/convergence_pack`,
 - passing `cargo test --test milestone66_phase16_known_issues_budget -- --nocapture`,
-- passing `bash scripts/check_phase16_known_issues_budget.sh --repo . --doc docs/known-issues-budget-phase16.md`,
+- passing `bash scripts/check_phase16_known_issues_budget.sh --repo . --doc legacy known-issues budget doc (removed)`,
 - passing `cargo test --test milestone67_phase16_large_repo_benchmark -- --nocapture`,
 - passing `bash scripts/check_phase16_large_repo_benchmark.sh --repo .`,
 - passing `cargo test --test milestone68_phase16_release_checklist_gate -- --nocapture`,
-- passing `bash scripts/check_phase16_release_checklist.sh --repo . --doc docs/release-checklist-phase16.md`,
+- passing `bash scripts/check_phase16_release_checklist.sh --repo . --doc legacy release checklist doc (removed)`,
 - passing `cargo test --test milestone69_phase16_large_repo_replay -- --nocapture`,
 - passing `bash scripts/check_phase16_large_repo_replay.sh --repo .`,
 - passing `cargo test --test milestone70_phase16_known_issues_closure -- --nocapture`,
-- passing `bash scripts/check_phase16_known_issues_budget.sh --repo . --doc docs/known-issues-budget-phase16.md`,
-- passing `bash scripts/check_phase16_release_checklist.sh --repo . --doc docs/release-checklist-phase16.md`,
+- passing `bash scripts/check_phase16_known_issues_budget.sh --repo . --doc legacy known-issues budget doc (removed)`,
+- passing `bash scripts/check_phase16_release_checklist.sh --repo . --doc legacy release checklist doc (removed)`,
 - passing `cargo fmt`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test`,
 - passing contract validators listed above.
 

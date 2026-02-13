@@ -1,334 +1,189 @@
 # CLI Reference
 
-All examples assume invocation through Cargo:
+Top-level help:
 
 ```bash
-cargo run -- <command> ...
+repo-scout --help
 ```
 
-## Global Help
+## Core indexing and navigation
+
+### `index`
+
+Build/update the local index.
 
 ```bash
-cargo run -- --help
+repo-scout index --repo <REPO>
 ```
 
-Current command surface:
+### `status`
 
-- `index`
-- `status`
-- `find`
-- `refs`
-- `impact`
-- `context`
-- `tests-for`
-- `verify-plan`
-- `diff-impact`
-- `explain`
-
-## Commands
-
-### `index --repo <PATH>`
-
-Build or refresh `<PATH>/.repo-scout/index.db`.
-
-Example:
+Show index status and health metadata.
 
 ```bash
-cargo run -- index --repo .
+repo-scout status --repo <REPO>
 ```
 
-Terminal output fields:
+### `find`
 
-- `index_path`
-- `schema_version`
-- `indexed_files`
-- `skipped_files`
-
-Notes:
-
-- `indexed_files` counts changed/new files processed in this run.
-- `skipped_files` counts unchanged files skipped by content hash.
-
-### `status --repo <PATH>`
-
-Show index location and schema version.
-
-Example:
+Find symbol definitions.
 
 ```bash
-cargo run -- status --repo .
+repo-scout find <SYMBOL> --repo <REPO> [--json] [--code-only] [--exclude-tests] [--max-results <N>] [--compact]
 ```
 
-### `find <SYMBOL> --repo <PATH> [--json] [--code-only] [--exclude-tests] [--max-results <N>]`
+### `refs`
 
-Find likely symbol definitions.
-
-Ranking strategy:
-
-1. AST definition matches (`why_matched=ast_definition`, `confidence=ast_exact`, `score=1.0`).
-2. Text exact token fallback (`exact_symbol_name`, `text_fallback`, `0.8`).
-3. Text substring fallback (`text_substring_match`, `text_fallback`, `0.4`).
-4. At equal fallback score tiers, tie-break by path class (`code` before `test-like` before
-   `docs/other`), then by file/position/symbol.
-
-Phase 12 note: Go definitions are indexed into AST definitions, so `find` returns Go symbols with
-`why_matched=ast_definition` when available.
-
-Scope controls for fallback rows:
-
-- `--code-only`: restricts fallback matches to `.rs`, `.ts`, `.tsx`, `.py`, `.go` paths.
-- `--exclude-tests`: omits fallback matches in test-like paths (`tests/`, `/tests/`,
-  `*_test.rs`, `*_test.go`, `*.test.ts`, `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`, `test_*.py`,
-  `*_test.py`).
-- `--max-results <N>`: deterministic truncation after ranking (`0` yields empty results).
-
-AST definition matches remain highest priority and are returned unchanged when present.
-
-Example:
+Find references to a symbol.
 
 ```bash
-cargo run -- find run --repo .
-cargo run -- find run --repo . --json
-cargo run -- find run --repo . --code-only --exclude-tests --max-results 10 --json
+repo-scout refs <SYMBOL> --repo <REPO> [--json] [--code-only] [--exclude-tests] [--max-results <N>] [--compact]
 ```
 
-### `refs <SYMBOL> --repo <PATH> [--json] [--code-only] [--exclude-tests] [--max-results <N>]`
+### `impact`
 
-Find likely references/usages.
-
-Ranking strategy:
-
-1. AST reference matches (`why_matched=ast_reference`, `confidence=ast_likely`, `score=0.95`).
-2. Same text fallback sequence as `find`.
-3. Same fallback path-class tie-break behavior as `find`.
-
-Phase 12 note: Go call identifiers and selector-call fields now contribute AST reference rows, so
-Go `refs` is no longer definition-only/text-fallback in common call-site cases.
-
-Scope controls for fallback rows:
-
-- `--code-only`: restricts fallback matches to `.rs`, `.ts`, `.tsx`, `.py`, `.go` paths.
-- `--exclude-tests`: omits fallback matches in test-like paths (`tests/`, `/tests/`,
-  `*_test.rs`, `*_test.go`, `*.test.ts`, `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`, `test_*.py`,
-  `*_test.py`).
-- `--max-results <N>`: deterministic truncation after ranking (`0` yields empty results).
-
-AST reference matches remain highest priority and are returned unchanged when present.
-
-Example:
+Show direct dependents/impact for a symbol.
 
 ```bash
-cargo run -- refs run --repo .
-cargo run -- refs run --repo . --json
-cargo run -- refs run --repo . --code-only --exclude-tests --max-results 10 --json
+repo-scout impact <SYMBOL> --repo <REPO> [--json]
 ```
 
-### `impact <SYMBOL> --repo <PATH> [--json]`
+### `context`
 
-Return one-hop incoming graph neighbors likely impacted by changing `SYMBOL`.
-
-Relationship labels are normalized to:
-
-- `called_by`
-- `contained_by`
-- `imported_by`
-- `implemented_by`
-
-Ranking notes:
-
-- Semantic edge rows are deterministically calibrated by relationship/provenance.
-- `called_by` rows from resolved call edges are ranked in a high-confidence band (for example
-  `score ≈ 0.97` in Phase 8 fixture scenarios).
-- Deterministic tie-breaks remain `file_path`, `line`, `column`, `symbol`, `relationship`.
-
-Example:
+Rank files/symbols relevant to a task description.
 
 ```bash
-cargo run -- impact run --repo .
-cargo run -- impact run --repo . --json
+repo-scout context --task <TASK> --repo <REPO> [--budget <N>] [--json] [--code-only] [--exclude-tests]
 ```
 
-### `context --task <TEXT> --repo <PATH> [--budget <N>] [--json] [--code-only] [--exclude-tests]`
+### `tests-for`
 
-Build a ranked, budgeted context bundle for an editing task.
-
-Behavior:
-
-- Extracts normalized task keywords (lowercased, deduped, stopword-filtered).
-- Uses deterministic token-overlap relevance between task keywords and symbol tokens.
-- Prioritizes direct symbol definition hits (typically `context_high`, score up to `0.98`).
-- Adds one-hop graph neighbors (`context_medium`, score derived from direct match score).
-- `--code-only` keeps only `.rs`, `.ts`, `.tsx`, `.py`, `.go` paths.
-- `--exclude-tests` removes test-like paths (`tests/`, `/tests/`, `*_test.rs`, `*_test.go`,
-  `*.test.ts`, `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`, `test_*.py`, `*_test.py`, `*_tests.py`).
-- Truncates to `max(1, budget / 200)` results.
-
-Example:
+Suggest tests related to a symbol.
 
 ```bash
-cargo run -- context --task "update run and verify refs behavior" --repo . --budget 400
-cargo run -- context --task "update run and verify refs behavior" --repo . --budget 400 --json
-cargo run -- context --task "update run and verify refs behavior" --repo . --budget 400 --code-only --exclude-tests --json
+repo-scout tests-for <SYMBOL> --repo <REPO> [--json] [--include-support]
 ```
 
-### `tests-for <SYMBOL> --repo <PATH> [--include-support] [--json]`
+## Change analysis
 
-Return test targets likely relevant to `SYMBOL`.
+### `verify-plan`
 
-Current target discovery:
-
-- file path under `tests/`
-- file path containing `/tests/`
-- file name matching `*_test.rs`
-- file name matching `*_test.go`
-- file name matching `*.test.ts`, `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`
-- file name matching `test_*.py` or `*_test.py`
-- file name matching `*_tests.py`
-
-Output rows include:
-
-- `target`
-- `target_kind` (`integration_test_file` or additive `support_test_file`)
-- `why_included`
-- `confidence`
-- `score`
-
-Default behavior returns runnable integration targets only. Set `--include-support` to restore
-support paths (for example `tests/common/mod.rs`) in deterministic ranked order.
-
-Runner-aware runnable target behavior:
-
-- Rust direct `tests/<file>.rs` targets map to `cargo test --test <file_stem>`.
-- Go `_test.go` targets map to package commands (`go test ./<package_dir>`; `go test .` for
-  repository-root test files).
-- Python targets map to `pytest <target>` only when explicit pytest configuration is detected
-  (`pytest.ini`, `[tool.pytest.ini_options]` in `pyproject.toml`, `[pytest]` in `tox.ini`, or
-  `[tool:pytest]` in `setup.cfg`).
-- TypeScript targets map to runner commands only when `package.json` unambiguously signals one
-  Node runner:
-  - Vitest: `npx vitest run <target>`
-  - Jest: `npx jest --runTestsByPath <target>`
-  - Ambiguous Jest+Vitest signals stay non-runnable by default (strict mode).
-
-Example:
+Generate test/verification plan from changed files/lines/symbols.
 
 ```bash
-cargo run -- tests-for run --repo .
-cargo run -- tests-for run --repo . --json
-cargo run -- tests-for run --repo . --include-support --json
+repo-scout verify-plan --repo <REPO> [--changed-file <PATH>] [--changed-line <SPEC>] [--changed-symbol <SYMBOL>] [--since <REV>] [--unstaged] [--max-targeted <N>] [--json]
 ```
 
-### `verify-plan --changed-file <PATH> [--changed-file <PATH> ...] --repo <PATH> [--changed-line <path:start[:end]>] [--changed-symbol <symbol> ...] [--max-targeted <N>] [--json]`
+### `diff-impact`
 
-Generate deterministic validation steps for changed files.
-
-Behavior:
-
-- Normalizes changed-file paths to repo-relative form.
-- Deduplicates repeated changed-file inputs.
-- Parses and normalizes repeatable `--changed-line` ranges (`path:start[:end]`).
-- Applies repeatable `--changed-symbol` filters additively to changed-file symbol selection.
-- Dampens high-frequency generic changed symbols (for example `Path`, `output`) for better signal.
-- Suggests runnable targeted commands only:
-  - `cargo test --test <name>` for direct `tests/<file>.rs` targets.
-  - `go test ./<package_dir>` (or `go test .` for root package tests) for Go `_test.go` targets.
-  - `pytest <target>` for Python test targets when explicit pytest configuration is detected.
-  - `npx vitest run <target>` for TypeScript targets in explicit Vitest contexts.
-  - `npx jest --runTestsByPath <target>` for TypeScript targets in explicit Jest contexts.
-- Caps symbol-derived targeted rows to `8` by default.
-- `--max-targeted 0` suppresses symbol-derived targeted rows, while still preserving changed
-  runnable test targets and the required full-suite gate.
-- Always appends a full-suite safety gate:
-  - `cargo test` for Rust-scoped verification contexts (default).
-  - `go test ./...` when changed scope is Go-only.
-  - `pytest` for explicit Python runner contexts when changed scope is Python-only.
-  - `npx vitest run` for explicit Vitest contexts when changed scope is TypeScript-only.
-  - `npx jest` for explicit Jest contexts when changed scope is TypeScript-only.
-
-Example:
+Compute change blast radius from file or symbol deltas.
 
 ```bash
-cargo run -- verify-plan --changed-file src/query/mod.rs --repo .
-cargo run -- verify-plan --changed-file src/query/mod.rs --changed-file ./src/query/mod.rs --repo . --json
-cargo run -- verify-plan --changed-file src/main.rs --repo . --max-targeted 6 --json
-cargo run -- verify-plan --changed-file src/query/mod.rs --changed-line src/query/mod.rs:1094:1165 --changed-symbol verify_plan_for_changed_files --repo . --json
+repo-scout diff-impact --repo <REPO> [--changed-file <PATH>] [--changed-line <SPEC>] [--changed-symbol <SYMBOL>] [--since <REV>] [--unstaged] [--max-distance <N>] [--max-results <N>] [--no-limit] [--include-tests] [--exclude-tests] [--include-imports] [--exclude-changed] [--json]
 ```
 
-### `diff-impact --changed-file <PATH> [--changed-file <PATH> ...] --repo <PATH> [--max-distance <N>] [--exclude-tests|--include-tests] [--include-imports] [--changed-line <path:start[:end]>] [--changed-symbol <symbol> ...] [--exclude-changed] [--max-results <N>] [--json]`
+## Deep inspection
 
-Generate deterministic changed-file impact results.
+### `explain`
 
-Behavior:
-
-- Normalizes and deduplicates changed-file paths.
-- Emits changed symbols (`distance = 0`, `relationship = changed_symbol`).
-- Excludes `kind=import` from changed-symbol seeds unless `--include-imports` is set.
-- Applies `--changed-line` filters to changed-symbol seeds for matching files only.
-- Applies repeatable `--changed-symbol` filters to changed-symbol seeds.
-- Emits bounded multi-hop incoming neighbors (`called_by`, `contained_by`, `imported_by`,
-  `implemented_by`) up to `--max-distance`.
-- Resolves Rust module-qualified call paths (`crate::`, `self::`, `super::`, and unqualified module
-  prefixes) with deterministic candidate targets across both `<module>.rs` and `<module>/mod.rs`
-  layouts.
-- Uses module-aware TypeScript/Python call resolution so namespace/member and module-alias attribute
-  calls resolve to the intended module under duplicate symbol names, including Python relative
-  imports (`from .module import symbol`) for identifier-call attribution.
-- TypeScript relative directory imports (`./module`) emit deterministic candidate paths for both
-  direct module files and `index.ts`/`index.tsx` files to preserve caller attribution when
-  repositories use `./module/index.ts` layouts.
-- Uses cycle-safe, deterministic dedupe to prevent duplicate growth and changed-symbol echo rows at
-  non-zero distances.
-- `--exclude-changed` removes changed-symbol (`distance=0`) rows from final output while traversal
-  still uses those seeds.
-- `--max-results <N>` truncates results deterministically after ranking.
-- Emits test targets (`result_kind = test_target`) when available; default behavior remains
-  `include_tests = true`.
-- `--exclude-tests` suppresses test-target rows and flips schema-3 `include_tests` to `false`.
-- `--include-tests` keeps explicit default behavior and conflicts with `--exclude-tests`.
-- Semantic impacted-symbol rows use deterministic calibrated scoring (for example `call_resolution`
-  `called_by` rows in Phase 8 fixtures score `0.97`) and rank ahead of fallback test-target rows.
-- Terminal output is row-oriented: one deterministic `impacted_symbol ...` or `test_target ...` line
-  per result with confidence/provenance/score fields.
-
-`--changed-line` parsing rules:
-
-- Format: `path:start[:end]`
-- `start`/`end` are 1-based positive line numbers.
-- `end` defaults to `start` when omitted.
-- Invalid specs return an actionable error that includes the malformed token and expected format.
-
-Examples:
+Detailed symbol dossier.
 
 ```bash
-cargo run -- diff-impact --changed-file src/query/mod.rs --repo .
-cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --json
-cargo run -- diff-impact --changed-file src/query/mod.rs --repo . --exclude-tests --json
-cargo run -- diff-impact --changed-file src/query/mod.rs --changed-symbol verify_plan_for_changed_files --exclude-changed --max-results 12 --repo . --json
+repo-scout explain <SYMBOL> --repo <REPO> [--json] [--include-snippets] [--compact]
 ```
 
-### `explain <SYMBOL> --repo <PATH> [--include-snippets] [--json]`
+### `snippet`
 
-Return a deterministic symbol dossier.
-
-Behavior:
-
-- Resolves exact symbol definitions.
-- Includes signature and span metadata.
-- Includes inbound/outbound relationship counters.
-- Optionally includes source snippets (`--include-snippets`).
-
-Examples:
+Extract source snippet for a symbol.
 
 ```bash
-cargo run -- explain impact_matches --repo .
-cargo run -- explain impact_matches --repo . --json
-cargo run -- explain impact_matches --repo . --include-snippets --json
+repo-scout snippet <SYMBOL> --repo <REPO> [--json] [--context <LINES>]
 ```
 
-## Exit Codes
+### `outline`
 
-- Success: `0`
-- Failure: non-zero
+Show file structure/signatures.
 
-Corrupt or invalid index DB errors include a hint with the index path and recovery action
-(`delete file, rerun index`).
+```bash
+repo-scout outline <FILE> --repo <REPO> [--json]
+```
+
+### `summary`
+
+Whole-repo structural overview.
+
+```bash
+repo-scout summary --repo <REPO>
+```
+
+## Graph and relationship commands
+
+### `callers`
+
+```bash
+repo-scout callers <SYMBOL> --repo <REPO> [--json]
+```
+
+### `callees`
+
+```bash
+repo-scout callees <SYMBOL> --repo <REPO> [--json]
+```
+
+### `deps`
+
+```bash
+repo-scout deps <FILE> --repo <REPO> [--json]
+```
+
+### `hotspots`
+
+```bash
+repo-scout hotspots --repo <REPO> [--limit <N>] [--json]
+```
+
+### `call-path`
+
+```bash
+repo-scout call-path <FROM> <TO> --repo <REPO> [--max-depth <N>] [--json]
+```
+
+### `related`
+
+```bash
+repo-scout related <SYMBOL> --repo <REPO> [--json]
+```
+
+### `health`
+
+```bash
+repo-scout health --repo <REPO> [--top <N>] [--threshold <N>] [--large-files] [--large-functions] [--json]
+```
+
+### `circular`
+
+```bash
+repo-scout circular --repo <REPO> [--max-length <N>] [--json]
+```
+
+### `tree`
+
+```bash
+repo-scout tree --repo <REPO> [--depth <N>] [--no-deps] [--focus <PATH>] [--symbols] [--json]
+```
+
+### `orient`
+
+```bash
+repo-scout orient --repo <REPO> [--depth <N>] [--top <N>] [--json]
+```
+
+## Practical defaults
+
+For automation, use `--json` and parse command output strictly.
+
+For interactive use:
+
+- start with `index`, then `find` and `refs`
+- move to `impact` / `diff-impact` for risk assessment
+- use `verify-plan` before running full test suites

@@ -33,11 +33,11 @@ This phase does not introduce schema-version churn or new query command families
       `cargo run -- refs docs_consistency --repo . --json`.
 - [x] (2026-02-10) Authored this Phase 18 ExecPlan as planning-only work.
 - [x] (2026-02-10) Completed Milestone 73 via strict red/green contract tests and added
-      `docs/maintenance-backlog-phase18.md`.
+      `legacy maintenance backlog doc (removed)`.
 - [x] (2026-02-10) Completed Milestone 74 via strict red/green contract tests and added
       `scripts/check_phase18_maintenance_pack.sh` plus Justfile/CI wiring.
 - [x] (2026-02-10) Completed Milestone 75 via strict red/green contract tests and added
-      `docs/maintenance-cadence-phase18.md`, `scripts/check_phase18_docs_freshness.sh`, and
+      `legacy maintenance cadence doc (removed)`, `scripts/check_phase18_docs_freshness.sh`, and
       maintenance-pack path integration.
 - [x] (2026-02-10) Completed Milestone 76 closure artifact updates:
       `docs/dogfood-log.md`, `agents/plans/repo-scout-phase18-execplan.md`, and `CHANGELOG.md`.
@@ -84,7 +84,7 @@ This phase does not introduce schema-version churn or new query command families
 Completion outcome:
 
 - Phase 18 maintenance governance artifacts are implemented and machine-checkable:
-  `docs/maintenance-backlog-phase18.md` and `docs/maintenance-cadence-phase18.md`.
+  `legacy maintenance backlog doc (removed)` and `legacy maintenance cadence doc (removed)`.
 - New executable maintenance gates are in place:
   `scripts/check_phase18_maintenance_pack.sh` and `scripts/check_phase18_docs_freshness.sh`.
 - Local/CI wiring is complete with deterministic invocation surfaces:
@@ -106,8 +106,8 @@ Residual work:
 
 Primary modules/artifacts expected to be touched in Phase 18:
 
-- `docs/maintenance-backlog-phase18.md` (new)
-- `docs/maintenance-cadence-phase18.md` (new)
+- `legacy maintenance backlog doc (removed)` (new)
+- `legacy maintenance cadence doc (removed)` (new)
 - `scripts/check_phase18_maintenance_pack.sh` (new)
 - `scripts/check_phase18_docs_freshness.sh` (new)
 - `Justfile`
@@ -190,7 +190,7 @@ Milestone goal: establish one deterministic maintenance backlog source of truth.
 Feature slice 73A adds failing tests asserting the existence/shape of a backlog artifact with
 explicit fields (id, priority, owner, status, target window, notes).
 
-Feature slice 73B implements `docs/maintenance-backlog-phase18.md` and minimal supporting updates
+Feature slice 73B implements `legacy maintenance backlog doc (removed)` and minimal supporting updates
 so tests pass.
 
 ### Milestone 74: Maintenance Gate Pack
@@ -208,7 +208,7 @@ Milestone goal: prevent stale operational status/docs over time.
 
 Feature slice 75A adds failing tests for freshness policy artifact and script behavior.
 
-Feature slice 75B implements `docs/maintenance-cadence-phase18.md` and
+Feature slice 75B implements `legacy maintenance cadence doc (removed)` and
 `scripts/check_phase18_docs_freshness.sh` (deterministic checks for required docs/status markers).
 
 ### Milestone 76: Closure Evidence and Validation

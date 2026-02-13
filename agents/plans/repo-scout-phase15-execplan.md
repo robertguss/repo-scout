@@ -213,7 +213,7 @@ The Phase 15 slice in this plan touches:
 - convergence-pack script in `scripts/check_phase15_convergence_pack.sh`,
 - Justfile target wiring in `Justfile`,
 - phase-level docs updates in `README.md`, `docs/cli-reference.md`, `docs/architecture.md`,
-  `docs/json-output.md`, `docs/performance-baseline.md`, and `docs/dogfood-log.md`.
+  `docs/json-output.md`, `legacy performance baseline doc (removed)`, and `docs/dogfood-log.md`.
 
 ## Contract Inputs
 

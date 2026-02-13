@@ -19,7 +19,7 @@ Required sources of truth (read first, then follow exactly):
 - `/Users/robertguss/Projects/experiments/repo-scout/docs/json-output.md`
 - `/Users/robertguss/Projects/experiments/repo-scout/docs/architecture.md`
 - `/Users/robertguss/Projects/experiments/repo-scout/docs/dogfood-log.md`
-- `/Users/robertguss/Projects/experiments/repo-scout/docs/performance-baseline.md`
+- `/Users/robertguss/Projects/experiments/repo-scout/legacy performance baseline doc (removed)`
 
 Git workflow requirements:
 
@@ -160,7 +160,7 @@ Completion criteria (must all be true before stopping):
    - `/Users/robertguss/Projects/experiments/repo-scout/docs/json-output.md`
    - `/Users/robertguss/Projects/experiments/repo-scout/docs/architecture.md`
    - `/Users/robertguss/Projects/experiments/repo-scout/docs/dogfood-log.md`
-   - `/Users/robertguss/Projects/experiments/repo-scout/docs/performance-baseline.md`
+   - `/Users/robertguss/Projects/experiments/repo-scout/legacy performance baseline doc (removed)`
 7. Commits exist for each milestone on `codex/phase8-implementation`.
 8. Working tree clean.
 9. PR created and ready for review.

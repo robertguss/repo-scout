@@ -49,7 +49,7 @@ instead of dropping edges in ambiguous-name scenarios.
 - [x] (2026-02-09 23:31Z) Completed Milestone 56 realistic fixture-corpus expansion and
       determinism/bounded-growth tests in `tests/milestone56_rust_production_determinism.rs`.
 - [x] (2026-02-09 23:38Z) Completed Milestone 57 Rust performance guardrail tightening:
-      `docs/performance-thresholds-rust.md`, `scripts/check_rust_perf_guardrails.sh`, and
+      `legacy rust thresholds doc (removed)`, `scripts/check_rust_perf_guardrails.sh`, and
       Justfile `perf-rust-guardrails`/`perf-rust-record`.
 - [x] (2026-02-09 23:59Z) Completed Milestone 58 docs/dogfood/contract closure updates and ran full
       quality + validator gates on `codex/phase11-implementation`.
@@ -65,7 +65,7 @@ instead of dropping edges in ambiguous-name scenarios.
 
 - Observation: current performance documentation includes timing commands but does not define
   explicit machine-readable threshold checks for Rust production closure.
-  Evidence: `docs/performance-baseline.md` lists command baselines but no threshold source file or
+  Evidence: `legacy performance baseline doc (removed)` lists command baselines but no threshold source file or
   validator command that fails on regression.
 
 - Observation: local TDD validator still needs `--allow-empty-range` in planning-only/no-commit
@@ -277,7 +277,7 @@ Milestone 57:
 
 - Slice 57A threshold source file contract:
   - Red: `cargo test milestone57_rust_perf_thresholds_file_exists_and_defines_budgets -- --nocapture`
-    failed because `docs/performance-thresholds-rust.md` did not exist.
+    failed because `legacy rust thresholds doc (removed)` did not exist.
   - Green: same command passed after adding thresholds doc and command budgets.
   - Refactor: covered by final full-suite `cargo test` pass in Milestone 58 closure.
 - Slice 57B/57C script and wiring contract:
@@ -393,7 +393,7 @@ Milestone goal: define and enforce tighter, repeatable Rust-focused performance 
 production-ready closure.
 
 Feature slice 57A adds a Rust-focused threshold source file,
-`docs/performance-thresholds-rust.md`, defining command budgets and interpretation rules for
+`legacy rust thresholds doc (removed)`, defining command budgets and interpretation rules for
 repeatable local checks (cold/warm caveats included).
 
 Feature slice 57B adds a non-destructive validator script, `scripts/check_rust_perf_guardrails.sh`,
@@ -426,7 +426,7 @@ Feature slice 58A updates docs:
 - `docs/cli-reference.md` (any changed semantics or clarifications),
 - `docs/architecture.md` (Rust module-qualified call resolution behavior),
 - `docs/json-output.md` (schema stability note and behavior clarifications),
-- `docs/performance-baseline.md` and `docs/performance-thresholds-rust.md`.
+- `legacy performance baseline doc (removed)` and `legacy rust thresholds doc (removed)`.
 
 Feature slice 58B appends dogfood and performance transcripts to `docs/dogfood-log.md`, including
 at least one transcript from a realistic Rust production fixture.
@@ -547,8 +547,8 @@ Expected touch points:
 - `docs/cli-reference.md`
 - `docs/json-output.md`
 - `docs/architecture.md`
-- `docs/performance-baseline.md`
-- `docs/performance-thresholds-rust.md` (new)
+- `legacy performance baseline doc (removed)`
+- `legacy rust thresholds doc (removed)` (new)
 - `docs/dogfood-log.md`
 
 Dependencies:
