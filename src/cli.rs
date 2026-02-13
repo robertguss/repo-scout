@@ -80,6 +80,8 @@ pub struct FindArgs {
     pub exclude_tests: bool,
     #[arg(long = "max-results")]
     pub max_results: Option<u32>,
+    #[arg(long, default_value_t = false)]
+    pub compact: bool,
 }
 
 #[derive(Debug, Args)]
@@ -95,6 +97,8 @@ pub struct RefsArgs {
     pub exclude_tests: bool,
     #[arg(long = "max-results")]
     pub max_results: Option<u32>,
+    #[arg(long, default_value_t = false)]
+    pub compact: bool,
 }
 
 #[derive(Debug, Args)]
@@ -214,6 +218,8 @@ pub struct ExplainArgs {
     pub json: bool,
     #[arg(long, default_value_t = false)]
     pub include_snippets: bool,
+    #[arg(long, default_value_t = false)]
+    pub compact: bool,
 }
 
 #[derive(Debug, Args)]

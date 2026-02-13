@@ -105,6 +105,8 @@ fn run_find(args: crate::cli::FindArgs) -> anyhow::Result<()> {
     }
     if args.json {
         output::print_query_json("find", &args.symbol, &matches)?;
+    } else if args.compact {
+        output::print_query_compact(&matches);
     } else {
         output::print_query("find", &args.symbol, &matches);
     }
@@ -143,6 +145,8 @@ fn run_refs(args: crate::cli::RefsArgs) -> anyhow::Result<()> {
     }
     if args.json {
         output::print_query_json("refs", &args.symbol, &matches)?;
+    } else if args.compact {
+        output::print_query_compact(&matches);
     } else {
         output::print_refs_grouped(&args.symbol, &matches);
     }
@@ -501,6 +505,8 @@ fn run_explain(args: crate::cli::ExplainArgs) -> anyhow::Result<()> {
     let matches = explain_symbol(&store.db_path, &args.symbol, args.include_snippets)?;
     if args.json {
         output::print_explain_json(&args.symbol, args.include_snippets, &matches)?;
+    } else if args.compact {
+        output::print_explain_compact(&matches);
     } else {
         output::print_explain(&args.symbol, &matches);
     }
@@ -735,6 +741,7 @@ fn integration_check() {
             code_only: true,
             exclude_tests: true,
             max_results: Some(1),
+            compact: false,
         })
         .expect("find json should succeed");
         run_find(FindArgs {
@@ -744,6 +751,7 @@ fn integration_check() {
             code_only: false,
             exclude_tests: false,
             max_results: None,
+            compact: false,
         })
         .expect("find text should succeed");
 
@@ -754,6 +762,7 @@ fn integration_check() {
             code_only: false,
             exclude_tests: false,
             max_results: Some(10),
+            compact: false,
         })
         .expect("refs json should succeed");
         run_refs(RefsArgs {
@@ -763,6 +772,7 @@ fn integration_check() {
             code_only: true,
             exclude_tests: false,
             max_results: None,
+            compact: false,
         })
         .expect("refs text should succeed");
 
@@ -890,6 +900,7 @@ fn integration_check() {
             repo: repo_path.clone(),
             json: true,
             include_snippets: true,
+            compact: false,
         })
         .expect("explain json should succeed");
         run_explain(ExplainArgs {
@@ -897,6 +908,7 @@ fn integration_check() {
             repo: repo_path,
             json: false,
             include_snippets: false,
+            compact: false,
         })
         .expect("explain text should succeed");
     }

@@ -131,6 +131,15 @@ pub fn print_query(command: &str, symbol: &str, matches: &[QueryMatch]) {
     }
 }
 
+pub fn print_query_compact(matches: &[QueryMatch]) {
+    for result in matches {
+        println!(
+            "{}:{} {}",
+            result.file_path, result.line, result.symbol
+        );
+    }
+}
+
 /// Emit the query results as pretty-printed JSON to stdout.
 ///
 /// The JSON payload uses the current JSON_SCHEMA_VERSION and includes the
@@ -523,6 +532,15 @@ pub fn print_explain(symbol: &str, matches: &[ExplainMatch]) {
                 println!("  {line}");
             }
         }
+    }
+}
+
+pub fn print_explain_compact(matches: &[ExplainMatch]) {
+    for result in matches {
+        println!(
+            "{}:{} {}",
+            result.file_path, result.start_line, result.symbol
+        );
     }
 }
 
