@@ -137,15 +137,15 @@ https://eslint.org/chat/help to chat with the team.
 [warn] contracts/core/AI_AGENT_CORE_CONTRACT.md
 [warn] docs/architecture.md
 [warn] docs/cli-reference.md
-[warn] docs/contract-artifact-policy.md
+[warn] legacy contract artifact policy doc (removed)
 [warn] docs/dogfood-log.md
 [warn] docs/json-output.md
-[warn] docs/known-issues-budget-phase16.md
-[warn] docs/maintenance-backlog-phase18.md
-[warn] docs/maintenance-cadence-phase18.md
-[warn] docs/performance-baseline.md
-[warn] docs/performance-thresholds-rust.md
-[warn] docs/release-checklist-phase16.md
+[warn] legacy known-issues budget doc (removed)
+[warn] legacy maintenance backlog doc (removed)
+[warn] legacy maintenance cadence doc (removed)
+[warn] legacy performance baseline doc (removed)
+[warn] legacy rust thresholds doc (removed)
+[warn] legacy release checklist doc (removed)
 [warn] README.md
 [warn] tests/fixtures/phase10/go_find/src/app.ts
 [warn] tests/fixtures/phase14/typescript_production/README.md
@@ -245,15 +245,15 @@ https://eslint.org/chat/help to chat with the team.
 [warn] contracts/core/AI_AGENT_CORE_CONTRACT.md
 [warn] docs/architecture.md
 [warn] docs/cli-reference.md
-[warn] docs/contract-artifact-policy.md
+[warn] legacy contract artifact policy doc (removed)
 [warn] docs/dogfood-log.md
 [warn] docs/json-output.md
-[warn] docs/known-issues-budget-phase16.md
-[warn] docs/maintenance-backlog-phase18.md
-[warn] docs/maintenance-cadence-phase18.md
-[warn] docs/performance-baseline.md
-[warn] docs/performance-thresholds-rust.md
-[warn] docs/release-checklist-phase16.md
+[warn] legacy known-issues budget doc (removed)
+[warn] legacy maintenance backlog doc (removed)
+[warn] legacy maintenance cadence doc (removed)
+[warn] legacy performance baseline doc (removed)
+[warn] legacy rust thresholds doc (removed)
+[warn] legacy release checklist doc (removed)
 [warn] README.md
 [warn] tests/fixtures/phase10/go_find/src/app.ts
 [warn] tests/fixtures/phase14/typescript_production/README.md

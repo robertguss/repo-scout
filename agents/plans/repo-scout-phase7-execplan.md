@@ -65,7 +65,7 @@ recommendation quality under known noisy scenarios.
       benchmark fixture assertions, and full-suite refactor gate (`cargo test`) green.
 - [x] (2026-02-08 02:12Z) Completed Milestone 36 documentation/evidence refresh across `README.md`,
       `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`, `docs/dogfood-log.md`,
-      and `docs/performance-baseline.md`.
+      and `legacy performance baseline doc (removed)`.
 - [x] (2026-02-08 02:13Z) Ran Milestone 36 post-refresh verification pack:
       `cargo run -- index --repo .`,
       `cargo run -- diff-impact --changed-file src/indexer/languages/typescript.rs --repo . --json`,
@@ -256,7 +256,7 @@ Current hot spots for this phase:
   and `collect_call_symbols` currently resolves attribute-call targets by symbol text only.
 - `src/query/mod.rs::diff_impact_for_changed_files` and `src/query/mod.rs::impact_matches` currently
   depend on persisted edge quality; ranking can be improved via confidence calibration.
-- `docs/performance-baseline.md` currently tracks runtime timings but does not include a dedicated
+- `legacy performance baseline doc (removed)` currently tracks runtime timings but does not include a dedicated
   phase-level semantic quality benchmark corpus.
 
 ## Strict TDD Contract
@@ -359,7 +359,7 @@ Feature slice 36A updates user-facing docs (`README.md`, `docs/cli-reference.md`
 resolution behavior and confidence/ranking semantics.
 
 Feature slice 36B updates `docs/dogfood-log.md` with Phase 7 red/green/refactor and dogfood
-transcripts, and extends `docs/performance-baseline.md` with a Phase 7 quality command pack covering
+transcripts, and extends `legacy performance baseline doc (removed)` with a Phase 7 quality command pack covering
 semantic fixtures.
 
 Feature slice 36C re-runs the full required dogfood pack and full-suite tests after docs refresh to
@@ -720,7 +720,7 @@ Expected interface-level touch points:
   - `docs/json-output.md`
   - `docs/architecture.md`
   - `docs/dogfood-log.md`
-  - `docs/performance-baseline.md`
+  - `legacy performance baseline doc (removed)`
 
 ## Revision Note
 

@@ -333,7 +333,7 @@ detection rules:
 Feature slice 46B updates evidence/perf logs with Phase 9 dogfood command packs and transcripts:
 
 - `docs/dogfood-log.md`
-- `docs/performance-baseline.md`
+- `legacy performance baseline doc (removed)`
 
 Feature slice 46C finalizes the living plan and runs all required gates:
 
@@ -544,7 +544,7 @@ Expected interface touch points:
   - `docs/json-output.md`
   - `docs/architecture.md`
   - `docs/dogfood-log.md`
-  - `docs/performance-baseline.md`
+  - `legacy performance baseline doc (removed)`
 
 ## Revision Note
 

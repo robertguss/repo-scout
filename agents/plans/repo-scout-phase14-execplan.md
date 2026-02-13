@@ -320,7 +320,7 @@ Rollback strategy if needed:
 - `docs/cli-reference.md`
 - `docs/architecture.md`
 - `docs/json-output.md`
-- `docs/performance-baseline.md`
+- `legacy performance baseline doc (removed)`
 - `docs/dogfood-log.md`
 
 ## Revision History

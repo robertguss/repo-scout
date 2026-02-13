@@ -58,7 +58,7 @@ non-code paths, and faster conversion from “what changed” to “what do I ru
 - [x] (2026-02-08 00:14Z) Ran required pre-milestone dogfood baseline for Milestone 31.
 - [x] (2026-02-08 00:15Z) Updated docs and evidence artifacts for Phase 6: `README.md`,
       `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`, `docs/dogfood-log.md`,
-      `docs/performance-baseline.md`.
+      `legacy performance baseline doc (removed)`.
 - [x] (2026-02-08 00:16Z) Re-ran required post-milestone dogfood checks after docs refresh, executed
       `cargo fmt`, and passed final `cargo test`.
 
@@ -347,7 +347,7 @@ Update:
 - `docs/json-output.md`
 - `docs/architecture.md`
 - `docs/dogfood-log.md`
-- `docs/performance-baseline.md`
+- `legacy performance baseline doc (removed)`
 
 Document new context, verify-plan, diff-impact, and find/refs options with deterministic behavior
 notes and examples showing recommended large-file workflows.
@@ -782,7 +782,7 @@ Milestone 31 documentation refresh and final validation evidence:
     # docs/json-output.md
     # docs/architecture.md
     # docs/dogfood-log.md
-    # docs/performance-baseline.md
+    # legacy performance baseline doc (removed)
 
     cargo run -- index --repo .
     cargo run -- context --task "update verify plan recommendation quality for changed files and reduce noisy test selection" --repo . --budget 1200 --json

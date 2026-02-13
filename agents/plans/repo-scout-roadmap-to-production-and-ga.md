@@ -45,19 +45,19 @@ Evidence from local audit and commands:
   `scripts/check_phase16_deterministic_replay.sh` and `just phase16-deterministic-replay`.
 - Phase 16 also includes benchmark-pack regression budgets:
   `scripts/check_phase16_benchmark_pack.sh`, `just phase16-benchmark-pack`, and
-  `docs/performance-thresholds-phase16.md`.
+  `legacy phase16 thresholds doc (removed)`.
 - Phase 16 also includes known-issues budget enforcement:
   `scripts/check_phase16_known_issues_budget.sh`, `just phase16-known-issues-budget`, and
-  `docs/known-issues-budget-phase16.md` (closure posture now enforces `max_deferred: 0`).
+  `legacy known-issues budget doc (removed)` (closure posture now enforces `max_deferred: 0`).
 - Phase 16 also includes larger-repo benchmark guardrails:
   `scripts/check_phase16_large_repo_benchmark.sh`, `just phase16-large-repo-benchmark`, and
-  `docs/performance-thresholds-phase16-large-repo.md`.
+  `legacy large-repo thresholds doc (removed)`.
 - Phase 16 also includes release-checklist closure gating:
   `scripts/check_phase16_release_checklist.sh`, `just phase16-release-checklist`, and
-  `docs/release-checklist-phase16.md`.
+  `legacy release checklist doc (removed)`.
 - Phase 16 also includes large-repo deterministic replay scenarios:
   `scripts/check_phase16_large_repo_replay.sh`, `just phase16-large-repo-replay`, and
-  `docs/performance-baseline.md`.
+  `legacy performance baseline doc (removed)`.
 
 Implication: the project has a strong base and can move quickly; remaining work is now
 maintenance/backlog rather than core capability delivery.
@@ -256,5 +256,5 @@ and threshold budgets, known-issues budget triage/ownership gate, larger-repo be
 guardrails, release-checklist closure gating, and large-repo deterministic replay scenarios; zero
 deferred known issues remain at closure. Phase 17 docs-consistency closure is complete. Phase 18
 maintenance/backlog hardening is complete with backlog governance and docs freshness guardrails
-(`docs/maintenance-backlog-phase18.md`, `docs/maintenance-cadence-phase18.md`,
+(`legacy maintenance backlog doc (removed)`, `legacy maintenance cadence doc (removed)`,
 `scripts/check_phase18_maintenance_pack.sh`, `scripts/check_phase18_docs_freshness.sh`).

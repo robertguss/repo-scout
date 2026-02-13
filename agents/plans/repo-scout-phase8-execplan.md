@@ -264,7 +264,7 @@ Feature slice 41A updates `README.md`, `docs/cli-reference.md`, `docs/json-outpu
 `docs/architecture.md` for: semantic closure outcomes, strict lint expectations, `diff-impact`
 `--exclude-tests`, and row-oriented terminal output.
 
-Feature slice 41B updates `docs/performance-baseline.md` and `docs/dogfood-log.md` with Phase 8
+Feature slice 41B updates `legacy performance baseline doc (removed)` and `docs/dogfood-log.md` with Phase 8
 command packs and red/green/refactor transcripts per slice.
 
 Feature slice 41C re-runs post-refresh dogfood and quality gates to prove docs and behavior are in
@@ -654,7 +654,7 @@ Expected interface-level touch points:
   - `docs/json-output.md`
   - `docs/architecture.md`
   - `docs/dogfood-log.md`
-  - `docs/performance-baseline.md`
+  - `legacy performance baseline doc (removed)`
 
 ## Revision Note
 

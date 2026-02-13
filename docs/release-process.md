@@ -24,5 +24,3 @@ just check
 just contract-check
 just docs-check
 ```
-
-See legacy phase gate docs in [Legacy Gates and Policies](./legacy-gates.md) for historical hardening packs that remain available.

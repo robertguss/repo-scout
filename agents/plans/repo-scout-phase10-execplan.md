@@ -347,7 +347,7 @@ Feature slice 53A updates user docs:
 `README.md`, `docs/cli-reference.md`, `docs/json-output.md`, `docs/architecture.md`.
 
 Feature slice 53B updates proof artifacts and baselines:
-`docs/dogfood-log.md`, `docs/performance-baseline.md`, and this ExecPlan progress transcripts.
+`docs/dogfood-log.md`, `legacy performance baseline doc (removed)`, and this ExecPlan progress transcripts.
 
 Feature slice 53C runs all required validators and records acceptance evidence.
 
@@ -355,7 +355,7 @@ Evidence log (updated as slices complete):
 
 - Slice 53A/53B
   Docs updated: `README.md`, `docs/cli-reference.md`, `docs/json-output.md`,
-  `docs/architecture.md`, `docs/dogfood-log.md`, `docs/performance-baseline.md`.
+  `docs/architecture.md`, `docs/dogfood-log.md`, `legacy performance baseline doc (removed)`.
 
 - Slice 53C verification
   Executed: milestone dogfood commands (`index`, `find`, `refs`), `cargo test`,
@@ -470,7 +470,7 @@ Expected touch points:
 - `docs/json-output.md`
 - `docs/architecture.md`
 - `docs/dogfood-log.md`
-- `docs/performance-baseline.md`
+- `legacy performance baseline doc (removed)`
 
 Dependencies:
 

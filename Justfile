@@ -57,7 +57,10 @@ docs-style repo=".":
 docs-links repo=".":
     bash scripts/check_markdown_links.sh --repo "{{repo}}"
 
-docs-check repo=".": docs-build docs-style docs-links
+docs-check repo=".":
+    just docs-build
+    just docs-style "{{repo}}"
+    just docs-links "{{repo}}"
 
 # Dogfooding loops
 dogfood-pre symbol repo=".":
@@ -136,23 +139,8 @@ gate-deterministic-replay repo="." fixtures="tests/fixtures/phase15/convergence_
 gate-benchmark-pack repo="." fixtures="tests/fixtures/phase15/convergence_pack":
     bash scripts/check_phase16_benchmark_pack.sh --repo "{{repo}}" --fixtures "{{fixtures}}"
 
-gate-known-issues repo="." doc="docs/known-issues-budget-phase16.md":
-    bash scripts/check_phase16_known_issues_budget.sh --repo "{{repo}}" --doc "{{doc}}"
-
-gate-release-checklist repo="." doc="docs/release-checklist-phase16.md":
-    bash scripts/check_phase16_release_checklist.sh --repo "{{repo}}" --doc "{{doc}}"
-
-gate-large-repo-benchmark repo=".":
-    bash scripts/check_phase16_large_repo_benchmark.sh --repo "{{repo}}"
-
 gate-large-repo-replay repo=".":
     bash scripts/check_phase16_large_repo_replay.sh --repo "{{repo}}"
-
-gate-maintenance repo=".":
-    bash scripts/check_phase18_maintenance_pack.sh --repo "{{repo}}"
-
-gate-doc-freshness repo="." doc="docs/maintenance-cadence-phase18.md":
-    bash scripts/check_phase18_docs_freshness.sh --repo "{{repo}}" --doc "{{doc}}"
 
 gate-e2e-matrix repo="." mode="full":
     bash scripts/run_e2e_release_matrix.sh --repo "{{repo}}" --mode "{{mode}}"

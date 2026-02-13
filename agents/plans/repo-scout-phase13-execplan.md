@@ -49,7 +49,7 @@ like `from .util import helper`.
       `bash scripts/validate_evidence_packet.sh --pr-body .github/pull_request_template.md`.
 - [x] (2026-02-10 00:29Z) Ran post-implementation dogfooding (`index/find/refs`) and refreshed
       docs/evidence (`README.md`, `docs/cli-reference.md`, `docs/architecture.md`,
-      `docs/json-output.md`, `docs/performance-baseline.md`, `docs/dogfood-log.md`) plus a
+      `docs/json-output.md`, `legacy performance baseline doc (removed)`, `docs/dogfood-log.md`) plus a
       repeatable fixture corpus under `tests/fixtures/phase13/python_recommendations/`.
 
 ## Surprises & Discoveries

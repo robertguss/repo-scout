@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `docs/maintainer-guide.md`
   - `docs/release-process.md`
   - `docs/troubleshooting.md`
-  - `docs/legacy-gates.md`
+  - `legacy gates doc (removed)`
 
 ### Changed
 
