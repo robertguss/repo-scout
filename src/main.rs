@@ -686,12 +686,14 @@ fn normalize_changed_file(repo_root: &std::path::Path, changed_file: &str) -> St
 #[cfg(test)]
 mod tests {
     use super::{
-        normalize_changed_file, parse_changed_line_spec, run_context, run_diff_impact, run_explain,
-        run_find, run_impact, run_index, run_refs, run_status, run_tests_for, run_verify_plan,
+        normalize_changed_file, parse_changed_line_spec, run_call_path, run_callees, run_callers,
+        run_context, run_deps, run_diff_impact, run_explain, run_find, run_hotspots, run_impact,
+        run_index, run_outline, run_refs, run_related, run_snippet, run_status, run_summary_cmd,
+        run_tests_for, run_verify_plan,
     };
     use crate::cli::{
-        ContextArgs, DiffImpactArgs, ExplainArgs, FindArgs, QueryArgs, RefsArgs, RepoArgs,
-        TestsForArgs, VerifyPlanArgs,
+        CallPathArgs, ContextArgs, DepsArgs, DiffImpactArgs, ExplainArgs, FindArgs, HotspotsArgs,
+        OutlineArgs, QueryArgs, RefsArgs, RepoArgs, SnippetArgs, TestsForArgs, VerifyPlanArgs,
     };
     use std::path::Path;
     use tempfile::TempDir;
@@ -913,12 +915,170 @@ fn integration_check() {
         .expect("explain json should succeed");
         run_explain(ExplainArgs {
             symbol: "run_find".to_string(),
-            repo: repo_path,
+            repo: repo_path.clone(),
             json: false,
             include_snippets: false,
             compact: false,
         })
         .expect("explain text should succeed");
+
+        // Snippet (json + text)
+        run_snippet(SnippetArgs {
+            symbol: "run_find".into(),
+            repo: repo_path.clone(),
+            json: true,
+            context: 0,
+        })
+        .expect("snippet json");
+        run_snippet(SnippetArgs {
+            symbol: "run_find".into(),
+            repo: repo_path.clone(),
+            json: false,
+            context: 2,
+        })
+        .expect("snippet text");
+
+        // Outline (json + text)
+        run_outline(OutlineArgs {
+            file: "src/lib.rs".into(),
+            repo: repo_path.clone(),
+            json: true,
+        })
+        .expect("outline json");
+        run_outline(OutlineArgs {
+            file: "src/lib.rs".into(),
+            repo: repo_path.clone(),
+            json: false,
+        })
+        .expect("outline text");
+
+        // Summary
+        run_summary_cmd(RepoArgs {
+            repo: repo_path.clone(),
+        })
+        .expect("summary");
+
+        // Deps (json + text)
+        run_deps(DepsArgs {
+            file: "src/lib.rs".into(),
+            repo: repo_path.clone(),
+            json: true,
+        })
+        .expect("deps json");
+        run_deps(DepsArgs {
+            file: "src/lib.rs".into(),
+            repo: repo_path.clone(),
+            json: false,
+        })
+        .expect("deps text");
+
+        // Hotspots (json + text)
+        run_hotspots(HotspotsArgs {
+            repo: repo_path.clone(),
+            json: true,
+            limit: 5,
+        })
+        .expect("hotspots json");
+        run_hotspots(HotspotsArgs {
+            repo: repo_path.clone(),
+            json: false,
+            limit: 5,
+        })
+        .expect("hotspots text");
+
+        // Callers (json + text)
+        run_callers(QueryArgs {
+            symbol: "run_find".into(),
+            repo: repo_path.clone(),
+            json: true,
+        })
+        .expect("callers json");
+        run_callers(QueryArgs {
+            symbol: "run_find".into(),
+            repo: repo_path.clone(),
+            json: false,
+        })
+        .expect("callers text");
+
+        // Callees (json + text)
+        run_callees(QueryArgs {
+            symbol: "run_find".into(),
+            repo: repo_path.clone(),
+            json: true,
+        })
+        .expect("callees json");
+        run_callees(QueryArgs {
+            symbol: "run_find".into(),
+            repo: repo_path.clone(),
+            json: false,
+        })
+        .expect("callees text");
+
+        // Call-path (json + text)
+        run_call_path(CallPathArgs {
+            from: "run_find".into(),
+            to: "run_refs".into(),
+            repo: repo_path.clone(),
+            json: true,
+            max_depth: 5,
+        })
+        .expect("call-path json");
+        run_call_path(CallPathArgs {
+            from: "run_find".into(),
+            to: "run_refs".into(),
+            repo: repo_path.clone(),
+            json: false,
+            max_depth: 5,
+        })
+        .expect("call-path text");
+
+        // Related (json + text)
+        run_related(QueryArgs {
+            symbol: "run_find".into(),
+            repo: repo_path.clone(),
+            json: true,
+        })
+        .expect("related json");
+        run_related(QueryArgs {
+            symbol: "run_find".into(),
+            repo: repo_path.clone(),
+            json: false,
+        })
+        .expect("related text");
+
+        // Explain compact
+        run_explain(ExplainArgs {
+            symbol: "run_find".into(),
+            repo: repo_path.clone(),
+            json: false,
+            include_snippets: false,
+            compact: true,
+        })
+        .expect("explain compact");
+
+        // Find compact
+        run_find(FindArgs {
+            symbol: "run_find".into(),
+            repo: repo_path.clone(),
+            json: false,
+            code_only: false,
+            exclude_tests: false,
+            max_results: None,
+            compact: true,
+        })
+        .expect("find compact");
+
+        // Refs compact
+        run_refs(RefsArgs {
+            symbol: "run_find".into(),
+            repo: repo_path,
+            json: false,
+            code_only: false,
+            exclude_tests: false,
+            max_results: None,
+            compact: true,
+        })
+        .expect("refs compact");
     }
 
     #[test]
