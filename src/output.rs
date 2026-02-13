@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use crate::query::{
-    ContextMatch, DiffImpactMatch, EdgeMatch, ExplainMatch, ImpactMatch, OutlineEntry,
-    QueryMatch, SnippetMatch, StatusSummary, TestTarget, VerificationStep,
+    ContextMatch, DiffImpactMatch, EdgeMatch, ExplainMatch, FileDeps, ImpactMatch,
+    OutlineEntry, QueryMatch, SnippetMatch, StatusSummary, TestTarget, VerificationStep,
 };
 use serde::Serialize;
 
@@ -690,6 +690,45 @@ pub fn print_edges_json(
         command,
         query: symbol,
         results: matches,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}
+
+pub fn print_deps(file: &str, deps: &FileDeps) {
+    println!("command: deps");
+    println!("file: {file}");
+    if !deps.depends_on.is_empty() {
+        println!("depends_on:");
+        for dep in &deps.depends_on {
+            println!("  {} ({})", dep.file_path, dep.edge_count);
+        }
+    }
+    if !deps.depended_on_by.is_empty() {
+        println!("depended_on_by:");
+        for dep in &deps.depended_on_by {
+            println!("  {} ({})", dep.file_path, dep.edge_count);
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct JsonDepsOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    file: &'a str,
+    depends_on: &'a [crate::query::FileDep],
+    depended_on_by: &'a [crate::query::FileDep],
+}
+
+pub fn print_deps_json(file: &str, deps: &FileDeps) -> anyhow::Result<()> {
+    let payload = JsonDepsOutput {
+        schema_version: JSON_SCHEMA_VERSION_V2,
+        command: "deps",
+        file,
+        depends_on: &deps.depends_on,
+        depended_on_by: &deps.depended_on_by,
     };
     let serialized = serde_json::to_string_pretty(&payload)?;
     println!("{serialized}");

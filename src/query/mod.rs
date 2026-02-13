@@ -2744,6 +2744,67 @@ pub fn callees_of(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<EdgeMatch>
     rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct FileDep {
+    pub file_path: String,
+    pub edge_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct FileDeps {
+    pub depends_on: Vec<FileDep>,
+    pub depended_on_by: Vec<FileDep>,
+}
+
+pub fn file_deps(db_path: &Path, file_path: &str) -> anyhow::Result<FileDeps> {
+    let connection = Connection::open(db_path)?;
+
+    // Files this file depends on (outgoing edges)
+    let mut depends_stmt = connection.prepare(
+        "SELECT s_to.file_path, COUNT(*) as cnt
+         FROM symbol_edges_v2 e
+         JOIN symbols_v2 s_from ON e.from_symbol_id = s_from.symbol_id
+         JOIN symbols_v2 s_to ON e.to_symbol_id = s_to.symbol_id
+         WHERE s_from.file_path = ?1 AND s_to.file_path != ?1
+         GROUP BY s_to.file_path
+         ORDER BY cnt DESC, s_to.file_path",
+    )?;
+    let depends_on: Vec<FileDep> = depends_stmt
+        .query_map(params![file_path], |row| {
+            Ok(FileDep {
+                file_path: row.get(0)?,
+                edge_count: row.get::<_, i64>(1)? as usize,
+            })
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    // Files that depend on this file (incoming edges)
+    let mut depended_stmt = connection.prepare(
+        "SELECT s_from.file_path, COUNT(*) as cnt
+         FROM symbol_edges_v2 e
+         JOIN symbols_v2 s_from ON e.from_symbol_id = s_from.symbol_id
+         JOIN symbols_v2 s_to ON e.to_symbol_id = s_to.symbol_id
+         WHERE s_to.file_path = ?1 AND s_from.file_path != ?1
+         GROUP BY s_from.file_path
+         ORDER BY cnt DESC, s_from.file_path",
+    )?;
+    let depended_on_by: Vec<FileDep> = depended_stmt
+        .query_map(params![file_path], |row| {
+            Ok(FileDep {
+                file_path: row.get(0)?,
+                edge_count: row.get::<_, i64>(1)? as usize,
+            })
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(FileDeps {
+        depends_on,
+        depended_on_by,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

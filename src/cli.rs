@@ -42,6 +42,8 @@ pub enum Command {
     Callers(QueryArgs),
     #[command(about = "Show what a symbol calls")]
     Callees(QueryArgs),
+    #[command(about = "Show file-level dependency graph")]
+    Deps(DepsArgs),
 }
 
 #[derive(Debug, Args)]
@@ -162,6 +164,15 @@ pub struct DiffImpactArgs {
     pub include_imports: bool,
     #[arg(long, default_value_t = false)]
     pub exclude_changed: bool,
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct DepsArgs {
+    pub file: String,
     #[arg(long)]
     pub repo: PathBuf,
     #[arg(long)]
