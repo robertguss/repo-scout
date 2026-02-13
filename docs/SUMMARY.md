@@ -1,0 +1,16 @@
+# Summary
+
+- [Architecture](./architecture.md)
+- [CLI Reference](./cli-reference.md)
+- [JSON Output](./json-output.md)
+- [Performance](./performance-baseline.md)
+  - [Rust Thresholds](./performance-thresholds-rust.md)
+  - [Phase 16 Thresholds](./performance-thresholds-phase16.md)
+  - [Large Repo Thresholds](./performance-thresholds-phase16-large-repo.md)
+- [Release & Maintenance](./release-checklist-phase16.md)
+  - [Known Issues Budget](./known-issues-budget-phase16.md)
+  - [Maintenance Backlog](./maintenance-backlog-phase18.md)
+  - [Maintenance Cadence](./maintenance-cadence-phase18.md)
+- [Contract Artifact Policy](./contract-artifact-policy.md)
+- [Semantic Precision](./phase7-semantic-precision.md)
+- [Dogfood Log](./dogfood-log.md)

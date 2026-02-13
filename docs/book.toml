@@ -1,0 +1,8 @@
+[book]
+title = "repo-scout"
+authors = ["Robert Guss"]
+language = "en"
+src = "."
+
+[build]
+build-dir = "../target/book"
