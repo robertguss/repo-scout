@@ -13,7 +13,7 @@ fn milestone2_second_index_skips_unchanged_files() {
         .assert()
         .success()
         .stdout(contains("indexed_files: 1"))
-        .stdout(contains("skipped_files: 0"));
+        .stdout(contains("non_source_files: 0"));
 
     let mut second_index = common::repo_scout_cmd();
     second_index.arg("index").arg("--repo").arg(repo.path());
@@ -21,7 +21,7 @@ fn milestone2_second_index_skips_unchanged_files() {
         .assert()
         .success()
         .stdout(contains("indexed_files: 0"))
-        .stdout(contains("skipped_files: 1"));
+        .stdout(contains("non_source_files: 1"));
 }
 
 #[test]

@@ -73,7 +73,7 @@ struct JsonExplainOutput<'a> {
 /// Prints index metadata (path, schema version, and file counts) to stdout.
 ///
 /// This writes four lines showing:
-/// `index_path`, `schema_version`, `indexed_files`, and `skipped_files`.
+/// `index_path`, `schema_version`, `indexed_files`, and `non_source_files`.
 ///
 /// # Examples
 ///
@@ -85,12 +85,12 @@ pub fn print_index(
     index_path: &Path,
     schema_version: i64,
     indexed_files: usize,
-    skipped_files: usize,
+    non_source_files: usize,
 ) {
     println!("index_path: {}", index_path.display());
     println!("schema_version: {schema_version}");
     println!("indexed_files: {indexed_files}");
-    println!("skipped_files: {skipped_files}");
+    println!("non_source_files: {non_source_files}");
 }
 
 pub fn print_status(index_path: &Path, schema_version: i64) {

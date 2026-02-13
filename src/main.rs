@@ -72,7 +72,7 @@ fn run_index(args: crate::cli::RepoArgs) -> anyhow::Result<()> {
         &store.db_path,
         store.schema_version,
         summary.indexed_files,
-        summary.skipped_files,
+        summary.non_source_files,
     );
     Ok(())
 }
