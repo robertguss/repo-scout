@@ -12,15 +12,25 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
+    #[command(about = "Index a repository into the local SQLite database")]
     Index(RepoArgs),
+    #[command(about = "Show index status and health")]
     Status(RepoArgs),
+    #[command(about = "Find symbol definitions by name")]
     Find(FindArgs),
+    #[command(about = "Find all references to a symbol")]
     Refs(RefsArgs),
+    #[command(about = "Show what depends on a symbol (callers, importers)")]
     Impact(QueryArgs),
+    #[command(about = "Find code relevant to a task description")]
     Context(ContextArgs),
+    #[command(about = "Find test files that cover a symbol")]
     TestsFor(TestsForArgs),
+    #[command(about = "Suggest test commands after changing files")]
     VerifyPlan(VerifyPlanArgs),
+    #[command(about = "Analyze blast radius of file changes")]
     DiffImpact(DiffImpactArgs),
+    #[command(about = "Show symbol details: signature, call graph, source")]
     Explain(ExplainArgs),
 }
 
