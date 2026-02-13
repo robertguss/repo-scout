@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use crate::query::{
-    ContextMatch, DiffImpactMatch, ExplainMatch, ImpactMatch, QueryMatch, StatusSummary,
-    TestTarget, VerificationStep,
+    ContextMatch, DiffImpactMatch, ExplainMatch, ImpactMatch, QueryMatch, SnippetMatch,
+    StatusSummary, TestTarget, VerificationStep,
 };
 use serde::Serialize;
 
@@ -535,6 +535,41 @@ pub fn print_explain_json(
         command: "explain",
         query: symbol,
         include_snippets,
+        results: matches,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}
+
+#[derive(Debug, Serialize)]
+struct JsonSnippetOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    query: &'a str,
+    results: &'a [SnippetMatch],
+}
+
+pub fn print_snippet(symbol: &str, matches: &[SnippetMatch]) {
+    println!("command: snippet");
+    println!("query: {symbol}");
+    println!("results: {}", matches.len());
+    for result in matches {
+        println!(
+            "{}:{}-{} {} ({})",
+            result.file_path, result.start_line, result.end_line, result.symbol, result.kind,
+        );
+        for line in result.snippet.lines() {
+            println!("  {line}");
+        }
+    }
+}
+
+pub fn print_snippet_json(symbol: &str, matches: &[SnippetMatch]) -> anyhow::Result<()> {
+    let payload = JsonSnippetOutput {
+        schema_version: JSON_SCHEMA_VERSION_V2,
+        command: "snippet",
+        query: symbol,
         results: matches,
     };
     let serialized = serde_json::to_string_pretty(&payload)?;

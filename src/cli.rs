@@ -32,6 +32,8 @@ pub enum Command {
     DiffImpact(DiffImpactArgs),
     #[command(about = "Show symbol details: signature, call graph, source")]
     Explain(ExplainArgs),
+    #[command(about = "Extract source code for a symbol")]
+    Snippet(SnippetArgs),
 }
 
 #[derive(Debug, Args)]
@@ -148,6 +150,17 @@ pub struct DiffImpactArgs {
     pub repo: PathBuf,
     #[arg(long)]
     pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct SnippetArgs {
+    pub symbol: String,
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long, default_value_t = 0)]
+    pub context: u32,
 }
 
 #[derive(Debug, Args)]

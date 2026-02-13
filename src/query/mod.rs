@@ -2573,6 +2573,60 @@ pub fn status_summary(db_path: &Path) -> anyhow::Result<StatusSummary> {
     })
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct SnippetMatch {
+    pub symbol: String,
+    pub kind: String,
+    pub file_path: String,
+    pub start_line: u32,
+    pub end_line: u32,
+    pub snippet: String,
+    pub signature: Option<String>,
+}
+
+pub fn snippet_for_symbol(
+    db_path: &Path,
+    symbol: &str,
+    context_lines: u32,
+) -> anyhow::Result<Vec<SnippetMatch>> {
+    let connection = Connection::open(db_path)?;
+    let mut stmt = connection.prepare(
+        "SELECT file_path, symbol, kind, start_line, end_line, signature
+         FROM symbols_v2
+         WHERE symbol = ?1
+         ORDER BY file_path, start_line",
+    )?;
+    let rows = stmt.query_map(params![symbol], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, u32>(3)?,
+            row.get::<_, u32>(4)?,
+            row.get::<_, Option<String>>(5)?,
+        ))
+    })?;
+
+    let mut results = Vec::new();
+    for row in rows {
+        let (file_path, sym, kind, start_line, end_line, signature) = row?;
+        let adj_start = start_line.saturating_sub(context_lines);
+        let adj_end = end_line.saturating_add(context_lines);
+        if let Some(snippet) = extract_symbol_snippet(db_path, &file_path, adj_start, adj_end) {
+            results.push(SnippetMatch {
+                symbol: sym,
+                kind,
+                file_path,
+                start_line,
+                end_line,
+                snippet,
+                signature,
+            });
+        }
+    }
+    Ok(results)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
