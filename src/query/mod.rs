@@ -2515,6 +2515,64 @@ fn is_changed_test_target_reason(why_included: &str) -> bool {
     why_included.starts_with("changed file '") && why_included.ends_with("is itself a test target")
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct StatusSummary {
+    pub source_files: usize,
+    pub definitions: usize,
+    pub references: usize,
+    pub text_occurrences: usize,
+    pub edges: usize,
+    pub languages: Vec<(String, usize)>,
+}
+
+pub fn status_summary(db_path: &Path) -> anyhow::Result<StatusSummary> {
+    let connection = Connection::open(db_path)?;
+    let source_files: i64 = connection.query_row(
+        "SELECT COUNT(*) FROM indexed_files",
+        [],
+        |row| row.get(0),
+    )?;
+    let definitions: i64 = connection.query_row(
+        "SELECT COUNT(*) FROM symbols_v2",
+        [],
+        |row| row.get(0),
+    )?;
+    let references: i64 = connection.query_row(
+        "SELECT COUNT(*) FROM ast_references",
+        [],
+        |row| row.get(0),
+    )?;
+    let text_occurrences: i64 = connection.query_row(
+        "SELECT COUNT(*) FROM text_occurrences",
+        [],
+        |row| row.get(0),
+    )?;
+    let edges: i64 = connection.query_row(
+        "SELECT COUNT(*) FROM symbol_edges_v2",
+        [],
+        |row| row.get(0),
+    )?;
+    let mut lang_stmt = connection.prepare(
+        "SELECT language, COUNT(DISTINCT file_path) FROM symbols_v2 \
+         GROUP BY language ORDER BY language",
+    )?;
+    let languages: Vec<(String, usize)> = lang_stmt
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize))
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(StatusSummary {
+        source_files: source_files as usize,
+        definitions: definitions as usize,
+        references: references as usize,
+        text_occurrences: text_occurrences as usize,
+        edges: edges as usize,
+        languages,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

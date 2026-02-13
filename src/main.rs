@@ -79,7 +79,8 @@ fn run_index(args: crate::cli::RepoArgs) -> anyhow::Result<()> {
 
 fn run_status(args: crate::cli::RepoArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
-    output::print_status(&store.db_path, store.schema_version);
+    let summary = query::status_summary(&store.db_path)?;
+    output::print_status(&store.db_path, store.schema_version, &summary);
     Ok(())
 }
 

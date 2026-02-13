@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use crate::query::{
-    ContextMatch, DiffImpactMatch, ExplainMatch, ImpactMatch, QueryMatch, TestTarget,
-    VerificationStep,
+    ContextMatch, DiffImpactMatch, ExplainMatch, ImpactMatch, QueryMatch, StatusSummary,
+    TestTarget, VerificationStep,
 };
 use serde::Serialize;
 
@@ -93,9 +93,24 @@ pub fn print_index(
     println!("non_source_files: {non_source_files}");
 }
 
-pub fn print_status(index_path: &Path, schema_version: i64) {
+pub fn print_status(
+    index_path: &Path,
+    schema_version: i64,
+    summary: &StatusSummary,
+) {
     println!("index_path: {}", index_path.display());
     println!("schema_version: {schema_version}");
+    println!("source_files: {}", summary.source_files);
+    println!("definitions: {}", summary.definitions);
+    println!("references: {}", summary.references);
+    println!("text_occurrences: {}", summary.text_occurrences);
+    println!("edges: {}", summary.edges);
+    if !summary.languages.is_empty() {
+        println!("languages:");
+        for (lang, count) in &summary.languages {
+            println!("  {lang}: {count}");
+        }
+    }
 }
 
 pub fn print_query(command: &str, symbol: &str, matches: &[QueryMatch]) {
