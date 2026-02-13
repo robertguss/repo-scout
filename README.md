@@ -1,316 +1,123 @@
 # repo-scout
 
-`repo-scout` is a local, deterministic CLI for indexing a repository and answering code-navigation
-questions fast.
+`repo-scout` is a local CLI for repository indexing, code navigation, and structural analysis.
+It is built for agent-driven workflows (Codex, Claude Code) and for human maintainers who need deterministic command output.
 
-## Current Status
+## Why repo-scout
 
-Phase 18 maintenance governance hardening is complete. `repo-scout` currently ships
-production-ready Rust/Go/Python/TypeScript support, cross-language convergence coverage, and
-release-grade deterministic replay/benchmark/known-issues/release-checklist gates plus
-maintenance-mode backlog/freshness guardrails.
-Phase 16 High-Bar/GA hardening is complete and remains the release baseline for core quality
-gates.
+- Fast local index in `<repo>/.repo-scout/index.db`
+- Symbol search and reference lookup across Rust, Go, Python, and TypeScript
+- Impact analysis and verification planning for code changes
+- Deterministic terminal and JSON output for automation and CI use
 
-Roadmap and phase artifacts are tracked in
-`agents/plans/repo-scout-roadmap-to-production-and-ga.md`.
+## Install
 
-## What It Does
+Prerequisites:
 
-- Incrementally indexes repositories into `<repo>/.repo-scout/index.db`.
-- Extracts language-agnostic token occurrences from all files.
-- Extracts Rust, TypeScript, Python, and Go symbol metadata through language adapters.
-- Supports deterministic terminal and JSON output for automation.
+- Rust stable toolchain
 
-Available commands:
-
-- `index`
-- `status`
-- `find`
-- `refs`
-- `impact`
-- `context`
-- `tests-for`
-- `verify-plan`
-- `diff-impact`
-- `explain`
-
-## Quick Start
-
-Prerequisite: stable Rust toolchain.
+Build from source:
 
 ```bash
-cargo build
+cargo build --release
+```
+
+Run from source during development:
+
+```bash
 cargo run -- --help
 ```
 
-Index a repo:
+## 5-minute quickstart
+
+Index a repository and run core navigation commands:
 
 ```bash
-cargo run -- index --repo /path/to/repo
+# 1) index
+cargo run -- index --repo /path/to/target-repo
+
+# 2) find symbol definitions
+cargo run -- find main --repo /path/to/target-repo
+
+# 3) find symbol references
+cargo run -- refs main --repo /path/to/target-repo
+
+# 4) inspect blast radius
+cargo run -- impact main --repo /path/to/target-repo
+
+# 5) machine-readable output
+cargo run -- refs main --repo /path/to/target-repo --json
 ```
 
-Run core queries:
+## Quickstart for AI-agent workflows
+
+If you want an agent to use `repo-scout` first (before broad file scanning), use a policy like:
+
+```text
+When exploring or editing code in this repository:
+1. Run `repo-scout index --repo .`
+2. Run `repo-scout find <symbol> --repo . --json`
+3. Run `repo-scout refs <symbol> --repo . --json`
+4. Use results to choose files, then read/edit only those files
+5. After changes, rerun index/find/refs and tests
+```
+
+Detailed playbooks:
+
+- Codex: `docs/agent-playbook-codex.md`
+- Claude Code: `docs/agent-playbook-claude-code.md`
+- Agent-agnostic workflow: `docs/agent-workflows.md`
+
+## Commands
+
+Primary commands:
+
+- `index`, `status`
+- `find`, `refs`, `impact`, `context`, `tests-for`
+- `verify-plan`, `diff-impact`, `explain`, `snippet`
+- `summary`, `outline`, `tree`, `orient`, `health`
+- `callers`, `callees`, `call-path`, `related`, `deps`, `hotspots`, `circular`
+
+See full command reference in `docs/cli-reference.md`.
+
+## Documentation
+
+This repository uses mdBook docs in `docs/`.
+
+- Docs entry: `docs/introduction.md`
+- Summary/nav: `docs/SUMMARY.md`
+- Build locally: `just docs-build`
+
+## Contributor workflow
+
+Minimum local checks:
 
 ```bash
-cargo run -- find launch --repo /path/to/repo
-cargo run -- refs launch --repo /path/to/repo
-cargo run -- impact launch --repo /path/to/repo
-cargo run -- context --task "modify launch flow and update callers" --repo /path/to/repo --budget 1200
-cargo run -- tests-for launch --repo /path/to/repo
-cargo run -- verify-plan --changed-file src/lib.rs --repo /path/to/repo
-cargo run -- diff-impact --changed-file src/lib.rs --repo /path/to/repo
-cargo run -- explain impact_matches --repo /path/to/repo
-
-# focused query controls
-cargo run -- refs launch --repo /path/to/repo --code-only --exclude-tests
-cargo run -- refs launch --repo /path/to/repo --code-only --exclude-tests --max-results 10
-cargo run -- find launch --repo /path/to/repo --max-results 10
-cargo run -- context --task "update launch flow and reduce test noise" --repo /path/to/repo --budget 1200 --exclude-tests --code-only
-cargo run -- tests-for launch --repo /path/to/repo --include-support
-cargo run -- verify-plan --changed-file src/lib.rs --changed-line src/lib.rs:20:80 --changed-symbol launch --repo /path/to/repo --max-targeted 6
-cargo run -- diff-impact --changed-file src/lib.rs --changed-line src/lib.rs:20:80 --changed-symbol launch --exclude-changed --max-results 12 --repo /path/to/repo
-cargo run -- diff-impact --changed-file src/lib.rs --include-imports --repo /path/to/repo
-cargo run -- diff-impact --changed-file src/lib.rs --repo /path/to/repo --max-distance 3
-# semantic precision examples (TypeScript/Python module aliases)
-cargo run -- diff-impact --changed-file src/util_a.ts --repo tests/fixtures/phase8/semantic_precision --json
-cargo run -- diff-impact --changed-file src/pkg_a/util.py --repo tests/fixtures/phase8/semantic_precision --json
+cargo fmt -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test
 ```
 
-JSON output is supported by query commands:
+Contract/TDD validation:
 
 ```bash
-cargo run -- find launch --repo /path/to/repo --json
-cargo run -- impact launch --repo /path/to/repo --json
-cargo run -- diff-impact --changed-file src/lib.rs --repo /path/to/repo --json
-cargo run -- explain impact_matches --repo /path/to/repo --json
+bash scripts/validate_tdd_cycle.sh --base origin/main
+bash scripts/validate_evidence_packet.sh --pr-body .github/pull_request_template.md
 ```
 
-## Command Behavior Summary
+## Contract system and governance
 
-- `index --repo <PATH>`
-  - Builds/updates the SQLite index.
-  - Prints `index_path`, `schema_version`, `indexed_files`, and `skipped_files`.
-- `status --repo <PATH>`
-  - Prints index path and schema version.
-- `find <SYMBOL> --repo <PATH> [--json] [--code-only] [--exclude-tests] [--max-results <N>]`
-  - Prefers AST definitions (`ast_definition`), then falls back to text ranking.
-  - Includes Go AST definitions in addition to Rust/TypeScript/Python definitions.
-- `refs <SYMBOL> --repo <PATH> [--json] [--code-only] [--exclude-tests] [--max-results <N>]`
-  - Prefers AST references (`ast_reference`), then falls back to text ranking.
-  - Go `refs` now include AST-backed identifier/selector call references when extractable.
-  - Fallback ties now prefer code paths over test/docs paths at equal score tiers.
-  - `--max-results` applies deterministic truncation after ranking.
-  - Scope flags apply to text fallback only; AST-priority behavior is unchanged.
-- `impact <SYMBOL> --repo <PATH> [--json]`
-  - Returns one-hop incoming graph neighbors (`called_by`, `contained_by`, `imported_by`,
-    `implemented_by`).
-  - Applies deterministic semantic score calibration so stronger edge evidence stays in a
-    high-confidence ranking band.
-- `context --task <TEXT> --repo <PATH> [--budget <N>] [--json] [--exclude-tests] [--code-only]`
-  - Uses deterministic token-overlap relevance to rank direct symbol definitions plus graph
-    neighbors, truncated by budget.
-- `tests-for <SYMBOL> --repo <PATH> [--include-support] [--json]`
-  - Returns runnable test targets by default and restores support paths when `--include-support` is
-    set.
-  - Runner-aware detection is strict and explicit:
-    - Rust: `cargo test --test <file_stem>` for direct `tests/<file>.rs`.
-    - Go: `go test ./<package_dir>` for `_test.go` files (`go test .` for root package tests).
-    - Python: `pytest <target>` when explicit pytest configuration is detected.
-    - TypeScript: Vitest/Jest runnable targets only when `package.json` signals exactly one runner.
-- `verify-plan --changed-file <PATH> --repo <PATH> [--changed-line <path:start[:end]>] [--changed-symbol <symbol> ...] [--max-targeted <N>] [--json]`
-  - Produces deterministic verification steps (bounded targeted test commands + runner-aware
-    full-suite gate).
-  - `--changed-line` and repeatable `--changed-symbol` narrow symbol-derived targeted steps.
-  - Default targeted cap is `8`; changed runnable test files are preserved even when
-    `--max-targeted=0`.
-- `diff-impact --changed-file <PATH> --repo <PATH> [--max-distance <N>] [--exclude-tests|--include-tests] [--include-imports] [--changed-line <path:start[:end]>] [--changed-symbol <symbol> ...] [--exclude-changed] [--max-results <N>] [--json]`
-  - Emits changed-symbol rows plus deterministic bounded multi-hop impacted symbols/test targets.
-  - Rust module-qualified calls now resolve deterministic candidate paths for both `<module>.rs` and
-    `<module>/mod.rs`, reducing dropped `called_by` rows in duplicate-name graphs.
-  - TypeScript namespace/member calls and Python module-alias attribute calls now resolve with
-    module-aware context to avoid duplicate-name cross-link ambiguity.
-  - TypeScript relative directory imports now include deterministic candidate paths for
-    `index.ts`/`index.tsx`, preserving caller attribution when `./module` resolves to
-    `./module/index.ts`.
-  - Go import-alias selector calls now resolve deterministic candidate targets so duplicate function
-    names across packages do not drop expected `called_by` rows.
-  - Test-target emission remains default-on (`include_tests = true` in schema 3); use
-    `--exclude-tests` for symbol-only output, or `--include-tests` for explicit default behavior.
-  - By default, changed-symbol seeds exclude import definitions unless `--include-imports` is set.
-  - `--changed-line` and repeatable `--changed-symbol` narrow changed-symbol seeds.
-  - `--exclude-changed` omits `distance=0` changed-symbol rows from output.
-  - `--max-results` applies deterministic post-sort truncation.
-  - Semantic caller rows use calibrated scoring that ranks above text-fallback test-target rows.
-  - Terminal mode now prints deterministic row-level `impacted_symbol` and `test_target` lines.
-- `explain <SYMBOL> --repo <PATH> [--include-snippets] [--json]`
-  - Produces a deterministic symbol dossier with spans, signature, and relationship counts.
-
-## JSON Schemas
-
-Current schema versions:
-
-- `find`, `refs`: `schema_version = 1`
-- `impact`, `context`, `tests-for`, `verify-plan`: `schema_version = 2`
-- `diff-impact`, `explain`: `schema_version = 3`
-
-See full contracts in `docs/json-output.md`.
-
-## Justfile Workflows
-
-This repo ships `just` shortcuts for both contributors and day-to-day CLI use.
-
-Examples:
-
-```bash
-just build
-just fmt
-just clippy
-just test
-just contract-check
-just docs-consistency
-just perf-rust-guardrails
-just perf-rust-record
-just phase15-convergence-pack .
-just phase16-benchmark-pack .
-just phase16-large-repo-benchmark .
-just phase16-known-issues-budget .
-just phase16-release-checklist .
-just phase16-deterministic-replay .
-just phase16-large-repo-replay .
-just phase18-maintenance-pack .
-just phase18-docs-freshness .
-just dogfood-pre launch
-just dogfood-post launch
-
-just index .
-just find launch .
-just refs launch .
-just impact launch .
-just context "update launch flow" . 1200
-just tests-for launch .
-just verify-plan src/lib.rs .
-```
-
-## Contract System v2 Workflow
-
-This repository uses a one-time snapshot of Contract System v2 for strict TDD and evidence
-enforcement.
+This repository follows Contract System v2 with strict TDD/evidence policy.
 
 - Core contracts: `contracts/core/`
 - Active language contract: `contracts/languages/RUST_CODING_CONTRACT.md`
 - Templates: `templates/`
-- Review checklists: `checklists/`
+- Checklists: `checklists/`
 - Validators: `scripts/validate_tdd_cycle.sh`, `scripts/validate_evidence_packet.sh`
-- CI gate: `.github/workflows/contract-gates.yml`
 
-Run these checks before opening a PR:
+## Versioning and changelog
 
-```bash
-bash scripts/check_docs_consistency.sh --repo .
-bash scripts/validate_tdd_cycle.sh --base origin/main
-bash scripts/validate_evidence_packet.sh --pr-body .github/pull_request_template.md
-cargo test
-```
-
-Equivalent `just` wrappers:
-
-```bash
-just contract-lint
-just docs-consistency
-just contract-tdd origin/main
-just contract-evidence-pr .github/pull_request_template.md
-just contract-check
-```
-
-Evidence default: PR body headings in `.github/pull_request_template.md` are the primary evidence
-source. `.evidence/EVIDENCE_PACKET.md` is optional.
-
-## Dogfood Procedure
-
-Before editing a feature slice:
-
-```bash
-cargo run -- index --repo .
-cargo run -- find <symbol> --repo . --json
-cargo run -- refs <symbol> --repo . --json
-```
-
-After editing:
-
-```bash
-cargo run -- index --repo .
-cargo run -- find <symbol> --repo .
-cargo run -- refs <symbol> --repo .
-cargo test
-```
-
-If dogfooding exposes a defect, add a failing integration test first, implement the minimum fix,
-then refactor with the full suite green.
-
-Phase 11 note: Rust module-qualified call paths (`crate::`, `self::`, `super::`, and
-module-prefix calls targeting `mod.rs`) now emit stable candidate-target edges for `impact` and
-`diff-impact` traversal.
-
-Phase 12 note: Go call references now populate `ast_references`, and Go selector calls using import
-aliases now emit stable call edges for `impact` and `diff-impact`.
-
-Phase 13 note: `tests-for` and `verify-plan` now synthesize `pytest` commands only when explicit
-pytest configuration is detected (`pytest.ini`, `pyproject.toml` `[tool.pytest.ini_options]`,
-`tox.ini` `[pytest]`, or `setup.cfg` `[tool:pytest]`), and Python relative imports
-(`from .module import symbol`) preserve caller attribution in `diff-impact`.
-
-Phase 14 note: `tests-for` and `verify-plan` now synthesize strict Node runner commands for
-TypeScript test files when `package.json` unambiguously signals exactly one runner:
-`npx vitest run <target>` / `npx vitest run` for Vitest, and
-`npx jest --runTestsByPath <target>` / `npx jest` for Jest. Ambiguous Jest+Vitest contexts remain
-conservative. TypeScript directory imports (`./module`) now include `index.ts`/`index.tsx`
-candidate paths for stable `diff-impact` caller attribution.
-
-Phase 15 note: `tests-for` and `verify-plan` now synthesize runnable Go commands for `_test.go`
-targets (`go test ./<package_dir>` or `go test .`) and choose `go test ./...` as the full-suite
-gate for Go-only changed scopes. Phase 15 also adds an integrated convergence-pack gate
-(`scripts/check_phase15_convergence_pack.sh`, `just phase15-convergence-pack`) that validates
-`tests-for`/`verify-plan` command contracts across Rust, Go, Python, and TypeScript fixtures.
-
-Phase 16 note: deterministic replay checks now run via
-`scripts/check_phase16_deterministic_replay.sh` (or `just phase16-deterministic-replay`) to assert
-stable repeated JSON outputs for `find`, `refs`, `tests-for`, `verify-plan`, and `diff-impact`
-across the integrated cross-language fixture pack.
-
-Phase 16 benchmark note: cross-language timing guardrails now run via
-`scripts/check_phase16_benchmark_pack.sh` (or `just phase16-benchmark-pack`) with conservative
-budgets defined in `docs/performance-thresholds-phase16.md`.
-
-Phase 16 known-issues note: issue-budget and ownership gating now runs via
-`scripts/check_phase16_known_issues_budget.sh` (or `just phase16-known-issues-budget`) against
-`docs/known-issues-budget-phase16.md` to enforce `max_open`, `max_deferred`, and `max_unowned`
-thresholds (`max_deferred` is now `0` at closure).
-
-Phase 16 large-repo note: repository-scale benchmark guardrails now run via
-`scripts/check_phase16_large_repo_benchmark.sh` (or `just phase16-large-repo-benchmark`) with
-budgets defined in `docs/performance-thresholds-phase16-large-repo.md`.
-
-Phase 16 release-checklist note: closure gating now runs via
-`scripts/check_phase16_release_checklist.sh` (or `just phase16-release-checklist`) against
-`docs/release-checklist-phase16.md` to enforce quality/evidence/rollback/docs/CI gate statuses.
-
-Phase 16 large-repo replay note: repository-scale deterministic replay checks now run via
-`scripts/check_phase16_large_repo_replay.sh` (or `just phase16-large-repo-replay`) to assert
-stable repeated JSON outputs for `find`, `refs`, `tests-for`, `verify-plan`, `diff-impact`, and
-`context` against the workspace repo path.
-
-## Error Recovery
-
-If the index DB is corrupted or not a valid SQLite database, `repo-scout` prints a recovery hint
-with the exact index path and tells you to delete the DB and rerun `index`.
-
-## More Docs
-
-- `docs/cli-reference.md`
-- `docs/json-output.md`
-- `docs/architecture.md`
-- `docs/dogfood-log.md`
-- `docs/performance-baseline.md`
-- `docs/maintenance-backlog-phase18.md`
-- `docs/maintenance-cadence-phase18.md`
+- Versioning: Semantic Versioning
+- Changelog format: Keep a Changelog
+- Current package version: `0.1.0` (`Cargo.toml`)
+- Changelog: `CHANGELOG.md`
