@@ -92,3 +92,79 @@ just phase16-release-checklist .    # closure quality gates
 just phase18-maintenance-pack .     # backlog/freshness guardrails
 just e2e-release-matrix .          # full release matrix
 ```
+
+## Coding Style & Naming Conventions
+
+- Rust 2024 edition; default rustfmt formatting (4-space indent, trailing commas, etc.).
+- Use `snake_case` for modules/functions/files, `UpperCamelCase` for types, and
+  `SCREAMING_SNAKE_CASE` for constants.
+- CLI subcommands and flags should stay lowercase/kebab-case to match existing commands (`find`,
+  `refs`, `--json`).
+
+## Strict TDD and Evidence Rules
+
+- Production code must not be written before a failing test exists for that feature slice.
+- Enforce Red -> Green -> Refactor ordering.
+- Record evidence for each slice in PR body or evidence packet.
+- Required commit prefixes (if enforced): `RED`, `GREEN`, `REFACTOR`, `DOCS`, `CHORE`, `BUILD`,
+  `TEST`.
+
+## Risk Tier Rules
+
+- Declare risk tier (`0 | 1 | 2 | 3`) before implementation.
+- If uncertain between tiers, choose the higher tier.
+- Require controls from `contracts/core/RISK_TIER_POLICY.md`.
+
+## PR and Review Expectations
+
+- Complete `checklists/PR_CONTRACT_CHECKLIST.md` for meaningful changes.
+- Complete `checklists/ADVERSARIAL_REVIEW_CHECKLIST.md` for Tier 2/Tier 3.
+- Include required evidence headings in PR body.
+- Merge only after contract gates pass.
+
+## Validation Commands (Required Before PR)
+
+```bash
+bash scripts/validate_tdd_cycle.sh --base origin/main
+bash scripts/validate_evidence_packet.sh --pr-body /tmp/pr_body.md
+```
+
+## Dogfooding Rules
+
+- Treat `repo-scout` as the first navigation/query tool when working in this repository.
+- Before implementing a feature slice, run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find <target_symbol> --repo . --json`
+  - `cargo run -- refs <target_symbol> --repo . --json`
+- After implementing a feature slice, run:
+  - `cargo run -- index --repo .`
+  - `cargo run -- find <target_symbol> --repo .`
+  - `cargo run -- refs <target_symbol> --repo .`
+  - `cargo test`
+- If dogfooding reveals a defect, write a failing integration test first, then implement the minimal
+  fix, then refactor with the full suite passing (strict red-green-refactor).
+- Every milestone should include at least one dogfood transcript in planning artifacts or PR notes.
+
+## Test Error-Handling Policy
+
+- In `tests/` code, `unwrap()` and `expect()` are allowed for fixture setup, UTF-8 decoding, JSON
+  parsing, and assertion preconditions where failure should immediately fail the test.
+- In `tests/common/`, `panic!` is allowed for terminal helper failures (e.g., bounded retry
+  timeouts).
+- In `src/` production code, do not introduce `unwrap()`/`expect()`/`panic!` unless an explicit
+  contract exception applies.
+
+## Contract Installation Policy
+
+- Contract installation scope is intentionally Rust-only.
+- `contracts/languages/PYTHON_CODING_CONTRACT.md` and
+  `contracts/languages/TYPESCRIPT_CODING_CONTRACT.md` are intentionally not installed.
+- Python and TypeScript are supported as indexed/query languages, but Rust is the only active coding
+  contract scope.
+
+## Contract Integration Statement
+
+This repository follows Contract System v2. Core contracts in `contracts/core/` are mandatory.
+Language contract activation is declared in `contracts/ACTIVE_LANGUAGE_CONTRACTS.md`, and active
+contracts in `contracts/languages/` apply based on changed files. In conflicts, the stricter rule
+applies and must be documented in evidence.

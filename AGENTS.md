@@ -8,8 +8,8 @@
 - `src/query/` contains query logic for `find` and `refs`; `src/store/` owns SQLite schema and
   persistence.
 - Integration tests live in `tests/` (milestone-focused specs plus `tests/common/` helpers). Docs
-  live in `docs/`, planning artifacts in `agents/`, and Contract System v2 assets in
-  `contracts/`, `templates/`, `checklists/`, and `scripts/`.
+  live in `docs/`, planning artifacts in `agents/`, and Contract System v2 assets in `contracts/`,
+  `templates/`, `checklists/`, and `scripts/`.
 
 ## Build, Test, and Development Commands
 
@@ -34,8 +34,8 @@
 
 - Production code must not be written before a failing test exists for that feature slice.
 - Enforce Red -> Green -> Refactor ordering for every feature slice.
-- Commit subjects for meaningful changes must use one allowed prefix:
-  `RED`, `GREEN`, `REFACTOR`, `DOCS`, `CHORE`, `BUILD`, `TEST`.
+- Commit subjects for meaningful changes must use one allowed prefix: `RED`, `GREEN`, `REFACTOR`,
+  `DOCS`, `CHORE`, `BUILD`, `TEST`.
 - Evidence is primarily captured in PR body headings in `.github/pull_request_template.md`.
   `.evidence/EVIDENCE_PACKET.md` is optional.
 - Required local validators before PR:
@@ -75,8 +75,8 @@
 
 ## Test Error-Handling Policy
 
-- In `tests/` code, `unwrap()` and `expect()` are allowed for fixture setup, UTF-8 decoding,
-  JSON parsing, and assertion preconditions when failure should immediately fail the test.
+- In `tests/` code, `unwrap()` and `expect()` are allowed for fixture setup, UTF-8 decoding, JSON
+  parsing, and assertion preconditions when failure should immediately fail the test.
 - In `tests/common/`, `panic!` is allowed for terminal helper failures (for example, bounded retry
   timeouts) where returning `Result` would only defer the same test failure.
 - In `src/` production code, you must not introduce `unwrap()`/`expect()`/`panic!` unless an
@@ -84,8 +84,8 @@
 
 ## Commit & Pull Request Guidelines
 
-- Commit subjects should use contract prefixes and imperative summary text after the prefix (example:
-  `GREEN: Implement milestone 4 ranking and JSON query contract`).
+- Commit subjects should use contract prefixes and imperative summary text after the prefix
+  (example: `GREEN: Implement milestone 4 ranking and JSON query contract`).
 - PRs must include required evidence headings from `.github/pull_request_template.md`, plus dogfood
   evidence and docs/plans updates when behavior changes.
 - Contract validators and CI gate must pass before merge.
@@ -118,16 +118,16 @@
 - Required validators before PR updates:
   - `bash scripts/validate_tdd_cycle.sh --base origin/main`
   - `bash scripts/validate_evidence_packet.sh --pr-body .github/pull_request_template.md`
-- Committed evidence is optional; use `.evidence/EVIDENCE_PACKET.md` only when extra local transcript
-  detail is needed.
+- Committed evidence is optional; use `.evidence/EVIDENCE_PACKET.md` only when extra local
+  transcript detail is needed.
 - Historical commit subjects before Tiger adoption are not retroactively enforced.
 - Validation scope for commit-prefix policy is `origin/main..HEAD` unless a different
   branch-appropriate base is explicitly required.
 
 ## Legacy ExecPlan Policy
 
-- `agents/plans/repo-scout-phase1-execplan.md` through
-  `agents/plans/repo-scout-phase8-execplan.md` are legacy pre-Tiger adoption artifacts.
+- `agents/plans/repo-scout-phase1-execplan.md` through `agents/plans/repo-scout-phase8-execplan.md`
+  are legacy pre-Tiger adoption artifacts.
 - `agents/plans/repo-scout-phase9-execplan.md` and all future ExecPlans must include:
   `Contract Inputs`, `AGENTS.md Constraints`, and `Risk Tier and Required Controls`.
 
