@@ -2,8 +2,14 @@ use std::path::Path;
 use std::process::Command;
 
 pub fn changed_files_since(repo: &Path, since: &str) -> anyhow::Result<Vec<String>> {
+    if since.starts_with('-') {
+        anyhow::bail!(
+            "changed_files_since: invalid revision '{}' (looks like a flag)",
+            since
+        );
+    }
     let output = Command::new("git")
-        .args(["diff", "--name-only", since, "HEAD"])
+        .args(["diff", "--name-only", "--", since, "HEAD"])
         .current_dir(repo)
         .output()?;
     if !output.status.success() {

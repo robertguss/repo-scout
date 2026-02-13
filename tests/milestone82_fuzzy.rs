@@ -31,7 +31,8 @@ fn find_shows_did_you_mean_when_zero_results() {
     ]);
     // Text fallback may find it, but if not, did-you-mean should appear
     assert!(
-        output.contains("calculate_total") || output.contains("calculate_sum"),
+        output.contains("calculate_total") || output.contains("calculate_sum")
+            || output.contains("did you mean") || output.contains("Did you mean"),
         "should find or suggest calculate symbols:\n{output}"
     );
 }

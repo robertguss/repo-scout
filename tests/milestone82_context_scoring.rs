@@ -18,16 +18,19 @@ fn context_scoring_differentiates_direct_vs_tangential() {
     let payload: Value = serde_json::from_str(&json_out).expect("valid json");
     let results = payload["results"].as_array().unwrap();
 
-    if results.len() >= 2 {
-        let scores: Vec<f64> = results.iter()
-            .map(|r| r["score"].as_f64().unwrap())
-            .collect();
-        let unique_scores: std::collections::HashSet<u64> = scores.iter()
-            .map(|s| (s * 1000.0) as u64)
-            .collect();
-        assert!(
-            unique_scores.len() > 1,
-            "scores should be differentiated, got: {scores:?}"
-        );
-    }
+    assert!(
+        results.len() >= 2,
+        "expected at least 2 results, got {}: {results:?}",
+        results.len()
+    );
+    let scores: Vec<f64> = results.iter()
+        .map(|r| r["score"].as_f64().unwrap())
+        .collect();
+    let unique_scores: std::collections::HashSet<u64> = scores.iter()
+        .map(|s| (s * 1000.0) as u64)
+        .collect();
+    assert!(
+        unique_scores.len() > 1,
+        "scores should be differentiated, got: {scores:?}"
+    );
 }

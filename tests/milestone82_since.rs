@@ -12,6 +12,16 @@ fn diff_impact_since_head_detects_changed_files() {
         .output()
         .unwrap();
     std::process::Command::new("git")
+        .args(["config", "user.name", "CI"])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+    std::process::Command::new("git")
+        .args(["config", "user.email", "ci@example.com"])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+    std::process::Command::new("git")
         .args(["add", "."])
         .current_dir(repo.path())
         .output()
