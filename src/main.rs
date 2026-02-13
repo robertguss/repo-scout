@@ -12,8 +12,8 @@ use crate::query::{
     ChangedLineRange, DiffImpactChangedMode, DiffImpactImportMode, DiffImpactOptions,
     DiffImpactTestMode, QueryScope, VerifyPlanOptions, context_matches, context_matches_scoped,
     diff_impact_for_changed_files, explain_symbol, find_matches_scoped, impact_matches,
-    outline_file, refs_matches_scoped, snippet_for_symbol, tests_for_symbol,
-    verify_plan_for_changed_files,
+    outline_file, refs_matches_scoped, repo_entry_points, snippet_for_symbol,
+    status_summary, tests_for_symbol, verify_plan_for_changed_files,
 };
 use crate::store::ensure_store;
 
@@ -65,6 +65,7 @@ fn run() -> anyhow::Result<()> {
         Command::Explain(args) => run_explain(args),
         Command::Snippet(args) => run_snippet(args),
         Command::Outline(args) => run_outline(args),
+        Command::Summary(args) => run_summary_cmd(args),
     }
 }
 
@@ -82,7 +83,7 @@ fn run_index(args: crate::cli::RepoArgs) -> anyhow::Result<()> {
 
 fn run_status(args: crate::cli::RepoArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
-    let summary = query::status_summary(&store.db_path)?;
+    let summary = status_summary(&store.db_path)?;
     output::print_status(&store.db_path, store.schema_version, &summary);
     Ok(())
 }
@@ -480,6 +481,14 @@ fn run_outline(args: crate::cli::OutlineArgs) -> anyhow::Result<()> {
     } else {
         output::print_outline(&args.file, &entries);
     }
+    Ok(())
+}
+
+fn run_summary_cmd(args: crate::cli::RepoArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let summary = status_summary(&store.db_path)?;
+    let entry_points = repo_entry_points(&store.db_path)?;
+    output::print_summary(&summary, &entry_points);
     Ok(())
 }
 

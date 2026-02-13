@@ -614,3 +614,47 @@ pub fn print_outline_json(file: &str, entries: &[OutlineEntry]) -> anyhow::Resul
     println!("{serialized}");
     Ok(())
 }
+
+pub fn print_summary(summary: &StatusSummary, entry_points: &[String]) {
+    println!("command: summary");
+    println!("source_files: {}", summary.source_files);
+    println!("definitions: {}", summary.definitions);
+    println!("references: {}", summary.references);
+    println!("text_occurrences: {}", summary.text_occurrences);
+    println!("edges: {}", summary.edges);
+    if !summary.languages.is_empty() {
+        println!("languages:");
+        for (lang, count) in &summary.languages {
+            println!("  {lang}: {count}");
+        }
+    }
+    if !entry_points.is_empty() {
+        println!("entry_points:");
+        for ep in entry_points {
+            println!("  {ep}");
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct JsonSummaryOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    summary: &'a StatusSummary,
+    entry_points: &'a [String],
+}
+
+pub fn print_summary_json(
+    summary: &StatusSummary,
+    entry_points: &[String],
+) -> anyhow::Result<()> {
+    let payload = JsonSummaryOutput {
+        schema_version: JSON_SCHEMA_VERSION_V2,
+        command: "summary",
+        summary,
+        entry_points,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}

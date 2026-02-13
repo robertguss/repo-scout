@@ -36,6 +36,8 @@ pub enum Command {
     Snippet(SnippetArgs),
     #[command(about = "Show file structure: signatures and definitions without bodies")]
     Outline(OutlineArgs),
+    #[command(about = "Show whole-repo structural overview")]
+    Summary(RepoArgs),
 }
 
 #[derive(Debug, Args)]

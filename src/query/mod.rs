@@ -2671,6 +2671,21 @@ pub fn outline_file(db_path: &Path, file_path: &str) -> anyhow::Result<Vec<Outli
     Ok(entries)
 }
 
+pub fn repo_entry_points(db_path: &Path) -> anyhow::Result<Vec<String>> {
+    let connection = Connection::open(db_path)?;
+    let mut stmt = connection.prepare(
+        "SELECT file_path FROM symbols_v2
+         WHERE symbol = 'main' AND kind = 'function'
+         ORDER BY file_path",
+    )?;
+    let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+    let mut entry_points = Vec::new();
+    for row in rows {
+        entry_points.push(row?);
+    }
+    Ok(entry_points)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
