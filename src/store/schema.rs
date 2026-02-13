@@ -1,7 +1,7 @@
 use anyhow::Context;
 use rusqlite::{Connection, OptionalExtension};
 
-pub const SCHEMA_VERSION: i64 = 3;
+pub const SCHEMA_VERSION: i64 = 4;
 
 /// Creates the database schema and records the current schema version.
 ///
@@ -114,6 +114,7 @@ pub fn bootstrap_schema(connection: &Connection) -> anyhow::Result<()> {
         "#,
     )?;
     migrate_schema_v3(connection)?;
+    migrate_schema_v4(connection)?;
 
     let upsert_schema_result = connection.execute(
         "INSERT OR REPLACE INTO meta(key, value) VALUES('schema_version', ?1)",
@@ -198,6 +199,56 @@ fn migrate_schema_v3(connection: &Connection) -> anyhow::Result<()> {
         "#,
     );
     migrate_rows_result?;
+
+    Ok(())
+}
+
+fn migrate_schema_v4(connection: &Connection) -> anyhow::Result<()> {
+    // Populated in Phase 1
+    ensure_column_exists(
+        connection,
+        "indexed_files",
+        "line_count",
+        "ALTER TABLE indexed_files ADD COLUMN line_count INTEGER",
+    )?;
+    ensure_column_exists(
+        connection,
+        "symbols_v2",
+        "line_count",
+        "ALTER TABLE symbols_v2 ADD COLUMN line_count INTEGER",
+    )?;
+
+    // Reserved for future phases (nullable)
+    ensure_column_exists(
+        connection,
+        "symbols_v2",
+        "visibility",
+        "ALTER TABLE symbols_v2 ADD COLUMN visibility TEXT",
+    )?;
+    ensure_column_exists(
+        connection,
+        "symbols_v2",
+        "param_count",
+        "ALTER TABLE symbols_v2 ADD COLUMN param_count INTEGER",
+    )?;
+    ensure_column_exists(
+        connection,
+        "symbols_v2",
+        "nesting_depth",
+        "ALTER TABLE symbols_v2 ADD COLUMN nesting_depth INTEGER",
+    )?;
+    ensure_column_exists(
+        connection,
+        "symbols_v2",
+        "branch_count",
+        "ALTER TABLE symbols_v2 ADD COLUMN branch_count INTEGER",
+    )?;
+    ensure_column_exists(
+        connection,
+        "symbols_v2",
+        "complexity_score",
+        "ALTER TABLE symbols_v2 ADD COLUMN complexity_score INTEGER",
+    )?;
 
     Ok(())
 }

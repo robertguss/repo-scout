@@ -104,7 +104,7 @@ fn milestone5_corrupt_index_reports_recovery_hint_and_recovers_after_delete() {
     fs::remove_file(&db_path).expect("corrupt db file should be removable");
     let recovered = run_success_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
     assert!(
-        recovered.contains("schema_version: 3"),
+        recovered.contains("schema_version: 4"),
         "reindex should succeed after deleting corrupt index file"
     );
 }

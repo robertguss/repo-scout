@@ -98,7 +98,7 @@ fn milestone6_schema_v1_upgrades_to_v3_without_data_loss() {
 
     let status = run_stdout(&["status", "--repo", repo.path().to_str().unwrap()]);
     assert!(
-        status.contains("schema_version: 3"),
+        status.contains("schema_version: 4"),
         "store bootstrap should migrate v1 dbs to schema v3"
     );
 
@@ -134,8 +134,8 @@ fn milestone6_schema_migration_is_idempotent() {
 
     let first = run_stdout(&["status", "--repo", repo.path().to_str().unwrap()]);
     let second = run_stdout(&["status", "--repo", repo.path().to_str().unwrap()]);
-    assert!(first.contains("schema_version: 3"));
-    assert!(second.contains("schema_version: 3"));
+    assert!(first.contains("schema_version: 4"));
+    assert!(second.contains("schema_version: 4"));
 
     let connection = Connection::open(db_path).expect("db should remain readable");
     let version: String = connection
@@ -145,7 +145,7 @@ fn milestone6_schema_migration_is_idempotent() {
             |row| row.get(0),
         )
         .expect("meta schema_version should exist");
-    assert_eq!(version, "3");
+    assert_eq!(version, "4");
 
     let edge_table_exists: i64 = connection
         .query_row(

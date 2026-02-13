@@ -75,6 +75,10 @@ fn run() -> anyhow::Result<()> {
         Command::Hotspots(args) => run_hotspots(args),
         Command::CallPath(args) => run_call_path(args),
         Command::Related(args) => run_related(args),
+        Command::Health(args) => run_health(args),
+        Command::Circular(args) => run_circular(args),
+        Command::Tree(args) => run_tree(args),
+        Command::Orient(args) => run_orient(args),
     }
 }
 
@@ -618,6 +622,66 @@ fn run_snippet(args: crate::cli::SnippetArgs) -> anyhow::Result<()> {
         output::print_snippet_json(&args.symbol, &matches)?;
     } else {
         output::print_snippet(&args.symbol, &matches);
+    }
+    Ok(())
+}
+
+fn run_health(args: crate::cli::HealthArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let report =
+        crate::query::diagnostics::health_report(&store.db_path, args.top, args.threshold)?;
+    if args.json {
+        output::print_health_json(&report)?;
+    } else {
+        let (show_files, show_functions) = if args.large_files && args.large_functions {
+            (true, true)
+        } else {
+            (!args.large_functions, !args.large_files)
+        };
+        output::print_health(&report, show_files, show_functions);
+    }
+    Ok(())
+}
+
+fn run_tree(args: crate::cli::TreeArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let tree_args = crate::query::orientation::TreeReportArgs {
+        depth: args.depth,
+        no_deps: args.no_deps,
+        focus: args.focus,
+        show_symbols: args.symbols,
+    };
+    let report = crate::query::orientation::tree_report(&store.db_path, &tree_args)?;
+    if args.json {
+        output::print_tree_json(&report)?;
+    } else {
+        output::print_tree(&report);
+    }
+    Ok(())
+}
+
+fn run_orient(args: crate::cli::OrientArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let orient_args = crate::query::orientation::OrientReportArgs {
+        depth: args.depth,
+        top: args.top,
+    };
+    let report = crate::query::orientation::orient_report(&store.db_path, &orient_args)?;
+    if args.json {
+        output::print_orient_json(&report)?;
+    } else {
+        output::print_orient(&report);
+    }
+    Ok(())
+}
+
+fn run_circular(args: crate::cli::CircularArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let report = crate::query::diagnostics::detect_circular_deps(&store.db_path, args.max_length)?;
+    if args.json {
+        output::print_circular_json(&report)?;
+    } else {
+        output::print_circular(&report);
     }
     Ok(())
 }

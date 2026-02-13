@@ -171,7 +171,7 @@ fn milestone14_schema_language_metadata_migration() {
     let db_path = build_v2_index(repo.path());
 
     let status_out = run_stdout(&["status", "--repo", repo.path().to_str().unwrap()]);
-    assert!(status_out.contains("schema_version: 3"));
+    assert!(status_out.contains("schema_version: 4"));
 
     let connection = Connection::open(db_path).expect("db should remain readable");
     assert!(table_has_column(&connection, "symbols_v2", "language"));
