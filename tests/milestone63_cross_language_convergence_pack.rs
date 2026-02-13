@@ -2,7 +2,6 @@ mod common;
 
 use common::run_stdout;
 use serde_json::Value;
-use std::path::Path;
 
 const FIXTURE_RUST_LIB_RS: &str = include_str!("fixtures/phase15/convergence_pack/rust/src/lib.rs");
 const FIXTURE_RUST_TEST_RS: &str =
@@ -54,7 +53,7 @@ fn has_step(results: &[Value], step: &str, scope: &str) -> bool {
 
 #[test]
 fn milestone63_phase15_convergence_pack_fixture_layout_exists() {
-    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let repo_root = common::repo_root();
     let required_files = [
         "tests/fixtures/phase15/convergence_pack/rust/src/lib.rs",
         "tests/fixtures/phase15/convergence_pack/rust/tests/phase63_flow.rs",

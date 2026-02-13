@@ -103,7 +103,7 @@ fn table_has_column(connection: &Connection, table: &str, column: &str) -> bool 
 
 #[test]
 fn milestone14_language_adapter_trait_migration() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = common::repo_root();
     let mod_source = fs::read_to_string(root.join("src/indexer/languages/mod.rs"))
         .expect("languages adapter module should exist");
     let rust_source = fs::read_to_string(root.join("src/indexer/languages/rust.rs"))
@@ -126,7 +126,7 @@ fn milestone14_language_adapter_trait_migration() {
 
 #[test]
 fn milestone14_rust_behavior_unchanged_through_adapter() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = common::repo_root();
     let indexer_source =
         fs::read_to_string(root.join("src/indexer/mod.rs")).expect("indexer module should load");
     assert!(indexer_source.contains("RustLanguageAdapter"));

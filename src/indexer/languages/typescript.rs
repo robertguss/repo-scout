@@ -89,7 +89,7 @@ impl LanguageAdapter for TypeScriptLanguageAdapter {
                         &mut symbols,
                     );
 
-                    for class_symbol in class_name {
+                    if let Some(class_symbol) = class_name {
                         for implemented in implemented_types(node, source) {
                             if let Some(import_paths) = import_target_hints.get(&implemented) {
                                 for import_path in import_paths {

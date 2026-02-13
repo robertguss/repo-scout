@@ -2,6 +2,7 @@
 
 `repo-scout` is a local CLI for repository indexing, code navigation, and structural analysis.
 It is built for agent-driven workflows (Codex, Claude Code) and for human maintainers who need deterministic command output.
+Phase 16 High-Bar/GA hardening is complete.
 
 ## Why repo-scout
 

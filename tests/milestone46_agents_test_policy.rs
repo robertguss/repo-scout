@@ -1,10 +1,11 @@
+mod common;
+
 use std::fs;
 
 fn read_agents_text_lowercase() -> String {
-    let repo_root = env!("CARGO_MANIFEST_DIR");
-    let agents_path = format!("{repo_root}/AGENTS.md");
+    let agents_path = common::repo_root().join("AGENTS.md");
     fs::read_to_string(&agents_path)
-        .unwrap_or_else(|err| panic!("failed to read {agents_path}: {err}"))
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", agents_path.display()))
         .to_lowercase()
 }
 

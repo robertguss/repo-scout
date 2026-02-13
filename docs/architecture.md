@@ -1,5 +1,7 @@
 # Architecture
 
+This architecture snapshot reflects the repository as of Phase 16 closure.
+
 ## High-level flow
 
 1. File walker discovers repository files.

@@ -11,10 +11,11 @@ use crate::cli::{Cli, Command};
 use crate::indexer::index_repository;
 use crate::query::{
     ChangedLineRange, DiffImpactChangedMode, DiffImpactImportMode, DiffImpactOptions,
-    DiffImpactTestMode, QueryScope, VerifyPlanOptions, context_matches, context_matches_scoped,
-    diff_impact_for_changed_files, explain_symbol, find_matches_scoped, impact_matches,
-    callees_of, callers_of, file_deps, find_call_path, hotspots, outline_file,
-    refs_matches_scoped, related_symbols, repo_entry_points, snippet_for_symbol,
+    DiffImpactTestMode, ExplainMatch, ImpactMatch, QueryPathMode, QueryScope, QueryTestMode,
+    VerifyPlanOptions, context_matches, context_matches_scoped, diff_impact_for_changed_files,
+    explain_symbol, find_matches_scoped, impact_matches, callees_of, callers_of, file_deps,
+    find_call_path, hotspots, outline_file, refs_matches_scoped, related_symbols,
+    repo_entry_points, snippet_for_symbol,
     status_summary, suggest_similar_symbols, tests_for_symbol,
     verify_plan_for_changed_files,
 };
@@ -103,20 +104,28 @@ fn run_status(args: crate::cli::RepoArgs) -> anyhow::Result<()> {
 
 fn run_find(args: crate::cli::FindArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
-    let scope = QueryScope::from_flags(args.code_only, args.exclude_tests);
-    let mut matches = find_matches_scoped(&store.db_path, &args.symbol, &scope)?;
+    let symbol_query = parse_symbol_query(&args.symbol);
+    let scope = query_scope_for_find_refs(args.code_only, args.exclude_tests, args.filters.scope);
+    let mut matches = find_matches_scoped(&store.db_path, &symbol_query.lookup_symbol, &scope)?;
+    filter_query_matches(&mut matches, &args.filters);
+    apply_query_match_ranking_preferences(
+        &mut matches,
+        &symbol_query.preferred_file,
+        &symbol_query.preferred_lang,
+        args.filters.include_fixtures,
+    );
     if let Some(max_results) = args.max_results {
         matches.truncate(u32_to_usize(max_results));
     }
     if args.json {
-        output::print_query_json("find", &args.symbol, &matches)?;
+        output::print_query_json("find", &symbol_query.lookup_symbol, &matches)?;
     } else if args.compact {
         output::print_query_compact(&matches);
     } else {
-        output::print_query("find", &args.symbol, &matches);
+        output::print_query("find", &symbol_query.lookup_symbol, &matches);
         if matches.is_empty() {
             let suggestions =
-                suggest_similar_symbols(&store.db_path, &args.symbol)?;
+                suggest_similar_symbols(&store.db_path, &symbol_query.lookup_symbol)?;
             if !suggestions.is_empty() {
                 output::print_did_you_mean(&suggestions);
             }
@@ -145,22 +154,32 @@ fn run_find(args: crate::cli::FindArgs) -> anyhow::Result<()> {
 ///     code_only: false,
 ///     exclude_tests: false,
 ///     max_results: None,
+///     compact: false,
+///     filters: crate::cli::SymbolFilterArgs::default(),
 /// };
 /// let _ = run_refs(args);
 /// ```
 fn run_refs(args: crate::cli::RefsArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
-    let scope = QueryScope::from_flags(args.code_only, args.exclude_tests);
-    let mut matches = refs_matches_scoped(&store.db_path, &args.symbol, &scope)?;
+    let symbol_query = parse_symbol_query(&args.symbol);
+    let scope = query_scope_for_find_refs(args.code_only, args.exclude_tests, args.filters.scope);
+    let mut matches = refs_matches_scoped(&store.db_path, &symbol_query.lookup_symbol, &scope)?;
+    filter_query_matches(&mut matches, &args.filters);
+    apply_query_match_ranking_preferences(
+        &mut matches,
+        &symbol_query.preferred_file,
+        &symbol_query.preferred_lang,
+        args.filters.include_fixtures,
+    );
     if let Some(max_results) = args.max_results {
         matches.truncate(u32_to_usize(max_results));
     }
     if args.json {
-        output::print_query_json("refs", &args.symbol, &matches)?;
+        output::print_query_json("refs", &symbol_query.lookup_symbol, &matches)?;
     } else if args.compact {
         output::print_query_compact(&matches);
     } else {
-        output::print_refs_grouped(&args.symbol, &matches);
+        output::print_refs_grouped(&symbol_query.lookup_symbol, &matches);
     }
     Ok(())
 }
@@ -179,16 +198,24 @@ fn run_refs(args: crate::cli::RefsArgs) -> anyhow::Result<()> {
 /// ```no_run
 /// use crate::cli::QueryArgs;
 ///
-/// let args = QueryArgs { repo: ".".into(), symbol: "my_crate::foo".into(), json: false };
+/// let args = QueryArgs {
+///     repo: ".".into(),
+///     symbol: "my_crate::foo".into(),
+///     json: false,
+///     filters: crate::cli::SymbolFilterArgs::default(),
+/// };
 /// run_impact(args).unwrap();
 /// ```
 fn run_impact(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
-    let matches = impact_matches(&store.db_path, &args.symbol)?;
+    let symbol_query = parse_symbol_query(&args.symbol);
+    let mut matches = impact_matches(&store.db_path, &symbol_query.lookup_symbol)?;
+    filter_impact_matches(&mut matches, &args.filters);
+    apply_impact_ranking_preferences(&mut matches, args.filters.include_fixtures);
     if args.json {
-        output::print_impact_json(&args.symbol, &matches)?;
+        output::print_impact_json(&symbol_query.lookup_symbol, &matches)?;
     } else {
-        output::print_impact(&args.symbol, &matches);
+        output::print_impact(&symbol_query.lookup_symbol, &matches);
     }
     Ok(())
 }
@@ -514,13 +541,23 @@ fn parse_changed_line_spec(
 
 fn run_explain(args: crate::cli::ExplainArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
-    let matches = explain_symbol(&store.db_path, &args.symbol, args.include_snippets)?;
+    let symbol_query = parse_symbol_query(&args.symbol);
+    let mut matches = explain_symbol(
+        &store.db_path,
+        &symbol_query.lookup_symbol,
+        args.include_snippets,
+    )?;
+    filter_explain_matches(&mut matches, &args.filters);
     if args.json {
-        output::print_explain_json(&args.symbol, args.include_snippets, &matches)?;
+        output::print_explain_json(
+            &symbol_query.lookup_symbol,
+            args.include_snippets,
+            &matches,
+        )?;
     } else if args.compact {
         output::print_explain_compact(&matches);
     } else {
-        output::print_explain(&args.symbol, &matches);
+        output::print_explain(&symbol_query.lookup_symbol, &matches);
     }
     Ok(())
 }
@@ -576,35 +613,423 @@ fn run_call_path(args: crate::cli::CallPathArgs) -> anyhow::Result<()> {
 
 fn run_related(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
-    let results = related_symbols(&store.db_path, &args.symbol)?;
+    let symbol_query = parse_symbol_query(&args.symbol);
+    let mut results = related_symbols(&store.db_path, &symbol_query.lookup_symbol)?;
+    filter_related_symbols(&mut results, &args.filters);
+    sort_related_symbols_by_path_preferences(&mut results, args.filters.include_fixtures);
     if args.json {
-        output::print_related_json(&args.symbol, &results)?;
+        output::print_related_json(&symbol_query.lookup_symbol, &results)?;
     } else {
-        output::print_related(&args.symbol, &results);
+        output::print_related(&symbol_query.lookup_symbol, &results);
     }
     Ok(())
 }
 
 fn run_callers(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
-    let matches = callers_of(&store.db_path, &args.symbol)?;
+    let symbol_query = parse_symbol_query(&args.symbol);
+    let mut matches = callers_of(&store.db_path, &symbol_query.lookup_symbol)?;
+    filter_edge_matches(&mut matches, &args.filters);
+    sort_edge_matches_by_path_preferences(&mut matches, args.filters.include_fixtures);
     if args.json {
-        output::print_edges_json("callers", &args.symbol, &matches)?;
+        output::print_edges_json("callers", &symbol_query.lookup_symbol, &matches)?;
     } else {
-        output::print_edges("callers", &args.symbol, &matches);
+        output::print_edges("callers", &symbol_query.lookup_symbol, &matches);
     }
     Ok(())
 }
 
 fn run_callees(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
-    let matches = callees_of(&store.db_path, &args.symbol)?;
+    let symbol_query = parse_symbol_query(&args.symbol);
+    let mut matches = callees_of(&store.db_path, &symbol_query.lookup_symbol)?;
+    filter_edge_matches(&mut matches, &args.filters);
+    sort_edge_matches_by_path_preferences(&mut matches, args.filters.include_fixtures);
     if args.json {
-        output::print_edges_json("callees", &args.symbol, &matches)?;
+        output::print_edges_json("callees", &symbol_query.lookup_symbol, &matches)?;
     } else {
-        output::print_edges("callees", &args.symbol, &matches);
+        output::print_edges("callees", &symbol_query.lookup_symbol, &matches);
     }
     Ok(())
+}
+
+#[derive(Debug, Clone)]
+struct ParsedSymbolQuery {
+    lookup_symbol: String,
+    preferred_file: Option<String>,
+    preferred_lang: Option<String>,
+}
+
+fn parse_symbol_query(raw_symbol: &str) -> ParsedSymbolQuery {
+    let mut parsed = ParsedSymbolQuery {
+        lookup_symbol: raw_symbol.to_string(),
+        preferred_file: None,
+        preferred_lang: None,
+    };
+    let Some((raw_prefix, raw_symbol_name)) = raw_symbol.rsplit_once("::") else {
+        return parsed;
+    };
+    if raw_symbol_name.trim().is_empty() {
+        return parsed;
+    }
+
+    let prefix = normalize_path(raw_prefix);
+    let symbol_name = raw_symbol_name.trim();
+    let maybe_lang_prefix = known_language_prefix(&prefix);
+    let maybe_file_prefix = maybe_lang_prefix
+        .map(|(_, rest)| rest)
+        .or(Some(prefix.as_str()))
+        .filter(|candidate| looks_like_file_path(candidate));
+    if maybe_lang_prefix.is_none() && maybe_file_prefix.is_none() {
+        return parsed;
+    }
+
+    parsed.lookup_symbol = symbol_name.to_string();
+    if let Some((lang, _)) = maybe_lang_prefix {
+        parsed.preferred_lang = Some(lang.to_string());
+    }
+    if let Some(file_prefix) = maybe_file_prefix {
+        parsed.preferred_file = Some(normalize_path(file_prefix));
+    }
+    parsed
+}
+
+fn query_scope_for_find_refs(
+    code_only: bool,
+    exclude_tests: bool,
+    scope: crate::cli::QueryScopeKind,
+) -> QueryScope {
+    let mut query_scope = QueryScope::from_flags(code_only, exclude_tests);
+    match scope {
+        crate::cli::QueryScopeKind::All => {}
+        crate::cli::QueryScopeKind::Production => {
+            query_scope.path_mode = QueryPathMode::CodeOnly;
+            query_scope.test_mode = QueryTestMode::ExcludeTests;
+        }
+        crate::cli::QueryScopeKind::Tests => {
+            query_scope.test_mode = QueryTestMode::IncludeTests;
+        }
+    }
+    query_scope
+}
+
+fn include_path_by_scope(path: &str, scope: crate::cli::QueryScopeKind) -> bool {
+    match scope {
+        crate::cli::QueryScopeKind::All => true,
+        crate::cli::QueryScopeKind::Production => {
+            is_code_file_path(path) && !is_test_like_path(path)
+        }
+        crate::cli::QueryScopeKind::Tests => is_test_like_path(path),
+    }
+}
+
+fn filter_query_matches(
+    matches: &mut Vec<crate::query::QueryMatch>,
+    filters: &crate::cli::SymbolFilterArgs,
+) {
+    matches.retain(|item| path_passes_filters(&item.file_path, filters));
+}
+
+fn filter_impact_matches(matches: &mut Vec<ImpactMatch>, filters: &crate::cli::SymbolFilterArgs) {
+    matches.retain(|item| path_passes_filters(&item.file_path, filters));
+}
+
+fn filter_edge_matches(
+    matches: &mut Vec<crate::query::EdgeMatch>,
+    filters: &crate::cli::SymbolFilterArgs,
+) {
+    matches.retain(|item| path_passes_filters(&item.file_path, filters));
+}
+
+fn filter_related_symbols(
+    matches: &mut Vec<crate::query::RelatedSymbol>,
+    filters: &crate::cli::SymbolFilterArgs,
+) {
+    matches.retain(|item| path_passes_filters(&item.file_path, filters));
+}
+
+fn filter_explain_matches(
+    matches: &mut Vec<ExplainMatch>,
+    filters: &crate::cli::SymbolFilterArgs,
+) {
+    matches.retain(|item| {
+        if !path_passes_filters(&item.file_path, filters) {
+            return false;
+        }
+        filters
+            .lang
+            .as_deref()
+            .map_or(true, |lang| item.language.eq_ignore_ascii_case(lang))
+    });
+}
+
+fn path_passes_filters(path: &str, filters: &crate::cli::SymbolFilterArgs) -> bool {
+    let normalized_path = normalize_path(path);
+    if !include_path_by_scope(&normalized_path, filters.scope) {
+        return false;
+    }
+    if filters.exclude_globs.iter().any(|glob| {
+        path_matches_glob(&normalized_path, &normalize_path(glob))
+    }) {
+        return false;
+    }
+    if let Some(file_filter) = filters.file.as_deref() {
+        if normalized_path != normalize_path(file_filter) {
+            return false;
+        }
+    }
+    if let Some(lang_filter) = filters.lang.as_deref() {
+        if !file_language(&normalized_path).eq_ignore_ascii_case(lang_filter) {
+            return false;
+        }
+    }
+    true
+}
+
+fn apply_query_match_ranking_preferences(
+    matches: &mut [crate::query::QueryMatch],
+    preferred_file: &Option<String>,
+    preferred_lang: &Option<String>,
+    include_fixtures: bool,
+) {
+    for item in matches.iter_mut() {
+        let mut adjusted_score = item.score;
+        if !include_fixtures {
+            if is_fixture_path(&item.file_path) {
+                adjusted_score -= 0.25;
+            } else if is_test_like_path(&item.file_path) {
+                adjusted_score -= 0.10;
+            }
+        }
+        if preferred_file
+            .as_deref()
+            .is_some_and(|preferred| normalize_path(&item.file_path) == normalize_path(preferred))
+        {
+            adjusted_score += 0.30;
+        }
+        if preferred_lang
+            .as_deref()
+            .is_some_and(|preferred| file_language(&item.file_path).eq_ignore_ascii_case(preferred))
+        {
+            adjusted_score += 0.15;
+        }
+        item.score = adjusted_score.max(0.0);
+    }
+
+    matches.sort_by(|left, right| {
+        right
+            .score
+            .partial_cmp(&left.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(
+                fallback_path_class_rank(&left.file_path)
+                    .cmp(&fallback_path_class_rank(&right.file_path)),
+            )
+            .then(left.file_path.cmp(&right.file_path))
+            .then(left.line.cmp(&right.line))
+            .then(left.column.cmp(&right.column))
+            .then(left.symbol.cmp(&right.symbol))
+            .then(left.why_matched.cmp(&right.why_matched))
+    });
+}
+
+fn fallback_path_class_rank(file_path: &str) -> u8 {
+    if is_code_file_path(file_path) && !is_test_like_path(file_path) {
+        0
+    } else if is_test_like_path(file_path) {
+        1
+    } else {
+        2
+    }
+}
+
+fn path_priority_rank(file_path: &str, include_fixtures: bool) -> u8 {
+    if is_code_file_path(file_path) && !is_test_like_path(file_path) {
+        0
+    } else if is_test_like_path(file_path) {
+        if !include_fixtures && is_fixture_path(file_path) {
+            2
+        } else {
+            1
+        }
+    } else {
+        3
+    }
+}
+
+fn score_with_fixture_penalty(score: f64, file_path: &str, include_fixtures: bool) -> f64 {
+    if include_fixtures {
+        return score;
+    }
+    if is_fixture_path(file_path) {
+        (score - 0.25).max(0.0)
+    } else if is_test_like_path(file_path) {
+        (score - 0.10).max(0.0)
+    } else {
+        score
+    }
+}
+
+fn apply_impact_ranking_preferences(matches: &mut [ImpactMatch], include_fixtures: bool) {
+    for item in matches.iter_mut() {
+        item.score = score_with_fixture_penalty(item.score, &item.file_path, include_fixtures);
+    }
+    matches.sort_by(|left, right| {
+        right
+            .score
+            .partial_cmp(&left.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(path_priority_rank(&left.file_path, include_fixtures).cmp(
+                &path_priority_rank(&right.file_path, include_fixtures),
+            ))
+            .then(left.file_path.cmp(&right.file_path))
+            .then(left.line.cmp(&right.line))
+            .then(left.column.cmp(&right.column))
+            .then(left.symbol.cmp(&right.symbol))
+            .then(left.relationship.cmp(&right.relationship))
+    });
+}
+
+fn sort_edge_matches_by_path_preferences(
+    matches: &mut [crate::query::EdgeMatch],
+    include_fixtures: bool,
+) {
+    matches.sort_by(|left, right| {
+        path_priority_rank(&left.file_path, include_fixtures)
+            .cmp(&path_priority_rank(&right.file_path, include_fixtures))
+            .then(left.file_path.cmp(&right.file_path))
+            .then(left.line.cmp(&right.line))
+            .then(left.column.cmp(&right.column))
+            .then(left.symbol.cmp(&right.symbol))
+            .then(left.kind.cmp(&right.kind))
+    });
+}
+
+fn sort_related_symbols_by_path_preferences(
+    matches: &mut [crate::query::RelatedSymbol],
+    include_fixtures: bool,
+) {
+    matches.sort_by(|left, right| {
+        path_priority_rank(&left.file_path, include_fixtures)
+            .cmp(&path_priority_rank(&right.file_path, include_fixtures))
+            .then(left.file_path.cmp(&right.file_path))
+            .then(left.symbol.cmp(&right.symbol))
+            .then(left.relationship.cmp(&right.relationship))
+            .then(left.kind.cmp(&right.kind))
+    });
+}
+
+fn file_language(file_path: &str) -> &'static str {
+    let normalized = normalize_path(file_path);
+    if normalized.ends_with(".rs") {
+        "rust"
+    } else if normalized.ends_with(".ts") || normalized.ends_with(".tsx") {
+        "typescript"
+    } else if normalized.ends_with(".py") {
+        "python"
+    } else if normalized.ends_with(".go") {
+        "go"
+    } else {
+        "unknown"
+    }
+}
+
+fn is_code_file_path(file_path: &str) -> bool {
+    let normalized = normalize_path(file_path);
+    normalized.ends_with(".rs")
+        || normalized.ends_with(".ts")
+        || normalized.ends_with(".tsx")
+        || normalized.ends_with(".py")
+        || normalized.ends_with(".go")
+}
+
+fn is_test_like_path(file_path: &str) -> bool {
+    let normalized = normalize_path(file_path);
+    normalized.starts_with("tests/")
+        || normalized.contains("/tests/")
+        || std::path::Path::new(&normalized)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(is_test_like_file_name)
+}
+
+fn is_test_like_file_name(file_name: &str) -> bool {
+    file_name.ends_with("_test.rs")
+        || file_name.ends_with("_test.go")
+        || file_name.ends_with("_test.py")
+        || file_name.ends_with("_tests.py")
+        || (file_name.starts_with("test_") && file_name.ends_with(".py"))
+        || file_name.ends_with(".test.ts")
+        || file_name.ends_with(".test.tsx")
+        || file_name.ends_with(".spec.ts")
+        || file_name.ends_with(".spec.tsx")
+}
+
+fn is_fixture_path(file_path: &str) -> bool {
+    let normalized = normalize_path(file_path);
+    normalized.starts_with("tests/fixtures/") || normalized.contains("/tests/fixtures/")
+}
+
+fn path_matches_glob(path: &str, glob: &str) -> bool {
+    let normalized_path = normalize_path(path);
+    let normalized_glob = normalize_path(glob);
+    if let Some(prefix) = normalized_glob.strip_suffix("/**") {
+        let normalized_prefix = prefix.trim_end_matches('/');
+        return normalized_path == normalized_prefix
+            || normalized_path.starts_with(&format!("{normalized_prefix}/"));
+    }
+    if !normalized_glob.contains('*') {
+        return normalized_path == normalized_glob;
+    }
+
+    let mut remaining_path = normalized_path.as_str();
+    let mut first_segment = true;
+    for segment in normalized_glob.split('*') {
+        if segment.is_empty() {
+            continue;
+        }
+        if first_segment {
+            if !remaining_path.starts_with(segment) {
+                return false;
+            }
+            remaining_path = &remaining_path[segment.len()..];
+            first_segment = false;
+            continue;
+        }
+        if let Some(index) = remaining_path.find(segment) {
+            remaining_path = &remaining_path[(index + segment.len())..];
+        } else {
+            return false;
+        }
+    }
+    normalized_glob.ends_with('*') || remaining_path.is_empty()
+}
+
+fn normalize_path(input: &str) -> String {
+    let normalized = input.replace('\\', "/");
+    normalized
+        .trim()
+        .trim_start_matches("./")
+        .trim_start_matches('/')
+        .to_string()
+}
+
+fn known_language_prefix(prefix: &str) -> Option<(&str, &str)> {
+    let (lang, rest) = prefix.split_once(':')?;
+    match lang {
+        "rust" | "python" | "typescript" | "go" => Some((lang, rest)),
+        _ => None,
+    }
+}
+
+fn looks_like_file_path(value: &str) -> bool {
+    let normalized = normalize_path(value);
+    normalized.contains('/')
+        || normalized.ends_with(".rs")
+        || normalized.ends_with(".py")
+        || normalized.ends_with(".ts")
+        || normalized.ends_with(".tsx")
+        || normalized.ends_with(".go")
 }
 
 fn run_summary_cmd(args: crate::cli::RepoArgs) -> anyhow::Result<()> {
@@ -750,14 +1175,16 @@ fn normalize_changed_file(repo_root: &std::path::Path, changed_file: &str) -> St
 #[cfg(test)]
 mod tests {
     use super::{
-        normalize_changed_file, parse_changed_line_spec, run_call_path, run_callees, run_callers,
-        run_context, run_deps, run_diff_impact, run_explain, run_find, run_hotspots, run_impact,
-        run_index, run_outline, run_refs, run_related, run_snippet, run_status, run_summary_cmd,
-        run_tests_for, run_verify_plan,
+        apply_impact_ranking_preferences, normalize_changed_file, parse_changed_line_spec,
+        run_call_path, run_callees, run_callers, run_context, run_deps, run_diff_impact,
+        run_explain, run_find, run_hotspots, run_impact, run_index, run_outline, run_refs,
+        run_related, run_snippet, run_status, run_summary_cmd, run_tests_for, run_verify_plan,
+        sort_edge_matches_by_path_preferences, sort_related_symbols_by_path_preferences,
     };
     use crate::cli::{
         CallPathArgs, ContextArgs, DepsArgs, DiffImpactArgs, ExplainArgs, FindArgs, HotspotsArgs,
-        OutlineArgs, QueryArgs, RefsArgs, RepoArgs, SnippetArgs, TestsForArgs, VerifyPlanArgs,
+        OutlineArgs, QueryArgs, RefsArgs, RepoArgs, SnippetArgs, SymbolFilterArgs, TestsForArgs,
+        VerifyPlanArgs,
     };
     use std::path::Path;
     use tempfile::TempDir;
@@ -816,6 +1243,7 @@ fn integration_check() {
             exclude_tests: true,
             max_results: Some(1),
             compact: false,
+            filters: SymbolFilterArgs::default(),
         })
         .expect("find json should succeed");
         run_find(FindArgs {
@@ -826,6 +1254,7 @@ fn integration_check() {
             exclude_tests: false,
             max_results: None,
             compact: false,
+            filters: SymbolFilterArgs::default(),
         })
         .expect("find text should succeed");
 
@@ -837,6 +1266,7 @@ fn integration_check() {
             exclude_tests: false,
             max_results: Some(10),
             compact: false,
+            filters: SymbolFilterArgs::default(),
         })
         .expect("refs json should succeed");
         run_refs(RefsArgs {
@@ -847,6 +1277,7 @@ fn integration_check() {
             exclude_tests: false,
             max_results: None,
             compact: false,
+            filters: SymbolFilterArgs::default(),
         })
         .expect("refs text should succeed");
 
@@ -854,12 +1285,14 @@ fn integration_check() {
             symbol: "run_find".to_string(),
             repo: repo_path.clone(),
             json: true,
+            filters: SymbolFilterArgs::default(),
         })
         .expect("impact json should succeed");
         run_impact(QueryArgs {
             symbol: "run_find".to_string(),
             repo: repo_path.clone(),
             json: false,
+            filters: SymbolFilterArgs::default(),
         })
         .expect("impact text should succeed");
 
@@ -975,6 +1408,7 @@ fn integration_check() {
             json: true,
             include_snippets: true,
             compact: false,
+            filters: SymbolFilterArgs::default(),
         })
         .expect("explain json should succeed");
         run_explain(ExplainArgs {
@@ -983,6 +1417,7 @@ fn integration_check() {
             json: false,
             include_snippets: false,
             compact: false,
+            filters: SymbolFilterArgs::default(),
         })
         .expect("explain text should succeed");
 
@@ -1055,12 +1490,14 @@ fn integration_check() {
             symbol: "run_find".into(),
             repo: repo_path.clone(),
             json: true,
+            filters: SymbolFilterArgs::default(),
         })
         .expect("callers json");
         run_callers(QueryArgs {
             symbol: "run_find".into(),
             repo: repo_path.clone(),
             json: false,
+            filters: SymbolFilterArgs::default(),
         })
         .expect("callers text");
 
@@ -1069,12 +1506,14 @@ fn integration_check() {
             symbol: "run_find".into(),
             repo: repo_path.clone(),
             json: true,
+            filters: SymbolFilterArgs::default(),
         })
         .expect("callees json");
         run_callees(QueryArgs {
             symbol: "run_find".into(),
             repo: repo_path.clone(),
             json: false,
+            filters: SymbolFilterArgs::default(),
         })
         .expect("callees text");
 
@@ -1101,12 +1540,14 @@ fn integration_check() {
             symbol: "run_find".into(),
             repo: repo_path.clone(),
             json: true,
+            filters: SymbolFilterArgs::default(),
         })
         .expect("related json");
         run_related(QueryArgs {
             symbol: "run_find".into(),
             repo: repo_path.clone(),
             json: false,
+            filters: SymbolFilterArgs::default(),
         })
         .expect("related text");
 
@@ -1117,6 +1558,7 @@ fn integration_check() {
             json: false,
             include_snippets: false,
             compact: true,
+            filters: SymbolFilterArgs::default(),
         })
         .expect("explain compact");
 
@@ -1129,6 +1571,7 @@ fn integration_check() {
             exclude_tests: false,
             max_results: None,
             compact: true,
+            filters: SymbolFilterArgs::default(),
         })
         .expect("find compact");
 
@@ -1141,8 +1584,110 @@ fn integration_check() {
             exclude_tests: false,
             max_results: None,
             compact: true,
+            filters: SymbolFilterArgs::default(),
         })
         .expect("refs compact");
+    }
+
+    #[test]
+    fn ranking_helpers_penalize_fixture_and_test_paths_by_default() {
+        let mut impact_rows = vec![
+            crate::query::ImpactMatch {
+                symbol: "fixture_user".into(),
+                kind: "function".into(),
+                file_path: "tests/fixtures/sample.rs".into(),
+                line: 1,
+                column: 1,
+                distance: 1,
+                relationship: "called_by".into(),
+                confidence: "graph_likely".into(),
+                score: 0.95,
+            },
+            crate::query::ImpactMatch {
+                symbol: "test_user".into(),
+                kind: "function".into(),
+                file_path: "tests/user_test.rs".into(),
+                line: 1,
+                column: 1,
+                distance: 1,
+                relationship: "called_by".into(),
+                confidence: "graph_likely".into(),
+                score: 0.93,
+            },
+            crate::query::ImpactMatch {
+                symbol: "prod_user".into(),
+                kind: "function".into(),
+                file_path: "src/lib.rs".into(),
+                line: 1,
+                column: 1,
+                distance: 1,
+                relationship: "called_by".into(),
+                confidence: "graph_likely".into(),
+                score: 0.90,
+            },
+        ];
+        apply_impact_ranking_preferences(&mut impact_rows, false);
+        assert_eq!(impact_rows[0].file_path, "src/lib.rs");
+
+        let mut include_fixture_rows = impact_rows.clone();
+        include_fixture_rows[0].score = 0.95;
+        include_fixture_rows[0].file_path = "tests/fixtures/sample.rs".into();
+        include_fixture_rows[1].score = 0.93;
+        include_fixture_rows[1].file_path = "tests/user_test.rs".into();
+        include_fixture_rows[2].score = 0.90;
+        include_fixture_rows[2].file_path = "src/lib.rs".into();
+        apply_impact_ranking_preferences(&mut include_fixture_rows, true);
+        assert_eq!(include_fixture_rows[0].file_path, "tests/fixtures/sample.rs");
+    }
+
+    #[test]
+    fn ranking_helpers_sort_edges_and_related_with_fixture_penalty() {
+        let mut edges = vec![
+            crate::query::EdgeMatch {
+                file_path: "tests/fixtures/sample.rs".into(),
+                symbol: "fixture_user".into(),
+                kind: "function".into(),
+                line: 1,
+                column: 1,
+                confidence: 0.95,
+            },
+            crate::query::EdgeMatch {
+                file_path: "tests/user_test.rs".into(),
+                symbol: "test_user".into(),
+                kind: "function".into(),
+                line: 1,
+                column: 1,
+                confidence: 0.95,
+            },
+            crate::query::EdgeMatch {
+                file_path: "src/lib.rs".into(),
+                symbol: "prod_user".into(),
+                kind: "function".into(),
+                line: 1,
+                column: 1,
+                confidence: 0.95,
+            },
+        ];
+        sort_edge_matches_by_path_preferences(&mut edges, false);
+        assert_eq!(edges[0].file_path, "src/lib.rs");
+        assert_eq!(edges[2].file_path, "tests/fixtures/sample.rs");
+
+        let mut related = vec![
+            crate::query::RelatedSymbol {
+                symbol: "fixture_sibling".into(),
+                file_path: "tests/fixtures/sample.rs".into(),
+                kind: "function".into(),
+                relationship: "sibling".into(),
+            },
+            crate::query::RelatedSymbol {
+                symbol: "prod_sibling".into(),
+                file_path: "src/lib.rs".into(),
+                kind: "function".into(),
+                relationship: "sibling".into(),
+            },
+        ];
+        sort_related_symbols_by_path_preferences(&mut related, false);
+        assert_eq!(related[0].file_path, "src/lib.rs");
     }
 
     #[test]

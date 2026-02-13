@@ -55,11 +55,25 @@ pub fn temp_repo() -> TempDir {
 
 #[allow(dead_code)]
 pub fn read_repo_file(path: &str) -> String {
-    let repo_root = env!("CARGO_MANIFEST_DIR");
-    let full_path = PathBuf::from(repo_root).join(path);
+    let full_path = repo_root().join(path);
     fs::read_to_string(&full_path).unwrap_or_else(|err| {
         panic!("failed to read {}: {err}", full_path.display());
     })
+}
+
+#[allow(dead_code)]
+pub fn repo_root() -> PathBuf {
+    let compile_time_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    if compile_time_root.join("Cargo.toml").is_file() {
+        return compile_time_root;
+    }
+
+    let cwd = std::env::current_dir().expect("cwd should be available");
+    if cwd.join("Cargo.toml").is_file() {
+        return cwd;
+    }
+
+    compile_time_root
 }
 
 #[allow(dead_code)]

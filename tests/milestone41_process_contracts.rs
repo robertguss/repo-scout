@@ -69,21 +69,19 @@ fn write_commit(repo: &Path, path: &str, contents: &str, subject: &str) {
 }
 
 fn run_tdd_validator(repo: &Path, base_ref: &str) -> Output {
-    let script = format!(
-        "{}/scripts/validate_tdd_cycle.sh",
-        env!("CARGO_MANIFEST_DIR")
-    );
+    let script = common::repo_root().join("scripts/validate_tdd_cycle.sh");
 
-    run_command(repo, "bash", &[&script, "--base", base_ref])
+    run_command(
+        repo,
+        "bash",
+        &[script.to_str().expect("script path should be utf-8"), "--base", base_ref],
+    )
 }
 
 fn run_evidence_validator(repo: &Path, args: &[&str]) -> Output {
-    let script = format!(
-        "{}/scripts/validate_evidence_packet.sh",
-        env!("CARGO_MANIFEST_DIR")
-    );
+    let script = common::repo_root().join("scripts/validate_evidence_packet.sh");
 
-    let mut full_args = vec![script];
+    let mut full_args = vec![script.to_str().expect("script path should be utf-8").to_string()];
     full_args.extend(args.iter().map(|arg| (*arg).to_string()));
     let refs: Vec<&str> = full_args.iter().map(String::as_str).collect();
     run_command(repo, "bash", &refs)

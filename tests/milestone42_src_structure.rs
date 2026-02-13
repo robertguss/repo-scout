@@ -1,10 +1,11 @@
+mod common;
+
 use std::fs;
 
 fn read_repo_file(path: &str) -> String {
-    let repo_root = env!("CARGO_MANIFEST_DIR");
-    let full_path = format!("{repo_root}/{path}");
+    let full_path = common::repo_root().join(path);
     fs::read_to_string(&full_path).unwrap_or_else(|err| {
-        panic!("failed to read {full_path}: {err}");
+        panic!("failed to read {}: {err}", full_path.display());
     })
 }
 

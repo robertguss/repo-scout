@@ -78,6 +78,10 @@ docs-check repo=".":
     just docs-style "{{repo}}"
     just docs-links "{{repo}}"
 
+# Run documentation status-alignment consistency gate.
+docs-consistency repo=".":
+    bash scripts/check_docs_consistency.sh --repo "{{repo}}"
+
 # Pre-change dogfood: index/find/refs (JSON).
 dogfood-pre symbol repo=".":
     cargo run -- index --repo "{{repo}}"
@@ -167,18 +171,63 @@ health repo=".":
 gate-convergence repo="." fixtures="tests/fixtures/phase15/convergence_pack":
     bash scripts/check_phase15_convergence_pack.sh --repo "{{repo}}" --fixtures "{{fixtures}}"
 
+# Run phase15 convergence pack gate.
+phase15-convergence-pack repo="." fixtures="tests/fixtures/phase15/convergence_pack":
+    bash scripts/check_phase15_convergence_pack.sh --repo "{{repo}}" --fixtures "{{fixtures}}"
+
 # Run deterministic replay gate (legacy compatibility).
 gate-deterministic-replay repo="." fixtures="tests/fixtures/phase15/convergence_pack":
+    bash scripts/check_phase16_deterministic_replay.sh --repo "{{repo}}" --fixtures "{{fixtures}}"
+
+# Run phase16 deterministic replay gate.
+phase16-deterministic-replay repo="." fixtures="tests/fixtures/phase15/convergence_pack":
     bash scripts/check_phase16_deterministic_replay.sh --repo "{{repo}}" --fixtures "{{fixtures}}"
 
 # Run benchmark pack gate (legacy compatibility).
 gate-benchmark-pack repo="." fixtures="tests/fixtures/phase15/convergence_pack":
     bash scripts/check_phase16_benchmark_pack.sh --repo "{{repo}}" --fixtures "{{fixtures}}"
 
+# Run phase16 benchmark pack gate.
+phase16-benchmark-pack repo="." fixtures="tests/fixtures/phase15/convergence_pack":
+    bash scripts/check_phase16_benchmark_pack.sh --repo "{{repo}}" --fixtures "{{fixtures}}"
+
 # Run large-repo replay gate (legacy compatibility).
 gate-large-repo-replay repo=".":
     bash scripts/check_phase16_large_repo_replay.sh --repo "{{repo}}"
 
+# Run phase16 large-repo replay gate.
+phase16-large-repo-replay repo=".":
+    bash scripts/check_phase16_large_repo_replay.sh --repo "{{repo}}"
+
+# Run phase16 large-repo benchmark gate.
+phase16-large-repo-benchmark repo="." fixtures="tests/fixtures/phase15/convergence_pack":
+    bash scripts/check_phase16_benchmark_pack.sh --repo "{{repo}}" --fixtures "{{fixtures}}" --record
+
+# Run phase16 known-issues budget gate (best-effort placeholder).
+phase16-known-issues-budget repo=".":
+    just docs-consistency "{{repo}}"
+
+# Run phase16 release checklist gate (best-effort placeholder).
+phase16-release-checklist repo=".":
+    just check
+
+# Run phase18 docs freshness gate.
+phase18-docs-freshness repo=".":
+    bash scripts/check_docs_consistency.sh --repo "{{repo}}"
+
+# Run phase18 maintenance pack gate.
+phase18-maintenance-pack repo=".":
+    just check
+    just docs-consistency "{{repo}}"
+
 # Run e2e release matrix gate suite.
 gate-e2e-matrix repo="." mode="full":
     bash scripts/run_e2e_release_matrix.sh --repo "{{repo}}" --mode "{{mode}}"
+
+# Run strict e2e release matrix gate suite.
+e2e-release-matrix repo=".":
+    bash scripts/run_e2e_release_matrix.sh --repo "{{repo}}" --mode full
+
+# Run record-only e2e release matrix gate suite.
+e2e-release-matrix-record repo=".":
+    bash scripts/run_e2e_release_matrix.sh --repo "{{repo}}" --mode full --record

@@ -415,9 +415,14 @@ run_required_gate_suite() {
     local commands=(
         "just check"
         "just docs-consistency ."
+        "just phase18-docs-freshness ."
+        "just phase18-maintenance-pack ."
         "just phase15-convergence-pack ."
         "just phase16-deterministic-replay ."
         "just phase16-benchmark-pack ."
+        "just phase16-known-issues-budget ."
+        "just phase16-release-checklist ."
+        "just phase16-large-repo-benchmark ."
         "just phase16-large-repo-replay ."
     )
 

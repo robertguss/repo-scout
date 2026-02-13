@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 
 #[derive(Debug, Parser)]
 #[command(name = "repo-scout")]
@@ -127,6 +127,30 @@ pub struct QueryArgs {
     pub repo: PathBuf,
     #[arg(long)]
     pub json: bool,
+    #[command(flatten)]
+    pub filters: SymbolFilterArgs,
+}
+
+#[derive(Clone, Copy, Debug, Default, ValueEnum)]
+pub enum QueryScopeKind {
+    #[default]
+    All,
+    Production,
+    Tests,
+}
+
+#[derive(Debug, Args, Default)]
+pub struct SymbolFilterArgs {
+    #[arg(long, value_enum, default_value_t = QueryScopeKind::All)]
+    pub scope: QueryScopeKind,
+    #[arg(long = "exclude-glob")]
+    pub exclude_globs: Vec<String>,
+    #[arg(long)]
+    pub lang: Option<String>,
+    #[arg(long)]
+    pub file: Option<String>,
+    #[arg(long, default_value_t = false)]
+    pub include_fixtures: bool,
 }
 
 #[derive(Debug, Args)]
@@ -144,6 +168,8 @@ pub struct FindArgs {
     pub max_results: Option<u32>,
     #[arg(long, default_value_t = false)]
     pub compact: bool,
+    #[command(flatten)]
+    pub filters: SymbolFilterArgs,
 }
 
 #[derive(Debug, Args)]
@@ -161,6 +187,8 @@ pub struct RefsArgs {
     pub max_results: Option<u32>,
     #[arg(long, default_value_t = false)]
     pub compact: bool,
+    #[command(flatten)]
+    pub filters: SymbolFilterArgs,
 }
 
 #[derive(Debug, Args)]
@@ -282,6 +310,8 @@ pub struct ExplainArgs {
     pub include_snippets: bool,
     #[arg(long, default_value_t = false)]
     pub compact: bool,
+    #[command(flatten)]
+    pub filters: SymbolFilterArgs,
 }
 
 #[derive(Debug, Args)]
