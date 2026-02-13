@@ -112,7 +112,10 @@ fn index_file(
     insert_symbols_result?;
     insert_references(&tx, &file.relative_path, prepared.extracted_references)?;
     insert_or_defer_edges(&tx, prepared.pending_edges, deferred_edges)?;
-    upsert_indexed_file_row(&tx, &file.relative_path, &file.content_hash)?;
+    let file_line_count = std::str::from_utf8(&file.bytes)
+        .map(|s| s.lines().count())
+        .unwrap_or(0) as i64;
+    upsert_indexed_file_row(&tx, &file.relative_path, &file.content_hash, file_line_count)?;
     tx.commit()?;
     Ok(FileIndexOutcome::Indexed)
 }
@@ -232,10 +235,12 @@ fn insert_symbols(
                 i64::from(definition.start_column)
             ],
         )?;
+        let symbol_line_count =
+            i64::from(definition.end_line) - i64::from(definition.start_line) + 1;
         tx.execute(
             "INSERT INTO symbols_v2(
-                symbol_id, file_path, symbol, kind, language, qualified_symbol, container, start_line, start_column, end_line, end_column, signature
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                symbol_id, file_path, symbol, kind, language, qualified_symbol, container, start_line, start_column, end_line, end_column, signature, line_count
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             params![
                 symbol_id,
                 file_path,
@@ -248,7 +253,8 @@ fn insert_symbols(
                 i64::from(definition.start_column),
                 i64::from(definition.end_line),
                 i64::from(definition.end_column),
-                definition.signature.as_deref()
+                definition.signature.as_deref(),
+                symbol_line_count
             ],
         )?;
     }
@@ -328,12 +334,13 @@ fn upsert_indexed_file_row(
     tx: &rusqlite::Transaction<'_>,
     file_path: &str,
     content_hash: &str,
+    line_count: i64,
 ) -> anyhow::Result<()> {
     tx.execute(
-        "INSERT INTO indexed_files(file_path, content_hash)
-         VALUES (?1, ?2)
-         ON CONFLICT(file_path) DO UPDATE SET content_hash = excluded.content_hash",
-        params![file_path, content_hash],
+        "INSERT INTO indexed_files(file_path, content_hash, line_count)
+         VALUES (?1, ?2, ?3)
+         ON CONFLICT(file_path) DO UPDATE SET content_hash = excluded.content_hash, line_count = excluded.line_count",
+        params![file_path, content_hash, line_count],
     )?;
     Ok(())
 }

@@ -9,7 +9,7 @@ pub fn changed_files_since(repo: &Path, since: &str) -> anyhow::Result<Vec<Strin
         );
     }
     let output = Command::new("git")
-        .args(["diff", "--name-only", "--", since, "HEAD"])
+        .args(["diff", "--name-only", since, "HEAD"])
         .current_dir(repo)
         .output()?;
     if !output.status.success() {

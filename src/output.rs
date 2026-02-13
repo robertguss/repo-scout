@@ -4,6 +4,8 @@ use crate::query::{
     ContextMatch, DiffImpactMatch, EdgeMatch, ExplainMatch, FileDeps, HotspotEntry,
     ImpactMatch, OutlineEntry, QueryMatch, RelatedSymbol, SnippetMatch, StatusSummary,
     TestTarget, VerificationStep,
+    diagnostics::{CircularReport, HealthReport},
+    orientation::{OrientReport, TreeNode, TreeNodeKind, TreeReport},
 };
 use serde::Serialize;
 
@@ -937,6 +939,261 @@ pub fn print_related_json(
         command: "related",
         query: symbol,
         results,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}
+
+pub fn print_health(report: &HealthReport, show_files: bool, show_functions: bool) {
+    println!("Code health report:");
+    println!();
+
+    if show_files {
+        println!("  LARGEST FILES:");
+        if report.largest_files.is_empty() {
+            println!("    (none above threshold)");
+        }
+        for (i, file) in report.largest_files.iter().enumerate() {
+            println!(
+                "    #{:<3} {:<40} {} lines   {} symbols",
+                i + 1,
+                file.file_path,
+                file.line_count,
+                file.symbol_count
+            );
+        }
+        println!();
+    }
+
+    if show_functions {
+        println!("  LARGEST FUNCTIONS:");
+        if report.largest_functions.is_empty() {
+            println!("    (none above threshold)");
+        }
+        for (i, func) in report.largest_functions.iter().enumerate() {
+            println!(
+                "    #{:<3} {:<40} {} lines    {}:{}",
+                i + 1,
+                func.symbol,
+                func.line_count,
+                func.file_path,
+                func.start_line
+            );
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct JsonHealthOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    largest_files: &'a [crate::query::diagnostics::FileHealth],
+    largest_functions: &'a [crate::query::diagnostics::FunctionHealth],
+}
+
+pub fn print_health_json(report: &HealthReport) -> anyhow::Result<()> {
+    let payload = JsonHealthOutput {
+        schema_version: JSON_SCHEMA_VERSION_V2,
+        command: "health",
+        largest_files: &report.largest_files,
+        largest_functions: &report.largest_functions,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}
+
+pub fn print_circular(report: &CircularReport) {
+    if report.cycles.is_empty() {
+        println!("No circular dependencies found.");
+        return;
+    }
+    println!("Circular dependencies:");
+    println!();
+    for (i, cycle) in report.cycles.iter().enumerate() {
+        println!("  Cycle {} ({} files):", i + 1, cycle.files.len());
+        for edge in &cycle.edges {
+            println!(
+                "    {} → {}",
+                edge.from_file, edge.to_file
+            );
+            println!(
+                "      via: {}::{}() {} {}::{}()",
+                edge.from_file.trim_end_matches(".rs").replace('/', "::"),
+                edge.from_symbol,
+                edge.edge_kind,
+                edge.to_file.trim_end_matches(".rs").replace('/', "::"),
+                edge.to_symbol
+            );
+        }
+        println!();
+    }
+    println!(
+        "  Summary: {} cycle{} found",
+        report.total_cycles,
+        if report.total_cycles == 1 { "" } else { "s" }
+    );
+}
+
+#[derive(Serialize)]
+struct JsonCircularOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    cycles: &'a [crate::query::diagnostics::CycleDep],
+    total_cycles: usize,
+}
+
+pub fn print_circular_json(report: &CircularReport) -> anyhow::Result<()> {
+    let payload = JsonCircularOutput {
+        schema_version: JSON_SCHEMA_VERSION_V2,
+        command: "circular",
+        cycles: &report.cycles,
+        total_cycles: report.total_cycles,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}
+
+pub fn print_tree(report: &TreeReport) {
+    print_tree_node(&report.root, "", true);
+}
+
+fn print_tree_node(node: &TreeNode, prefix: &str, is_last: bool) {
+    let connector = if prefix.is_empty() {
+        ""
+    } else if is_last {
+        "└── "
+    } else {
+        "├── "
+    };
+
+    match node.kind {
+        TreeNodeKind::Directory => {
+            let stats = if node.total_files > 0 {
+                format!(" [{} files, {} symbols]", node.total_files, node.total_symbols)
+            } else {
+                String::new()
+            };
+            println!("{prefix}{connector}{}/{stats}", node.name);
+        }
+        TreeNodeKind::File => {
+            let line_info = node
+                .line_count
+                .map(|lc| format!("{lc} lines"))
+                .unwrap_or_default();
+            let sym_info = if node.symbol_count > 0 {
+                format!(" │ {} symbols", node.symbol_count)
+            } else {
+                String::new()
+            };
+            let stats = if !line_info.is_empty() || !sym_info.is_empty() {
+                format!(" [{line_info}{sym_info}]")
+            } else {
+                String::new()
+            };
+            println!("{prefix}{connector}{}{stats}", node.name);
+        }
+    }
+
+    // Print dependency annotations for files
+    let child_prefix = if prefix.is_empty() {
+        String::new()
+    } else if is_last {
+        format!("{prefix}    ")
+    } else {
+        format!("{prefix}│   ")
+    };
+
+    if !node.imports.is_empty() {
+        println!("{child_prefix}→ imports: {}", node.imports.join(", "));
+    }
+    if !node.used_by.is_empty() {
+        println!("{child_prefix}← used by: {}", node.used_by.join(", "));
+    }
+
+    // Print symbols if present
+    for sym in &node.symbols {
+        println!("{child_prefix}  {} {} (line {})", sym.kind, sym.name, sym.start_line);
+    }
+
+    // Print children
+    let child_count = node.children.len();
+    for (i, child) in node.children.iter().enumerate() {
+        let child_is_last = i == child_count - 1;
+        print_tree_node(child, &child_prefix, child_is_last);
+    }
+}
+
+#[derive(Serialize)]
+struct JsonTreeOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    tree: &'a TreeNode,
+}
+
+pub fn print_tree_json(report: &TreeReport) -> anyhow::Result<()> {
+    let payload = JsonTreeOutput {
+        schema_version: JSON_SCHEMA_VERSION_V2,
+        command: "tree",
+        tree: &report.root,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}
+
+pub fn print_orient(report: &OrientReport) {
+    println!("Orientation report:");
+    println!();
+
+    println!("═══ STRUCTURE ═══");
+    print_tree(&report.tree);
+    println!();
+
+    println!("═══ HEALTH ═══");
+    print_health(&report.health, true, true);
+    println!();
+
+    println!("═══ HOTSPOTS ═══");
+    print_hotspots(&report.hotspots);
+    println!();
+
+    println!("═══ CIRCULAR ═══");
+    print_circular(&report.circular);
+    println!();
+
+    println!("═══ RECOMMENDATIONS ═══");
+    if report.recommendations.is_empty() {
+        println!("  No recommendations.");
+    } else {
+        for rec in &report.recommendations {
+            println!("  {}", rec.message);
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct JsonOrientOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    tree: &'a TreeNode,
+    health: &'a HealthReport,
+    hotspots: &'a [HotspotEntry],
+    circular: &'a CircularReport,
+    recommendations: &'a [crate::query::orientation::Recommendation],
+}
+
+pub fn print_orient_json(report: &OrientReport) -> anyhow::Result<()> {
+    let payload = JsonOrientOutput {
+        schema_version: JSON_SCHEMA_VERSION_V2,
+        command: "orient",
+        tree: &report.tree.root,
+        health: &report.health,
+        hotspots: &report.hotspots,
+        circular: &report.circular,
+        recommendations: &report.recommendations,
     };
     let serialized = serde_json::to_string_pretty(&payload)?;
     println!("{serialized}");

@@ -1,3 +1,6 @@
+pub mod diagnostics;
+pub mod orientation;
+
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::Path;
@@ -3062,7 +3065,7 @@ pub fn find_call_path(
     }
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct HotspotEntry {
     pub symbol: String,
     pub file_path: String,

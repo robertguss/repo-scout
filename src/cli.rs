@@ -50,6 +50,68 @@ pub enum Command {
     CallPath(CallPathArgs),
     #[command(about = "Show structurally related symbols")]
     Related(QueryArgs),
+    #[command(about = "Show code health: largest files and functions")]
+    Health(HealthArgs),
+    #[command(about = "Detect circular file-level dependencies")]
+    Circular(CircularArgs),
+    #[command(about = "Show repository file tree with stats and dependencies")]
+    Tree(TreeArgs),
+    #[command(about = "Orientation report: structure, health, hotspots, cycles, recommendations")]
+    Orient(OrientArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct HealthArgs {
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long, default_value_t = 20)]
+    pub top: u32,
+    #[arg(long, default_value_t = 0)]
+    pub threshold: u32,
+    #[arg(long, default_value_t = false)]
+    pub large_files: bool,
+    #[arg(long, default_value_t = false)]
+    pub large_functions: bool,
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct TreeArgs {
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long, default_value_t = 3)]
+    pub depth: u32,
+    #[arg(long = "no-deps", default_value_t = false)]
+    pub no_deps: bool,
+    #[arg(long)]
+    pub focus: Option<String>,
+    #[arg(long, default_value_t = false)]
+    pub symbols: bool,
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct OrientArgs {
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long, default_value_t = 2)]
+    pub depth: u32,
+    #[arg(long, default_value_t = 5)]
+    pub top: u32,
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct CircularArgs {
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long = "max-length", default_value_t = 10)]
+    pub max_length: u32,
+    #[arg(long)]
+    pub json: bool,
 }
 
 #[derive(Debug, Args)]
