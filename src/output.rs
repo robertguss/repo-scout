@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use crate::query::{
-    ContextMatch, DiffImpactMatch, ExplainMatch, ImpactMatch, QueryMatch, SnippetMatch,
-    StatusSummary, TestTarget, VerificationStep,
+    ContextMatch, DiffImpactMatch, ExplainMatch, ImpactMatch, OutlineEntry, QueryMatch,
+    SnippetMatch, StatusSummary, TestTarget, VerificationStep,
 };
 use serde::Serialize;
 
@@ -571,6 +571,44 @@ pub fn print_snippet_json(symbol: &str, matches: &[SnippetMatch]) -> anyhow::Res
         command: "snippet",
         query: symbol,
         results: matches,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}
+
+#[derive(Debug, Serialize)]
+struct JsonOutlineOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    file: &'a str,
+    results: &'a [OutlineEntry],
+}
+
+pub fn print_outline(file: &str, entries: &[OutlineEntry]) {
+    println!("command: outline");
+    println!("file: {file}");
+    println!("results: {}", entries.len());
+    for entry in entries {
+        let vis = if entry.visibility.is_empty() {
+            String::new()
+        } else {
+            format!("{} ", entry.visibility)
+        };
+        let sig = entry
+            .signature
+            .as_deref()
+            .unwrap_or(&entry.symbol);
+        println!("  L{} {}{} ({})", entry.line, vis, sig, entry.kind);
+    }
+}
+
+pub fn print_outline_json(file: &str, entries: &[OutlineEntry]) -> anyhow::Result<()> {
+    let payload = JsonOutlineOutput {
+        schema_version: JSON_SCHEMA_VERSION_V2,
+        command: "outline",
+        file,
+        results: entries,
     };
     let serialized = serde_json::to_string_pretty(&payload)?;
     println!("{serialized}");

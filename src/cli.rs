@@ -34,6 +34,8 @@ pub enum Command {
     Explain(ExplainArgs),
     #[command(about = "Extract source code for a symbol")]
     Snippet(SnippetArgs),
+    #[command(about = "Show file structure: signatures and definitions without bodies")]
+    Outline(OutlineArgs),
 }
 
 #[derive(Debug, Args)]
@@ -146,6 +148,15 @@ pub struct DiffImpactArgs {
     pub include_imports: bool,
     #[arg(long, default_value_t = false)]
     pub exclude_changed: bool,
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct OutlineArgs {
+    pub file: String,
     #[arg(long)]
     pub repo: PathBuf,
     #[arg(long)]

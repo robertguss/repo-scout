@@ -2627,6 +2627,50 @@ pub fn snippet_for_symbol(
     Ok(results)
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct OutlineEntry {
+    pub symbol: String,
+    pub kind: String,
+    pub line: u32,
+    pub signature: Option<String>,
+    pub visibility: String,
+}
+
+pub fn outline_file(db_path: &Path, file_path: &str) -> anyhow::Result<Vec<OutlineEntry>> {
+    let connection = Connection::open(db_path)?;
+    let mut stmt = connection.prepare(
+        "SELECT symbol, kind, start_line, signature
+         FROM symbols_v2
+         WHERE file_path = ?1
+         ORDER BY start_line",
+    )?;
+    let rows = stmt.query_map(params![file_path], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, u32>(2)?,
+            row.get::<_, Option<String>>(3)?,
+        ))
+    })?;
+    let mut entries = Vec::new();
+    for row in rows {
+        let (symbol, kind, line, signature) = row?;
+        let visibility = signature
+            .as_deref()
+            .map(|s| if s.starts_with("pub") { "pub" } else { "" })
+            .unwrap_or("")
+            .to_string();
+        entries.push(OutlineEntry {
+            symbol,
+            kind,
+            line,
+            signature,
+            visibility,
+        });
+    }
+    Ok(entries)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

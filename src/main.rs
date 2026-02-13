@@ -12,7 +12,8 @@ use crate::query::{
     ChangedLineRange, DiffImpactChangedMode, DiffImpactImportMode, DiffImpactOptions,
     DiffImpactTestMode, QueryScope, VerifyPlanOptions, context_matches, context_matches_scoped,
     diff_impact_for_changed_files, explain_symbol, find_matches_scoped, impact_matches,
-    refs_matches_scoped, snippet_for_symbol, tests_for_symbol, verify_plan_for_changed_files,
+    outline_file, refs_matches_scoped, snippet_for_symbol, tests_for_symbol,
+    verify_plan_for_changed_files,
 };
 use crate::store::ensure_store;
 
@@ -63,6 +64,7 @@ fn run() -> anyhow::Result<()> {
         Command::DiffImpact(args) => run_diff_impact(args),
         Command::Explain(args) => run_explain(args),
         Command::Snippet(args) => run_snippet(args),
+        Command::Outline(args) => run_outline(args),
     }
 }
 
@@ -466,6 +468,17 @@ fn run_explain(args: crate::cli::ExplainArgs) -> anyhow::Result<()> {
         output::print_explain_json(&args.symbol, args.include_snippets, &matches)?;
     } else {
         output::print_explain(&args.symbol, &matches);
+    }
+    Ok(())
+}
+
+fn run_outline(args: crate::cli::OutlineArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let entries = outline_file(&store.db_path, &args.file)?;
+    if args.json {
+        output::print_outline_json(&args.file, &entries)?;
+    } else {
+        output::print_outline(&args.file, &entries);
     }
     Ok(())
 }
