@@ -633,8 +633,11 @@ fn run_health(args: crate::cli::HealthArgs) -> anyhow::Result<()> {
     if args.json {
         output::print_health_json(&report)?;
     } else {
-        let show_files = !args.large_functions;
-        let show_functions = !args.large_files;
+        let (show_files, show_functions) = if args.large_files && args.large_functions {
+            (true, true)
+        } else {
+            (!args.large_functions, !args.large_files)
+        };
         output::print_health(&report, show_files, show_functions);
     }
     Ok(())

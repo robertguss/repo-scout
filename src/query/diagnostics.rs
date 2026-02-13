@@ -118,7 +118,7 @@ pub fn detect_circular_deps(db_path: &Path, max_length: u32) -> anyhow::Result<C
     }
 
     // Step 2: Tarjan's SCC
-    let sccs = tarjan_scc(&adj);
+    let sccs = tarjan_scc(&adj)?;
 
     // Step 3: Filter to multi-file SCCs within max_length
     let mut cycles = Vec::new();
@@ -176,7 +176,7 @@ pub fn detect_circular_deps(db_path: &Path, max_length: u32) -> anyhow::Result<C
 }
 
 /// Tarjan's Strongly Connected Components algorithm.
-fn tarjan_scc(adj: &HashMap<String, Vec<String>>) -> Vec<Vec<String>> {
+fn tarjan_scc(adj: &HashMap<String, Vec<String>>) -> anyhow::Result<Vec<Vec<String>>> {
     let mut index_counter: u32 = 0;
     let mut stack: Vec<String> = Vec::new();
     let mut on_stack: HashMap<String, bool> = HashMap::new();
@@ -205,7 +205,7 @@ fn tarjan_scc(adj: &HashMap<String, Vec<String>>) -> Vec<Vec<String>> {
         index: &mut HashMap<String, u32>,
         lowlink: &mut HashMap<String, u32>,
         result: &mut Vec<Vec<String>>,
-    ) {
+    ) -> anyhow::Result<()> {
         index.insert(v.to_string(), *index_counter);
         lowlink.insert(v.to_string(), *index_counter);
         *index_counter += 1;
@@ -215,7 +215,7 @@ fn tarjan_scc(adj: &HashMap<String, Vec<String>>) -> Vec<Vec<String>> {
         if let Some(neighbors) = adj.get(v) {
             for w in neighbors {
                 if !index.contains_key(w.as_str()) {
-                    strongconnect(w, adj, index_counter, stack, on_stack, index, lowlink, result);
+                    strongconnect(w, adj, index_counter, stack, on_stack, index, lowlink, result)?;
                     let w_low = lowlink[w.as_str()];
                     let v_low = lowlink[v];
                     if w_low < v_low {
@@ -234,7 +234,14 @@ fn tarjan_scc(adj: &HashMap<String, Vec<String>>) -> Vec<Vec<String>> {
         if lowlink[v] == index[v] {
             let mut component = Vec::new();
             loop {
-                let w = stack.pop().unwrap();
+                let w = match stack.pop() {
+                    Some(w) => w,
+                    None => {
+                        return Err(anyhow::anyhow!(
+                            "Tarjan invariant violated: stack exhausted while processing component rooted at '{v}'"
+                        ));
+                    }
+                };
                 on_stack.insert(w.clone(), false);
                 component.push(w.clone());
                 if w == v {
@@ -243,6 +250,7 @@ fn tarjan_scc(adj: &HashMap<String, Vec<String>>) -> Vec<Vec<String>> {
             }
             result.push(component);
         }
+        Ok(())
     }
 
     for node in &all_nodes {
@@ -256,9 +264,9 @@ fn tarjan_scc(adj: &HashMap<String, Vec<String>>) -> Vec<Vec<String>> {
                 &mut index,
                 &mut lowlink,
                 &mut result,
-            );
+            )?;
         }
     }
 
-    result
+    Ok(result)
 }

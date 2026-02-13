@@ -154,7 +154,7 @@ pub fn tree_report(db_path: &Path, args: &TreeReportArgs) -> anyhow::Result<Tree
             imports_map.get(file_path.as_str()).cloned().unwrap_or_default(),
             used_by_map.get(file_path.as_str()).cloned().unwrap_or_default(),
             symbols_map.get(file_path.as_str()).cloned().unwrap_or_default(),
-        );
+        )?;
     }
 
     // 5. Aggregate directory stats
@@ -174,9 +174,9 @@ fn insert_path(
     imports: Vec<String>,
     used_by: Vec<String>,
     symbols: Vec<TreeSymbol>,
-) {
+) -> anyhow::Result<()> {
     if parts.is_empty() {
-        return;
+        return Ok(());
     }
     if parts.len() == 1 {
         // Leaf file
@@ -192,7 +192,7 @@ fn insert_path(
             total_symbols: symbol_count,
             symbols,
         });
-        return;
+        return Ok(());
     }
 
     // Find or create directory node
@@ -213,10 +213,25 @@ fn insert_path(
             total_symbols: 0,
             symbols: Vec::new(),
         });
-        node.children.last_mut().unwrap()
+        if let Some(child) = node.children.last_mut() {
+            child
+        } else {
+            return Err(anyhow::anyhow!(
+                "Tree insert invariant violated: unable to access newly inserted child directory '{dir_name}'"
+            ));
+        }
     };
 
-    insert_path(child, &parts[1..], line_count, symbol_count, imports, used_by, symbols);
+    insert_path(
+        child,
+        &parts[1..],
+        line_count,
+        symbol_count,
+        imports,
+        used_by,
+        symbols,
+    )?;
+    Ok(())
 }
 
 fn aggregate_stats(node: &mut TreeNode) -> (u32, u32) {
