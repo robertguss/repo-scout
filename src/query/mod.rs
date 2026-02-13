@@ -1038,6 +1038,23 @@ pub fn find_matches_scoped(
     ranked_text_matches(&connection, symbol, scope)
 }
 
+pub fn suggest_similar_symbols(
+    db_path: &Path,
+    symbol: &str,
+) -> anyhow::Result<Vec<String>> {
+    let connection = Connection::open(db_path)?;
+    let pattern = format!("%{symbol}%");
+    let mut stmt = connection.prepare(
+        "SELECT DISTINCT symbol FROM symbols_v2
+         WHERE symbol LIKE ?1
+         ORDER BY LENGTH(symbol) ASC
+         LIMIT 5",
+    )?;
+    let rows = stmt
+        .query_map(params![pattern], |row| row.get::<_, String>(0))?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
+
 /// Finds references to `symbol` in the database, preferring AST-derived reference matches.
 ///
 /// If any AST references are present for the symbol those matches are returned. If no AST

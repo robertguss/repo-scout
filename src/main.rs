@@ -15,7 +15,8 @@ use crate::query::{
     diff_impact_for_changed_files, explain_symbol, find_matches_scoped, impact_matches,
     callees_of, callers_of, file_deps, find_call_path, hotspots, outline_file,
     refs_matches_scoped, related_symbols, repo_entry_points, snippet_for_symbol,
-    status_summary, tests_for_symbol, verify_plan_for_changed_files,
+    status_summary, suggest_similar_symbols, tests_for_symbol,
+    verify_plan_for_changed_files,
 };
 use crate::store::ensure_store;
 
@@ -109,6 +110,13 @@ fn run_find(args: crate::cli::FindArgs) -> anyhow::Result<()> {
         output::print_query_compact(&matches);
     } else {
         output::print_query("find", &args.symbol, &matches);
+        if matches.is_empty() {
+            let suggestions =
+                suggest_similar_symbols(&store.db_path, &args.symbol)?;
+            if !suggestions.is_empty() {
+                output::print_did_you_mean(&suggestions);
+            }
+        }
     }
     Ok(())
 }

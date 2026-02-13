@@ -131,6 +131,13 @@ pub fn print_query(command: &str, symbol: &str, matches: &[QueryMatch]) {
     }
 }
 
+pub fn print_did_you_mean(suggestions: &[String]) {
+    println!("\ndid you mean:");
+    for s in suggestions {
+        println!("  {s}");
+    }
+}
+
 pub fn print_query_compact(matches: &[QueryMatch]) {
     for result in matches {
         println!(
