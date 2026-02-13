@@ -115,7 +115,12 @@ fn index_file(
     let file_line_count = std::str::from_utf8(&file.bytes)
         .map(|s| s.lines().count())
         .unwrap_or(0) as i64;
-    upsert_indexed_file_row(&tx, &file.relative_path, &file.content_hash, file_line_count)?;
+    upsert_indexed_file_row(
+        &tx,
+        &file.relative_path,
+        &file.content_hash,
+        file_line_count,
+    )?;
     tx.commit()?;
     Ok(FileIndexOutcome::Indexed)
 }

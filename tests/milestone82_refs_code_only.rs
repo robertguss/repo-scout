@@ -15,19 +15,18 @@ fn refs_code_only_excludes_non_source_files() {
     );
     common::run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
 
-    let all = common::run_stdout(&[
-        "refs", "helper", "--repo", repo.path().to_str().unwrap(),
-    ]);
+    let all = common::run_stdout(&["refs", "helper", "--repo", repo.path().to_str().unwrap()]);
     let code_only = common::run_stdout(&[
-        "refs", "helper", "--repo", repo.path().to_str().unwrap(), "--code-only",
+        "refs",
+        "helper",
+        "--repo",
+        repo.path().to_str().unwrap(),
+        "--code-only",
     ]);
 
     // code_only should have fewer or equal results (no .md files)
     let all_count: usize = all.lines().filter(|l| l.contains("helper")).count();
-    let code_count: usize = code_only
-        .lines()
-        .filter(|l| l.contains("helper"))
-        .count();
+    let code_count: usize = code_only.lines().filter(|l| l.contains("helper")).count();
     assert!(
         code_count <= all_count,
         "code-only should not have more results than all"

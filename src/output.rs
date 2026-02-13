@@ -1,11 +1,15 @@
 use std::path::Path;
 
 use crate::query::{
-    ContextMatch, DiffImpactMatch, EdgeMatch, ExplainMatch, FileDeps, HotspotEntry,
-    ImpactMatch, OutlineEntry, QueryMatch, RelatedSymbol, SnippetMatch, StatusSummary,
-    TestTarget, VerificationStep,
-    diagnostics::{CircularReport, HealthReport},
+    ContextMatch, DiffImpactMatch, EdgeMatch, ExplainMatch, FileDeps, HotspotEntry, ImpactMatch,
+    OutlineEntry, QueryMatch, RelatedSymbol, SnippetMatch, StatusSummary, TestTarget,
+    VerificationStep,
+    diagnostics::{
+        AnatomyReport, CircularReport, CouplingEntry, DeadSymbol, HealthReport, Suggestion,
+        TestGapReport,
+    },
     orientation::{OrientReport, TreeNode, TreeNodeKind, TreeReport},
+    planning::BoundaryReport,
 };
 use serde::Serialize;
 
@@ -96,11 +100,7 @@ pub fn print_index(
     println!("non_source_files: {non_source_files}");
 }
 
-pub fn print_status(
-    index_path: &Path,
-    schema_version: i64,
-    summary: &StatusSummary,
-) {
+pub fn print_status(index_path: &Path, schema_version: i64, summary: &StatusSummary) {
     println!("index_path: {}", index_path.display());
     println!("schema_version: {schema_version}");
     println!("source_files: {}", summary.source_files);
@@ -142,10 +142,7 @@ pub fn print_did_you_mean(suggestions: &[String]) {
 
 pub fn print_query_compact(matches: &[QueryMatch]) {
     for result in matches {
-        println!(
-            "{}:{} {}",
-            result.file_path, result.line, result.symbol
-        );
+        println!("{}:{} {}", result.file_path, result.line, result.symbol);
     }
 }
 
@@ -623,10 +620,7 @@ pub fn print_outline(file: &str, entries: &[OutlineEntry]) {
         } else {
             format!("{} ", entry.visibility)
         };
-        let sig = entry
-            .signature
-            .as_deref()
-            .unwrap_or(&entry.symbol);
+        let sig = entry.signature.as_deref().unwrap_or(&entry.symbol);
         println!("  L{} {}{} ({})", entry.line, vis, sig, entry.kind);
     }
 }
@@ -671,7 +665,11 @@ pub fn print_edges(command: &str, symbol: &str, matches: &[EdgeMatch]) {
     for result in matches {
         println!(
             "{}:{}:{} {} ({}) [{:.2}]",
-            result.file_path, result.line, result.column, result.symbol, result.kind,
+            result.file_path,
+            result.line,
+            result.column,
+            result.symbol,
+            result.kind,
             result.confidence,
         );
     }
@@ -685,11 +683,7 @@ struct JsonEdgeOutput<'a> {
     results: &'a [EdgeMatch],
 }
 
-pub fn print_edges_json(
-    command: &str,
-    symbol: &str,
-    matches: &[EdgeMatch],
-) -> anyhow::Result<()> {
+pub fn print_edges_json(command: &str, symbol: &str, matches: &[EdgeMatch]) -> anyhow::Result<()> {
     let payload = JsonEdgeOutput {
         schema_version: JSON_SCHEMA_VERSION_V2,
         command,
@@ -778,10 +772,7 @@ pub fn print_hotspots_json(entries: &[HotspotEntry]) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn print_refs_grouped(
-    symbol: &str,
-    matches: &[QueryMatch],
-) {
+pub fn print_refs_grouped(symbol: &str, matches: &[QueryMatch]) {
     println!("command: refs");
     println!("query: {symbol}");
     println!("results: {}", matches.len());
@@ -825,32 +816,20 @@ pub fn print_refs_grouped(
         for r in *items {
             println!(
                 "  {}:{}:{} {} [{} {}]",
-                r.file_path,
-                r.line,
-                r.column,
-                r.symbol,
-                r.why_matched,
-                r.confidence,
+                r.file_path, r.line, r.column, r.symbol, r.why_matched, r.confidence,
             );
         }
     }
 }
 
-pub fn print_call_path(
-    from: &str,
-    to: &str,
-    path: &Option<Vec<String>>,
-) {
+pub fn print_call_path(from: &str, to: &str, path: &Option<Vec<String>>) {
     println!("command: call-path");
     println!("from: {from}");
     println!("to: {to}");
     match path {
         Some(steps) => {
             println!("path_length: {}", steps.len());
-            println!(
-                "path: {}",
-                steps.join(" -> ")
-            );
+            println!("path: {}", steps.join(" -> "));
         }
         None => {
             println!("path: none (no call path found)");
@@ -884,10 +863,7 @@ pub fn print_call_path_json(
     Ok(())
 }
 
-pub fn print_related(
-    symbol: &str,
-    results: &[RelatedSymbol],
-) {
+pub fn print_related(symbol: &str, results: &[RelatedSymbol]) {
     println!("command: related");
     println!("query: {symbol}");
     println!("results: {}", results.len());
@@ -907,10 +883,7 @@ struct JsonRelatedOutput<'a> {
     results: &'a [RelatedSymbol],
 }
 
-pub fn print_related_json(
-    symbol: &str,
-    results: &[RelatedSymbol],
-) -> anyhow::Result<()> {
+pub fn print_related_json(symbol: &str, results: &[RelatedSymbol]) -> anyhow::Result<()> {
     let payload = JsonRelatedOutput {
         schema_version: JSON_SCHEMA_VERSION_V2,
         command: "related",
@@ -991,10 +964,7 @@ pub fn print_circular(report: &CircularReport) {
     for (i, cycle) in report.cycles.iter().enumerate() {
         println!("  Cycle {} ({} files):", i + 1, cycle.files.len());
         for edge in &cycle.edges {
-            println!(
-                "    {} → {}",
-                edge.from_file, edge.to_file
-            );
+            println!("    {} → {}", edge.from_file, edge.to_file);
             println!(
                 "      via: {}::{}() {} {}::{}()",
                 edge.from_file.trim_end_matches(".rs").replace('/', "::"),
@@ -1033,6 +1003,238 @@ pub fn print_circular_json(report: &CircularReport) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[derive(Serialize)]
+struct JsonAnatomyOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    report: &'a AnatomyReport,
+}
+
+pub fn print_anatomy(report: &AnatomyReport) {
+    println!("Anatomy of {}:", report.file_path);
+    println!();
+    println!(
+        "  symbols: {} total ({} functions)",
+        report.total_symbols, report.function_count
+    );
+    println!();
+    for symbol in &report.symbols {
+        let line_count = symbol
+            .line_count
+            .map_or_else(|| "?".to_string(), |value| value.to_string());
+        println!(
+            "  {} ({}) line {} size {}",
+            symbol.symbol, symbol.kind, symbol.start_line, line_count
+        );
+    }
+}
+
+pub fn print_anatomy_json(report: &AnatomyReport) -> anyhow::Result<()> {
+    let payload = JsonAnatomyOutput {
+        schema_version: JSON_SCHEMA_VERSION_V2,
+        command: "anatomy",
+        report,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}
+
+#[derive(Serialize)]
+struct JsonCouplingOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    results: &'a [CouplingEntry],
+}
+
+pub fn print_coupling(entries: &[CouplingEntry]) {
+    println!("File coupling report:");
+    if entries.is_empty() {
+        println!("  (no cross-file coupling found)");
+        return;
+    }
+    for (index, entry) in entries.iter().enumerate() {
+        println!(
+            "  #{:<3} {} <-> {} ({} + {} = {})",
+            index + 1,
+            entry.file_a,
+            entry.file_b,
+            entry.a_to_b_edges,
+            entry.b_to_a_edges,
+            entry.total_edges
+        );
+    }
+}
+
+pub fn print_coupling_json(entries: &[CouplingEntry]) -> anyhow::Result<()> {
+    let payload = JsonCouplingOutput {
+        schema_version: JSON_SCHEMA_VERSION_V2,
+        command: "coupling",
+        results: entries,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}
+
+#[derive(Serialize)]
+struct JsonDeadOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    results: &'a [DeadSymbol],
+}
+
+pub fn print_dead(entries: &[DeadSymbol]) {
+    println!("Dead symbol candidates:");
+    if entries.is_empty() {
+        println!("  (none)");
+        return;
+    }
+    for entry in entries {
+        println!(
+            "  {} ({}) in {}:{}",
+            entry.symbol, entry.kind, entry.file_path, entry.line
+        );
+    }
+}
+
+pub fn print_dead_json(entries: &[DeadSymbol]) -> anyhow::Result<()> {
+    let payload = JsonDeadOutput {
+        schema_version: JSON_SCHEMA_VERSION_V2,
+        command: "dead",
+        results: entries,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}
+
+#[derive(Serialize)]
+struct JsonTestGapsOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    report: &'a TestGapReport,
+}
+
+pub fn print_test_gaps(report: &TestGapReport) {
+    println!("Test gap analysis for {}:", report.target);
+    println!();
+    println!("  COVERED: {}", report.covered.len());
+    for entry in &report.covered {
+        println!(
+            "    {} ({} lines, {} test hits)",
+            entry.symbol, entry.line_count, entry.test_hits
+        );
+    }
+    println!();
+    println!("  UNCOVERED: {}", report.uncovered.len());
+    for entry in &report.uncovered {
+        println!(
+            "    {} ({}, {} lines)",
+            entry.symbol, entry.risk, entry.line_count
+        );
+    }
+    let total = report.covered.len() + report.uncovered.len();
+    println!();
+    println!("  SUMMARY: {} / {} covered", report.covered.len(), total);
+}
+
+pub fn print_test_gaps_json(report: &TestGapReport) -> anyhow::Result<()> {
+    let payload = JsonTestGapsOutput {
+        schema_version: JSON_SCHEMA_VERSION_V2,
+        command: "test-gaps",
+        report,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}
+
+#[derive(Serialize)]
+struct JsonSuggestOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    results: &'a [Suggestion],
+}
+
+pub fn print_suggest(entries: &[Suggestion]) {
+    println!("Refactoring suggestions:");
+    if entries.is_empty() {
+        println!("  (no candidates)");
+        return;
+    }
+    for (index, entry) in entries.iter().enumerate() {
+        println!(
+            "  #{:<3} {}:{} score={:.1} lines={} fan_in={} tested={}",
+            index + 1,
+            entry.file_path,
+            entry.symbol,
+            entry.refactoring_value,
+            entry.line_count,
+            entry.fan_in,
+            if entry.has_tests { "yes" } else { "no" }
+        );
+    }
+}
+
+pub fn print_suggest_json(entries: &[Suggestion]) -> anyhow::Result<()> {
+    let payload = JsonSuggestOutput {
+        schema_version: JSON_SCHEMA_VERSION_V2,
+        command: "suggest",
+        results: entries,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}
+
+#[derive(Serialize)]
+struct JsonBoundaryOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    report: &'a BoundaryReport,
+}
+
+pub fn print_boundary(report: &BoundaryReport, public_only: bool) {
+    println!("Boundary analysis for {}:", report.file_path);
+    println!();
+    println!("  PUBLIC:");
+    if report.public_symbols.is_empty() {
+        println!("    (none)");
+    }
+    for symbol in &report.public_symbols {
+        println!(
+            "    {} ({}) external_refs={}",
+            symbol.symbol, symbol.kind, symbol.external_references
+        );
+    }
+    if public_only {
+        return;
+    }
+    println!();
+    println!("  INTERNAL:");
+    if report.internal_symbols.is_empty() {
+        println!("    (none)");
+    }
+    for symbol in &report.internal_symbols {
+        println!(
+            "    {} ({}) external_refs={}",
+            symbol.symbol, symbol.kind, symbol.external_references
+        );
+    }
+}
+
+pub fn print_boundary_json(report: &BoundaryReport) -> anyhow::Result<()> {
+    let payload = JsonBoundaryOutput {
+        schema_version: JSON_SCHEMA_VERSION_V2,
+        command: "boundary",
+        report,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}
+
 pub fn print_tree(report: &TreeReport) {
     print_tree_node(&report.root, "", true);
 }
@@ -1049,7 +1251,10 @@ fn print_tree_node(node: &TreeNode, prefix: &str, is_last: bool) {
     match node.kind {
         TreeNodeKind::Directory => {
             let stats = if node.total_files > 0 {
-                format!(" [{} files, {} symbols]", node.total_files, node.total_symbols)
+                format!(
+                    " [{} files, {} symbols]",
+                    node.total_files, node.total_symbols
+                )
             } else {
                 String::new()
             };
@@ -1092,7 +1297,10 @@ fn print_tree_node(node: &TreeNode, prefix: &str, is_last: bool) {
 
     // Print symbols if present
     for sym in &node.symbols {
-        println!("{child_prefix}  {} {} (line {})", sym.kind, sym.name, sym.start_line);
+        println!(
+            "{child_prefix}  {} {} (line {})",
+            sym.kind, sym.name, sym.start_line
+        );
     }
 
     // Print children

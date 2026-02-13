@@ -25,10 +25,7 @@ fn diff_impact_defaults_to_30_max_results() {
     ]);
 
     // Count result lines (lines with file paths, not header lines)
-    let result_count: usize = output
-        .lines()
-        .filter(|l| l.starts_with("src/"))
-        .count();
+    let result_count: usize = output.lines().filter(|l| l.starts_with("src/")).count();
     assert!(
         result_count <= 30,
         "default diff-impact should cap at 30 results, got {result_count}"

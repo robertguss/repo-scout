@@ -29,7 +29,9 @@ fn milestone95_find_scope_and_exclude_glob_filters_noise() {
         "--json",
     ]);
     let payload: Value = serde_json::from_str(&out).expect("find json should parse");
-    let results = payload["results"].as_array().expect("results should be array");
+    let results = payload["results"]
+        .as_array()
+        .expect("results should be array");
 
     assert!(
         results
@@ -81,7 +83,10 @@ fn milestone95_find_lang_and_file_filters_and_qualified_preference() {
         .as_array()
         .expect("results should be array");
     assert!(
-        !file_results.is_empty() && file_results.iter().all(|row| row["file_path"] == "src/main.rs"),
+        !file_results.is_empty()
+            && file_results
+                .iter()
+                .all(|row| row["file_path"] == "src/main.rs"),
         "--file src/main.rs should keep only that file"
     );
 
@@ -98,7 +103,9 @@ fn milestone95_find_lang_and_file_filters_and_qualified_preference() {
         .as_array()
         .expect("results should be array");
     assert_eq!(
-        qualified_results.first().and_then(|row| row["file_path"].as_str()),
+        qualified_results
+            .first()
+            .and_then(|row| row["file_path"].as_str()),
         Some("src/main.rs"),
         "qualified query should prioritize matching file"
     );

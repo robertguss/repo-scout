@@ -85,7 +85,10 @@ pub fn tree_report(db_path: &Path, args: &TreeReportArgs) -> anyhow::Result<Tree
         })?;
         for row in rows {
             let (from, to) = row?;
-            imports_map.entry(from.clone()).or_default().push(to.clone());
+            imports_map
+                .entry(from.clone())
+                .or_default()
+                .push(to.clone());
             used_by_map.entry(to).or_default().push(from);
         }
     }
@@ -151,9 +154,18 @@ pub fn tree_report(db_path: &Path, args: &TreeReportArgs) -> anyhow::Result<Tree
             &parts,
             line_count,
             symbol_count,
-            imports_map.get(file_path.as_str()).cloned().unwrap_or_default(),
-            used_by_map.get(file_path.as_str()).cloned().unwrap_or_default(),
-            symbols_map.get(file_path.as_str()).cloned().unwrap_or_default(),
+            imports_map
+                .get(file_path.as_str())
+                .cloned()
+                .unwrap_or_default(),
+            used_by_map
+                .get(file_path.as_str())
+                .cloned()
+                .unwrap_or_default(),
+            symbols_map
+                .get(file_path.as_str())
+                .cloned()
+                .unwrap_or_default(),
         )?;
     }
 
@@ -339,8 +351,7 @@ fn generate_recommendations(
             kind: RecommendationKind::StartExploring,
             message: format!(
                 "Start exploring: {} (entry point, {} symbols)",
-                entry.file_path,
-                entry.fan_out
+                entry.file_path, entry.fan_out
             ),
             file_path: Some(entry.file_path.clone()),
         });

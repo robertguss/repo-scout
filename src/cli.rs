@@ -58,6 +58,50 @@ pub enum Command {
     Tree(TreeArgs),
     #[command(about = "Orientation report: structure, health, hotspots, cycles, recommendations")]
     Orient(OrientArgs),
+    #[command(about = "Analyze single-file structure and cohesion for refactoring")]
+    Anatomy(AnatomyArgs),
+    #[command(about = "Show strongest bidirectional file coupling")]
+    Coupling(CouplingArgs),
+    #[command(about = "Find symbols that appear unreferenced")]
+    Dead(DeadArgs),
+    #[command(
+        name = "test-gaps",
+        about = "Assess test coverage gaps for file or symbol"
+    )]
+    TestGaps(TestGapsArgs),
+    #[command(about = "Prioritized refactoring recommendations")]
+    Suggest(SuggestArgs),
+    #[command(about = "Show public API boundary for a file")]
+    Boundary(BoundaryArgs),
+    #[command(
+        name = "extract-check",
+        about = "Pre-flight analysis for extracting a code range"
+    )]
+    ExtractCheck(ExtractCheckArgs),
+    #[command(name = "move-check", about = "Pre-flight analysis for moving a symbol")]
+    MoveCheck(MoveCheckArgs),
+    #[command(name = "rename-check", about = "Preview impacts of renaming a symbol")]
+    RenameCheck(RenameCheckArgs),
+    #[command(
+        name = "split-check",
+        about = "Pre-flight analysis for splitting a file"
+    )]
+    SplitCheck(SplitCheckArgs),
+    #[command(
+        name = "test-scaffold",
+        about = "Structured test setup guidance for a symbol"
+    )]
+    TestScaffold(TestScaffoldArgs),
+    #[command(
+        name = "safe-steps",
+        about = "Generate safe incremental refactoring steps"
+    )]
+    SafeSteps(SafeStepsArgs),
+    #[command(
+        name = "verify-refactor",
+        about = "Verify refactor completeness between snapshots"
+    )]
+    VerifyRefactor(VerifyRefactorArgs),
 }
 
 #[derive(Debug, Args)]
@@ -72,6 +116,10 @@ pub struct HealthArgs {
     pub large_files: bool,
     #[arg(long, default_value_t = false)]
     pub large_functions: bool,
+    #[arg(long = "save-baseline", default_value_t = false)]
+    pub save_baseline: bool,
+    #[arg(long, default_value_t = false)]
+    pub diff: bool,
     #[arg(long)]
     pub json: bool,
 }
@@ -334,4 +382,167 @@ pub struct CallPathArgs {
     pub json: bool,
     #[arg(long, default_value_t = 10)]
     pub max_depth: u32,
+}
+
+#[derive(Debug, Args)]
+pub struct AnatomyArgs {
+    pub file: String,
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long, default_value_t = false)]
+    pub clusters: bool,
+    #[arg(long, default_value_t = false)]
+    pub cohesion: bool,
+    #[arg(long = "suggest-split", default_value_t = false)]
+    pub suggest_split: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct CouplingArgs {
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long, default_value_t = 20)]
+    pub limit: u32,
+}
+
+#[derive(Debug, Args)]
+pub struct DeadArgs {
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+    #[command(flatten)]
+    pub filters: SymbolFilterArgs,
+}
+
+#[derive(Debug, Args)]
+pub struct TestGapsArgs {
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+    pub target: String,
+    #[arg(long = "min-risk")]
+    pub min_risk: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct SuggestArgs {
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long, default_value_t = 10)]
+    pub top: u32,
+    #[arg(long, default_value_t = false)]
+    pub safe_only: bool,
+    #[arg(long = "min-score")]
+    pub min_score: Option<f64>,
+}
+
+#[derive(Debug, Args)]
+pub struct BoundaryArgs {
+    pub file: String,
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long = "public-only", default_value_t = false)]
+    pub public_only: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct ExtractCheckArgs {
+    pub symbol: String,
+    #[arg(long)]
+    pub lines: String,
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct MoveCheckArgs {
+    pub symbol: String,
+    #[arg(long)]
+    pub to: String,
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct RenameCheckArgs {
+    pub symbol: String,
+    #[arg(long)]
+    pub to: String,
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct SplitCheckArgs {
+    pub file: String,
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long, default_value_t = false)]
+    pub auto: bool,
+    #[arg(long)]
+    pub groups: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct TestScaffoldArgs {
+    pub symbol: String,
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Clone, ValueEnum)]
+pub enum SafeStepsAction {
+    Extract,
+    Move,
+    Rename,
+    Split,
+}
+
+#[derive(Debug, Args)]
+pub struct SafeStepsArgs {
+    pub symbol: String,
+    #[arg(long, value_enum)]
+    pub action: SafeStepsAction,
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long)]
+    pub lines: Option<String>,
+    #[arg(long)]
+    pub to: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct VerifyRefactorArgs {
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long)]
+    pub before: String,
+    #[arg(long)]
+    pub after: Option<String>,
+    #[arg(long, default_value_t = false)]
+    pub strict: bool,
 }

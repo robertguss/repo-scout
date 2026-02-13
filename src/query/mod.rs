@@ -1,5 +1,7 @@
 pub mod diagnostics;
 pub mod orientation;
+pub mod planning;
+pub mod verification;
 
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::fs;
@@ -1041,10 +1043,7 @@ pub fn find_matches_scoped(
     ranked_text_matches(&connection, symbol, scope)
 }
 
-pub fn suggest_similar_symbols(
-    db_path: &Path,
-    symbol: &str,
-) -> anyhow::Result<Vec<String>> {
+pub fn suggest_similar_symbols(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<String>> {
     let connection = Connection::open(db_path)?;
     let pattern = format!("%{symbol}%");
     let mut stmt = connection.prepare(
@@ -1053,8 +1052,7 @@ pub fn suggest_similar_symbols(
          ORDER BY LENGTH(symbol) ASC
          LIMIT 5",
     )?;
-    let rows = stmt
-        .query_map(params![pattern], |row| row.get::<_, String>(0))?;
+    let rows = stmt.query_map(params![pattern], |row| row.get::<_, String>(0))?;
     Ok(rows.filter_map(|r| r.ok()).collect())
 }
 
@@ -2312,10 +2310,7 @@ fn test_targets_for_symbol_inner(
     if !use_sub_tokens {
         return Ok(targets);
     }
-    let sub_tokens: Vec<&str> = symbol
-        .split('_')
-        .filter(|t| t.len() >= 3)
-        .collect();
+    let sub_tokens: Vec<&str> = symbol.split('_').filter(|t| t.len() >= 3).collect();
     if !sub_tokens.is_empty() {
         for token in &sub_tokens {
             let mut sub_stmt = connection.prepare(
@@ -2599,31 +2594,18 @@ pub struct StatusSummary {
 
 pub fn status_summary(db_path: &Path) -> anyhow::Result<StatusSummary> {
     let connection = Connection::open(db_path)?;
-    let source_files: i64 = connection.query_row(
-        "SELECT COUNT(*) FROM indexed_files",
-        [],
-        |row| row.get(0),
-    )?;
-    let definitions: i64 = connection.query_row(
-        "SELECT COUNT(*) FROM symbols_v2",
-        [],
-        |row| row.get(0),
-    )?;
-    let references: i64 = connection.query_row(
-        "SELECT COUNT(*) FROM ast_references",
-        [],
-        |row| row.get(0),
-    )?;
-    let text_occurrences: i64 = connection.query_row(
-        "SELECT COUNT(*) FROM text_occurrences",
-        [],
-        |row| row.get(0),
-    )?;
-    let edges: i64 = connection.query_row(
-        "SELECT COUNT(*) FROM symbol_edges_v2",
-        [],
-        |row| row.get(0),
-    )?;
+    let source_files: i64 =
+        connection.query_row("SELECT COUNT(*) FROM indexed_files", [], |row| row.get(0))?;
+    let definitions: i64 =
+        connection.query_row("SELECT COUNT(*) FROM symbols_v2", [], |row| row.get(0))?;
+    let references: i64 =
+        connection.query_row("SELECT COUNT(*) FROM ast_references", [], |row| row.get(0))?;
+    let text_occurrences: i64 =
+        connection.query_row("SELECT COUNT(*) FROM text_occurrences", [], |row| {
+            row.get(0)
+        })?;
+    let edges: i64 =
+        connection.query_row("SELECT COUNT(*) FROM symbol_edges_v2", [], |row| row.get(0))?;
     let mut lang_stmt = connection.prepare(
         "SELECT language, COUNT(DISTINCT file_path) FROM symbols_v2 \
          GROUP BY language ORDER BY language",
@@ -2885,10 +2867,7 @@ pub struct RelatedSymbol {
     pub relationship: String,
 }
 
-pub fn related_symbols(
-    db_path: &Path,
-    symbol: &str,
-) -> anyhow::Result<Vec<RelatedSymbol>> {
+pub fn related_symbols(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<RelatedSymbol>> {
     let connection = Connection::open(db_path)?;
     let mut results: Vec<RelatedSymbol> = Vec::new();
     let mut seen = HashSet::new();
@@ -2900,9 +2879,7 @@ pub fn related_symbols(
          ORDER BY file_path, symbol_id LIMIT 1",
     )?;
     let sym_info: Option<(i64, String)> = sym_stmt
-        .query_map(params![symbol], |row| {
-            Ok((row.get(0)?, row.get(1)?))
-        })?
+        .query_map(params![symbol], |row| Ok((row.get(0)?, row.get(1)?)))?
         .filter_map(|r| r.ok())
         .next();
 
@@ -2989,9 +2966,7 @@ pub fn find_call_path(
          ORDER BY file_path, symbol_id LIMIT 1",
     )?;
     let from_id: Option<(i64, String)> = from_stmt
-        .query_map(params![from], |row| {
-            Ok((row.get(0)?, row.get(1)?))
-        })?
+        .query_map(params![from], |row| Ok((row.get(0)?, row.get(1)?)))?
         .filter_map(|r| r.ok())
         .next();
 
@@ -3021,9 +2996,7 @@ pub fn find_call_path(
              ORDER BY s.symbol, s.file_path",
         )?;
         let neighbors: Vec<(i64, String)> = edge_stmt
-            .query_map(params![current_id], |row| {
-                Ok((row.get(0)?, row.get(1)?))
-            })?
+            .query_map(params![current_id], |row| Ok((row.get(0)?, row.get(1)?)))?
             .filter_map(|r| r.ok())
             .collect();
 
@@ -3031,10 +3004,7 @@ pub fn find_call_path(
             if visited.contains_key(&neighbor_id) {
                 continue;
             }
-            visited.insert(
-                neighbor_id,
-                (current_id, neighbor_name.clone()),
-            );
+            visited.insert(neighbor_id, (current_id, neighbor_name.clone()));
             if neighbor_name == to {
                 found_id = Some(neighbor_id);
                 break;

@@ -25,7 +25,9 @@ fn setup_health_repo(repo_path: &std::path::Path) {
     // Medium file with a big function
     let medium_content = format!(
         "fn short() {{}}\n\nfn big_function() {{\n{}\n}}\n",
-        (0..50).map(|i| format!("    let x{i} = {i};\n")).collect::<String>()
+        (0..50)
+            .map(|i| format!("    let x{i} = {i};\n"))
+            .collect::<String>()
     );
     common::write_file(repo_path, "src/medium.rs", &medium_content);
 }
@@ -37,8 +39,14 @@ fn milestone92_health_shows_largest_files() {
     run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
 
     let output = run_stdout(&["health", "--repo", repo.path().to_str().unwrap()]);
-    assert!(output.contains("LARGEST FILES"), "health output should contain LARGEST FILES section");
-    assert!(output.contains("src/large.rs"), "health output should list the largest file");
+    assert!(
+        output.contains("LARGEST FILES"),
+        "health output should contain LARGEST FILES section"
+    );
+    assert!(
+        output.contains("src/large.rs"),
+        "health output should list the largest file"
+    );
 }
 
 #[test]
@@ -113,7 +121,10 @@ fn milestone92_health_large_files_filter() {
         repo.path().to_str().unwrap(),
         "--large-files",
     ]);
-    assert!(output.contains("LARGEST FILES"), "should show files section");
+    assert!(
+        output.contains("LARGEST FILES"),
+        "should show files section"
+    );
     assert!(
         !output.contains("LARGEST FUNCTIONS"),
         "--large-files should hide functions section"
@@ -148,12 +159,7 @@ fn milestone92_health_json_output() {
     setup_health_repo(repo.path());
     run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
 
-    let json = run_json(&[
-        "health",
-        "--repo",
-        repo.path().to_str().unwrap(),
-        "--json",
-    ]);
+    let json = run_json(&["health", "--repo", repo.path().to_str().unwrap(), "--json"]);
     assert_eq!(json["command"], "health");
     assert!(json["schema_version"].is_number());
     assert!(json["largest_files"].is_array());

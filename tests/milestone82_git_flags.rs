@@ -136,7 +136,9 @@ fn verify_plan_unstaged_detects_modified_files() {
         repo.path().to_str().unwrap(),
     ]);
     assert!(
-        output.contains("changed_files:") || output.contains("src/lib.rs") || output.contains("0 targeted"),
+        output.contains("changed_files:")
+            || output.contains("src/lib.rs")
+            || output.contains("0 targeted"),
         "verify-plan --unstaged should detect or report changed file:\n{output}"
     );
 }

@@ -12,7 +12,11 @@ fn explain_include_snippets_terminal_shows_snippet() {
     );
     let _index_out = common::run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
     let terminal_out = common::run_stdout(&[
-        "explain", "greet", "--repo", repo.path().to_str().unwrap(), "--include-snippets",
+        "explain",
+        "greet",
+        "--repo",
+        repo.path().to_str().unwrap(),
+        "--include-snippets",
     ]);
     assert!(
         terminal_out.contains("snippet:"),
@@ -35,13 +39,24 @@ fn explain_include_snippets_terminal_matches_json_snippet() {
     let _index_out = common::run_stdout(&["index", "--repo", repo.path().to_str().unwrap()]);
 
     let terminal_out = common::run_stdout(&[
-        "explain", "add", "--repo", repo.path().to_str().unwrap(), "--include-snippets",
+        "explain",
+        "add",
+        "--repo",
+        repo.path().to_str().unwrap(),
+        "--include-snippets",
     ]);
     let json_out = common::run_stdout(&[
-        "explain", "add", "--repo", repo.path().to_str().unwrap(), "--include-snippets", "--json",
+        "explain",
+        "add",
+        "--repo",
+        repo.path().to_str().unwrap(),
+        "--include-snippets",
+        "--json",
     ]);
     let payload: Value = serde_json::from_str(&json_out).expect("valid json");
-    let json_snippet = payload["results"][0]["snippet"].as_str().expect("snippet in json");
+    let json_snippet = payload["results"][0]["snippet"]
+        .as_str()
+        .expect("snippet in json");
 
     // Terminal should contain the same snippet content
     assert!(

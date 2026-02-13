@@ -5,19 +5,21 @@ mod output;
 mod query;
 mod store;
 
+use std::fs;
+
 use clap::Parser;
+use rusqlite::Connection;
 
 use crate::cli::{Cli, Command};
 use crate::indexer::index_repository;
 use crate::query::{
     ChangedLineRange, DiffImpactChangedMode, DiffImpactImportMode, DiffImpactOptions,
     DiffImpactTestMode, ExplainMatch, ImpactMatch, QueryPathMode, QueryScope, QueryTestMode,
-    VerifyPlanOptions, context_matches, context_matches_scoped, diff_impact_for_changed_files,
-    explain_symbol, find_matches_scoped, impact_matches, callees_of, callers_of, file_deps,
-    find_call_path, hotspots, outline_file, refs_matches_scoped, related_symbols,
-    repo_entry_points, snippet_for_symbol,
-    status_summary, suggest_similar_symbols, tests_for_symbol,
-    verify_plan_for_changed_files,
+    VerifyPlanOptions, callees_of, callers_of, context_matches, context_matches_scoped,
+    diff_impact_for_changed_files, explain_symbol, file_deps, find_call_path, find_matches_scoped,
+    hotspots, impact_matches, outline_file, refs_matches_scoped, related_symbols,
+    repo_entry_points, snippet_for_symbol, status_summary, suggest_similar_symbols,
+    tests_for_symbol, verify_plan_for_changed_files,
 };
 use crate::store::ensure_store;
 
@@ -80,6 +82,19 @@ fn run() -> anyhow::Result<()> {
         Command::Circular(args) => run_circular(args),
         Command::Tree(args) => run_tree(args),
         Command::Orient(args) => run_orient(args),
+        Command::Anatomy(args) => run_anatomy(args),
+        Command::Coupling(args) => run_coupling(args),
+        Command::Dead(args) => run_dead(args),
+        Command::TestGaps(args) => run_test_gaps(args),
+        Command::Suggest(args) => run_suggest(args),
+        Command::Boundary(args) => run_boundary(args),
+        Command::ExtractCheck(args) => run_extract_check(args),
+        Command::MoveCheck(args) => run_move_check(args),
+        Command::RenameCheck(args) => run_rename_check(args),
+        Command::SplitCheck(args) => run_split_check(args),
+        Command::TestScaffold(args) => run_test_scaffold(args),
+        Command::SafeSteps(args) => run_safe_steps(args),
+        Command::VerifyRefactor(args) => run_verify_refactor(args),
     }
 }
 
@@ -124,8 +139,7 @@ fn run_find(args: crate::cli::FindArgs) -> anyhow::Result<()> {
     } else {
         output::print_query("find", &symbol_query.lookup_symbol, &matches);
         if matches.is_empty() {
-            let suggestions =
-                suggest_similar_symbols(&store.db_path, &symbol_query.lookup_symbol)?;
+            let suggestions = suggest_similar_symbols(&store.db_path, &symbol_query.lookup_symbol)?;
             if !suggestions.is_empty() {
                 output::print_did_you_mean(&suggestions);
             }
@@ -340,9 +354,7 @@ fn run_verify_plan(args: crate::cli::VerifyPlanArgs) -> anyhow::Result<()> {
         changed_files.extend(unstaged);
     }
     if changed_files.is_empty() {
-        anyhow::bail!(
-            "no changed files: provide --changed-file, --since, or --unstaged"
-        );
+        anyhow::bail!("no changed files: provide --changed-file, --since, or --unstaged");
     }
     changed_files.sort();
     changed_files.dedup();
@@ -397,9 +409,7 @@ fn run_diff_impact(args: crate::cli::DiffImpactArgs) -> anyhow::Result<()> {
         changed_files.extend(unstaged);
     }
     if changed_files.is_empty() {
-        anyhow::bail!(
-            "no changed files: provide --changed-file, --since, or --unstaged"
-        );
+        anyhow::bail!("no changed files: provide --changed-file, --since, or --unstaged");
     }
     changed_files.sort();
     changed_files.dedup();
@@ -549,11 +559,7 @@ fn run_explain(args: crate::cli::ExplainArgs) -> anyhow::Result<()> {
     )?;
     filter_explain_matches(&mut matches, &args.filters);
     if args.json {
-        output::print_explain_json(
-            &symbol_query.lookup_symbol,
-            args.include_snippets,
-            &matches,
-        )?;
+        output::print_explain_json(&symbol_query.lookup_symbol, args.include_snippets, &matches)?;
     } else if args.compact {
         output::print_explain_compact(&matches);
     } else {
@@ -597,12 +603,7 @@ fn run_hotspots(args: crate::cli::HotspotsArgs) -> anyhow::Result<()> {
 
 fn run_call_path(args: crate::cli::CallPathArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
-    let path = find_call_path(
-        &store.db_path,
-        &args.from,
-        &args.to,
-        args.max_depth,
-    )?;
+    let path = find_call_path(&store.db_path, &args.from, &args.to, args.max_depth)?;
     if args.json {
         output::print_call_path_json(&args.from, &args.to, &path)?;
     } else {
@@ -748,10 +749,7 @@ fn filter_related_symbols(
     matches.retain(|item| path_passes_filters(&item.file_path, filters));
 }
 
-fn filter_explain_matches(
-    matches: &mut Vec<ExplainMatch>,
-    filters: &crate::cli::SymbolFilterArgs,
-) {
+fn filter_explain_matches(matches: &mut Vec<ExplainMatch>, filters: &crate::cli::SymbolFilterArgs) {
     matches.retain(|item| {
         if !path_passes_filters(&item.file_path, filters) {
             return false;
@@ -768,9 +766,11 @@ fn path_passes_filters(path: &str, filters: &crate::cli::SymbolFilterArgs) -> bo
     if !include_path_by_scope(&normalized_path, filters.scope) {
         return false;
     }
-    if filters.exclude_globs.iter().any(|glob| {
-        path_matches_glob(&normalized_path, &normalize_path(glob))
-    }) {
+    if filters
+        .exclude_globs
+        .iter()
+        .any(|glob| path_matches_glob(&normalized_path, &normalize_path(glob)))
+    {
         return false;
     }
     if let Some(file_filter) = filters.file.as_deref() {
@@ -879,9 +879,10 @@ fn apply_impact_ranking_preferences(matches: &mut [ImpactMatch], include_fixture
             .score
             .partial_cmp(&left.score)
             .unwrap_or(std::cmp::Ordering::Equal)
-            .then(path_priority_rank(&left.file_path, include_fixtures).cmp(
-                &path_priority_rank(&right.file_path, include_fixtures),
-            ))
+            .then(
+                path_priority_rank(&left.file_path, include_fixtures)
+                    .cmp(&path_priority_rank(&right.file_path, include_fixtures)),
+            )
             .then(left.file_path.cmp(&right.file_path))
             .then(left.line.cmp(&right.line))
             .then(left.column.cmp(&right.column))
@@ -1055,6 +1056,29 @@ fn run_health(args: crate::cli::HealthArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
     let report =
         crate::query::diagnostics::health_report(&store.db_path, args.top, args.threshold)?;
+
+    let baseline_path = args.repo.join(".repo-scout").join("health-baseline.json");
+    if args.save_baseline {
+        if let Some(parent) = baseline_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let serialized = serde_json::to_string_pretty(&report)?;
+        fs::write(&baseline_path, serialized)?;
+    }
+    if args.diff {
+        if baseline_path.exists() {
+            let raw = fs::read_to_string(&baseline_path)?;
+            let baseline: crate::query::diagnostics::HealthReport = serde_json::from_str(&raw)?;
+            print_health_diff(&baseline, &report);
+        } else {
+            println!(
+                "Health comparison: no baseline found at {}",
+                baseline_path.display()
+            );
+        }
+        return Ok(());
+    }
+
     if args.json {
         output::print_health_json(&report)?;
     } else {
@@ -1109,6 +1133,357 @@ fn run_circular(args: crate::cli::CircularArgs) -> anyhow::Result<()> {
         output::print_circular(&report);
     }
     Ok(())
+}
+
+fn run_anatomy(_args: crate::cli::AnatomyArgs) -> anyhow::Result<()> {
+    let args = _args;
+    let store = ensure_store(&args.repo)?;
+    let report = crate::query::diagnostics::file_anatomy(&store.db_path, &args.file)?;
+    if args.json {
+        output::print_anatomy_json(&report)?;
+    } else {
+        output::print_anatomy(&report);
+    }
+    Ok(())
+}
+
+fn run_coupling(_args: crate::cli::CouplingArgs) -> anyhow::Result<()> {
+    let args = _args;
+    let store = ensure_store(&args.repo)?;
+    let entries = crate::query::diagnostics::coupling_report(&store.db_path, args.limit)?;
+    if args.json {
+        output::print_coupling_json(&entries)?;
+    } else {
+        output::print_coupling(&entries);
+    }
+    Ok(())
+}
+
+fn run_dead(_args: crate::cli::DeadArgs) -> anyhow::Result<()> {
+    let args = _args;
+    let store = ensure_store(&args.repo)?;
+    let mut entries = crate::query::diagnostics::dead_symbols(&store.db_path)?;
+    entries.retain(|entry| path_passes_filters(&entry.file_path, &args.filters));
+    if args.json {
+        output::print_dead_json(&entries)?;
+    } else {
+        output::print_dead(&entries);
+    }
+    Ok(())
+}
+
+fn run_test_gaps(_args: crate::cli::TestGapsArgs) -> anyhow::Result<()> {
+    let args = _args;
+    let store = ensure_store(&args.repo)?;
+    let mut report = crate::query::diagnostics::test_gap_analysis(&store.db_path, &args.target)?;
+    if let Some(min_risk) = args.min_risk {
+        report.uncovered.retain(|entry| entry.risk >= min_risk);
+    }
+    if args.json {
+        output::print_test_gaps_json(&report)?;
+    } else {
+        output::print_test_gaps(&report);
+    }
+    Ok(())
+}
+
+fn run_suggest(_args: crate::cli::SuggestArgs) -> anyhow::Result<()> {
+    let args = _args;
+    let store = ensure_store(&args.repo)?;
+    let suggestions = crate::query::diagnostics::suggest_refactorings(
+        &store.db_path,
+        args.top,
+        args.safe_only,
+        args.min_score,
+    )?;
+    if args.json {
+        output::print_suggest_json(&suggestions)?;
+    } else {
+        output::print_suggest(&suggestions);
+    }
+    Ok(())
+}
+
+fn run_boundary(_args: crate::cli::BoundaryArgs) -> anyhow::Result<()> {
+    let args = _args;
+    let store = ensure_store(&args.repo)?;
+    let report = crate::query::planning::boundary_analysis(&store.db_path, &args.file)?;
+    if args.json {
+        output::print_boundary_json(&report)?;
+    } else {
+        output::print_boundary(&report, args.public_only);
+    }
+    Ok(())
+}
+
+fn run_extract_check(_args: crate::cli::ExtractCheckArgs) -> anyhow::Result<()> {
+    let args = _args;
+    let store = ensure_store(&args.repo)?;
+    let range = crate::query::planning::parse_line_range(&args.lines)?;
+    let report = crate::query::planning::extract_check(&store.db_path, &args.symbol, range)?;
+    if args.json {
+        let payload = serde_json::json!({
+            "schema_version": output::JSON_SCHEMA_VERSION_V2,
+            "command": "extract-check",
+            "symbol": report.symbol,
+            "file_path": report.file_path,
+            "function_start_line": report.function_start_line,
+            "function_end_line": report.function_end_line,
+            "extract_start_line": report.extract_start_line,
+            "extract_end_line": report.extract_end_line,
+            "estimated_line_count": report.estimated_line_count,
+            "signature": report.signature,
+            "warnings": report.warnings,
+        });
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+    } else {
+        println!(
+            "Extract analysis for {} lines {}-{}:",
+            report.symbol, report.extract_start_line, report.extract_end_line
+        );
+        println!("  File: {}", report.file_path);
+        println!(
+            "  Function bounds: {}-{}",
+            report.function_start_line, report.function_end_line
+        );
+        println!(
+            "  Estimated extracted size: {} lines",
+            report.estimated_line_count
+        );
+        if !report.warnings.is_empty() {
+            println!("  Warnings:");
+            for warning in report.warnings {
+                println!("    - {warning}");
+            }
+        }
+    }
+    Ok(())
+}
+
+fn run_move_check(_args: crate::cli::MoveCheckArgs) -> anyhow::Result<()> {
+    let args = _args;
+    let store = ensure_store(&args.repo)?;
+    let refs = refs_matches_scoped(&store.db_path, &args.symbol, &QueryScope::default())?;
+    let impact = impact_matches(&store.db_path, &args.symbol)?;
+    let tests = tests_for_symbol(&store.db_path, &args.symbol, false)?;
+    if args.json {
+        let payload = serde_json::json!({
+            "schema_version": output::JSON_SCHEMA_VERSION_V2,
+            "command": "move-check",
+            "symbol": args.symbol,
+            "destination": args.to,
+            "reference_count": refs.len(),
+            "impact_count": impact.len(),
+            "test_count": tests.len(),
+        });
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+    } else {
+        println!("Move check for {} -> {}", args.symbol, args.to);
+        println!("  references to update: {}", refs.len());
+        println!("  impacted dependents: {}", impact.len());
+        println!("  associated tests: {}", tests.len());
+    }
+    Ok(())
+}
+
+fn run_rename_check(_args: crate::cli::RenameCheckArgs) -> anyhow::Result<()> {
+    let args = _args;
+    let store = ensure_store(&args.repo)?;
+    let refs = refs_matches_scoped(&store.db_path, &args.symbol, &QueryScope::default())?;
+    let connection = Connection::open(&store.db_path)?;
+    let text_hits: u32 = connection.query_row(
+        "SELECT COUNT(*) FROM text_occurrences WHERE symbol = ?1",
+        [args.symbol.as_str()],
+        |row| row.get(0),
+    )?;
+    if args.json {
+        let payload = serde_json::json!({
+            "schema_version": output::JSON_SCHEMA_VERSION_V2,
+            "command": "rename-check",
+            "symbol": args.symbol,
+            "new_name": args.to,
+            "ast_reference_count": refs.len(),
+            "text_occurrence_count": text_hits,
+        });
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+    } else {
+        println!("Rename check for {} -> {}", args.symbol, args.to);
+        println!("  AST references: {}", refs.len());
+        println!("  text occurrences: {text_hits}");
+    }
+    Ok(())
+}
+
+fn run_split_check(_args: crate::cli::SplitCheckArgs) -> anyhow::Result<()> {
+    let args = _args;
+    let store = ensure_store(&args.repo)?;
+    let anatomy = crate::query::diagnostics::file_anatomy(&store.db_path, &args.file)?;
+    let mode = if args.auto {
+        "auto"
+    } else if args.groups.is_some() {
+        "manual"
+    } else {
+        "none"
+    };
+    if args.json {
+        let payload = serde_json::json!({
+            "schema_version": output::JSON_SCHEMA_VERSION_V2,
+            "command": "split-check",
+            "file": args.file,
+            "mode": mode,
+            "symbol_count": anatomy.total_symbols,
+            "function_count": anatomy.function_count,
+        });
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+    } else {
+        println!("Split check for {} ({mode})", args.file);
+        println!("  symbols: {}", anatomy.total_symbols);
+        println!("  functions: {}", anatomy.function_count);
+    }
+    Ok(())
+}
+
+fn run_test_scaffold(_args: crate::cli::TestScaffoldArgs) -> anyhow::Result<()> {
+    let args = _args;
+    let store = ensure_store(&args.repo)?;
+    let explain = explain_symbol(&store.db_path, &args.symbol, false)?;
+    let tests = tests_for_symbol(&store.db_path, &args.symbol, true)?;
+    let signature = explain
+        .first()
+        .and_then(|entry| entry.signature.clone())
+        .unwrap_or_else(|| "<unknown>".to_string());
+    if args.json {
+        let payload = serde_json::json!({
+            "schema_version": output::JSON_SCHEMA_VERSION_V2,
+            "command": "test-scaffold",
+            "symbol": args.symbol,
+            "signature": signature,
+            "existing_tests": tests,
+        });
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+    } else {
+        println!("Test scaffold for {}:", args.symbol);
+        println!("  signature: {signature}");
+        println!("  existing tests: {}", tests.len());
+    }
+    Ok(())
+}
+
+fn run_safe_steps(_args: crate::cli::SafeStepsArgs) -> anyhow::Result<()> {
+    let args = _args;
+    let action = match args.action {
+        crate::cli::SafeStepsAction::Extract => "extract",
+        crate::cli::SafeStepsAction::Move => "move",
+        crate::cli::SafeStepsAction::Rename => "rename",
+        crate::cli::SafeStepsAction::Split => "split",
+    };
+    let steps = vec![
+        format!("Step 1: Stage the {action} change for {}", args.symbol),
+        "Step 2: Run targeted checks".to_string(),
+        "Step 3: Run full test suite".to_string(),
+    ];
+    if args.json {
+        let payload = serde_json::json!({
+            "schema_version": output::JSON_SCHEMA_VERSION_V2,
+            "command": "safe-steps",
+            "symbol": args.symbol,
+            "action": action,
+            "steps": steps,
+        });
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+    } else {
+        println!("Safe refactoring steps for {} ({action}):", args.symbol);
+        for step in steps {
+            println!("  {step}");
+        }
+    }
+    Ok(())
+}
+
+fn run_verify_refactor(_args: crate::cli::VerifyRefactorArgs) -> anyhow::Result<()> {
+    let args = _args;
+    let report = crate::query::verification::verify_refactor_report(
+        &args.repo,
+        &args.before,
+        args.after.as_deref(),
+    )?;
+    if args.strict && (!report.warnings.is_empty() || !report.changed_files.is_empty()) {
+        anyhow::bail!(
+            "verify-refactor strict mode failed: {}",
+            if !report.warnings.is_empty() {
+                report.warnings.join("; ")
+            } else {
+                format!("{} changed file(s) detected", report.changed_files.len())
+            }
+        );
+    }
+    if args.json {
+        let payload = serde_json::json!({
+            "schema_version": output::JSON_SCHEMA_VERSION_V2,
+            "command": "verify-refactor",
+            "before": report.before,
+            "after": report.after,
+            "changed_files": report.changed_files,
+            "warnings": report.warnings,
+        });
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+    } else {
+        println!(
+            "Refactoring verification ({} -> {}):",
+            report.before, report.after
+        );
+        println!("  Changed files: {}", report.changed_files.len());
+        if !report.changed_files.is_empty() {
+            for file in &report.changed_files {
+                println!("    - {file}");
+            }
+        }
+        if !report.warnings.is_empty() {
+            println!("  Warnings:");
+            for warning in report.warnings {
+                println!("    - {warning}");
+            }
+        } else if report.changed_files.is_empty() {
+            println!("  No discrepancies detected.");
+        }
+    }
+    Ok(())
+}
+
+fn print_health_diff(
+    baseline: &crate::query::diagnostics::HealthReport,
+    current: &crate::query::diagnostics::HealthReport,
+) {
+    let baseline_file = baseline.largest_files.first().map(|entry| entry.line_count);
+    let current_file = current.largest_files.first().map(|entry| entry.line_count);
+    let baseline_fn = baseline
+        .largest_functions
+        .first()
+        .map(|entry| entry.line_count);
+    let current_fn = current
+        .largest_functions
+        .first()
+        .map(|entry| entry.line_count);
+
+    println!("Health comparison:");
+    println!(
+        "  Largest file line count: {} -> {}",
+        baseline_file
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "?".to_string()),
+        current_file
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "?".to_string())
+    );
+    println!(
+        "  Largest function line count: {} -> {}",
+        baseline_fn
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "?".to_string()),
+        current_fn
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "?".to_string())
+    );
 }
 
 /// Normalize a changed-file path into a repository-relative, forward-slash string.
@@ -1637,7 +2012,10 @@ fn integration_check() {
         include_fixture_rows[2].score = 0.90;
         include_fixture_rows[2].file_path = "src/lib.rs".into();
         apply_impact_ranking_preferences(&mut include_fixture_rows, true);
-        assert_eq!(include_fixture_rows[0].file_path, "tests/fixtures/sample.rs");
+        assert_eq!(
+            include_fixture_rows[0].file_path,
+            "tests/fixtures/sample.rs"
+        );
     }
 
     #[test]

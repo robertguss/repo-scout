@@ -51,15 +51,12 @@ fn milestone91_tree_shows_structure() {
     let repo = setup_tree_repo();
     let output = common::run_stdout(&["tree", "--repo", repo.path().to_str().unwrap()]);
     // Should show directory structure
-    assert!(output.contains("src/") || output.contains("src"), "should show src dir:\n{output}");
     assert!(
-        output.contains("main.rs"),
-        "should show main.rs:\n{output}"
+        output.contains("src/") || output.contains("src"),
+        "should show src dir:\n{output}"
     );
-    assert!(
-        output.contains("lib.rs"),
-        "should show lib.rs:\n{output}"
-    );
+    assert!(output.contains("main.rs"), "should show main.rs:\n{output}");
+    assert!(output.contains("lib.rs"), "should show lib.rs:\n{output}");
 }
 
 #[test]
@@ -81,12 +78,8 @@ fn milestone91_tree_depth_limits_output() {
 #[test]
 fn milestone91_tree_no_deps_hides_arrows() {
     let repo = setup_tree_repo();
-    let output = common::run_stdout(&[
-        "tree",
-        "--no-deps",
-        "--repo",
-        repo.path().to_str().unwrap(),
-    ]);
+    let output =
+        common::run_stdout(&["tree", "--no-deps", "--repo", repo.path().to_str().unwrap()]);
     // Should not contain dependency arrows
     assert!(
         !output.contains("→ imports:") && !output.contains("← used by:"),
@@ -114,12 +107,8 @@ fn milestone91_tree_focus_filters() {
 #[test]
 fn milestone91_tree_symbols_expands() {
     let repo = setup_tree_repo();
-    let output = common::run_stdout(&[
-        "tree",
-        "--symbols",
-        "--repo",
-        repo.path().to_str().unwrap(),
-    ]);
+    let output =
+        common::run_stdout(&["tree", "--symbols", "--repo", repo.path().to_str().unwrap()]);
     // Should show individual symbols
     assert!(
         output.contains("greet") || output.contains("main") || output.contains("assist"),
@@ -130,12 +119,7 @@ fn milestone91_tree_symbols_expands() {
 #[test]
 fn milestone91_tree_json_output() {
     let repo = setup_tree_repo();
-    let output = common::run_stdout(&[
-        "tree",
-        "--json",
-        "--repo",
-        repo.path().to_str().unwrap(),
-    ]);
+    let output = common::run_stdout(&["tree", "--json", "--repo", repo.path().to_str().unwrap()]);
     let json: Value = serde_json::from_str(&output).expect("should be valid JSON");
     assert_eq!(json["command"], "tree");
     assert_eq!(json["schema_version"], 2);
@@ -145,17 +129,7 @@ fn milestone91_tree_json_output() {
 #[test]
 fn milestone91_tree_json_deterministic() {
     let repo = setup_tree_repo();
-    let output1 = common::run_stdout(&[
-        "tree",
-        "--json",
-        "--repo",
-        repo.path().to_str().unwrap(),
-    ]);
-    let output2 = common::run_stdout(&[
-        "tree",
-        "--json",
-        "--repo",
-        repo.path().to_str().unwrap(),
-    ]);
+    let output1 = common::run_stdout(&["tree", "--json", "--repo", repo.path().to_str().unwrap()]);
+    let output2 = common::run_stdout(&["tree", "--json", "--repo", repo.path().to_str().unwrap()]);
     assert_eq!(output1, output2, "tree JSON should be deterministic");
 }

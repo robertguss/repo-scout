@@ -106,17 +106,37 @@ fn milestone90_v3_upgrades_to_v4_with_new_columns() {
         let rows = stmt
             .query_map([], |row| row.get::<_, String>(1))
             .expect("pragma should query");
-        rows.filter_map(|r| r.ok())
-            .any(|col| col == column)
+        rows.filter_map(|r| r.ok()).any(|col| col == column)
     };
 
-    assert!(has_column("indexed_files", "line_count"), "indexed_files should have line_count column");
-    assert!(has_column("symbols_v2", "line_count"), "symbols_v2 should have line_count column");
-    assert!(has_column("symbols_v2", "visibility"), "symbols_v2 should have visibility column");
-    assert!(has_column("symbols_v2", "param_count"), "symbols_v2 should have param_count column");
-    assert!(has_column("symbols_v2", "nesting_depth"), "symbols_v2 should have nesting_depth column");
-    assert!(has_column("symbols_v2", "branch_count"), "symbols_v2 should have branch_count column");
-    assert!(has_column("symbols_v2", "complexity_score"), "symbols_v2 should have complexity_score column");
+    assert!(
+        has_column("indexed_files", "line_count"),
+        "indexed_files should have line_count column"
+    );
+    assert!(
+        has_column("symbols_v2", "line_count"),
+        "symbols_v2 should have line_count column"
+    );
+    assert!(
+        has_column("symbols_v2", "visibility"),
+        "symbols_v2 should have visibility column"
+    );
+    assert!(
+        has_column("symbols_v2", "param_count"),
+        "symbols_v2 should have param_count column"
+    );
+    assert!(
+        has_column("symbols_v2", "nesting_depth"),
+        "symbols_v2 should have nesting_depth column"
+    );
+    assert!(
+        has_column("symbols_v2", "branch_count"),
+        "symbols_v2 should have branch_count column"
+    );
+    assert!(
+        has_column("symbols_v2", "complexity_score"),
+        "symbols_v2 should have complexity_score column"
+    );
 }
 
 #[test]
@@ -157,7 +177,10 @@ fn milestone90_v4_preserves_existing_data() {
             |row| row.get(0),
         )
         .expect("indexed_files query should work");
-    assert_eq!(count, 1, "existing indexed_files rows should survive migration");
+    assert_eq!(
+        count, 1,
+        "existing indexed_files rows should survive migration"
+    );
 
     // Existing symbols_v2 row should survive
     let sym_count: i64 = connection
@@ -167,7 +190,10 @@ fn milestone90_v4_preserves_existing_data() {
             |row| row.get(0),
         )
         .expect("symbols_v2 query should work");
-    assert_eq!(sym_count, 1, "existing symbols_v2 rows should survive migration");
+    assert_eq!(
+        sym_count, 1,
+        "existing symbols_v2 rows should survive migration"
+    );
 
     // line_count should be NULL for pre-existing rows (not yet populated by indexer)
     let line_count: Option<i64> = connection
@@ -177,7 +203,10 @@ fn milestone90_v4_preserves_existing_data() {
             |row| row.get(0),
         )
         .expect("line_count query should work");
-    assert!(line_count.is_none(), "pre-existing indexed_files.line_count should be NULL");
+    assert!(
+        line_count.is_none(),
+        "pre-existing indexed_files.line_count should be NULL"
+    );
 
     let sym_line_count: Option<i64> = connection
         .query_row(
@@ -186,7 +215,10 @@ fn milestone90_v4_preserves_existing_data() {
             |row| row.get(0),
         )
         .expect("symbol line_count query should work");
-    assert!(sym_line_count.is_none(), "pre-existing symbols_v2.line_count should be NULL");
+    assert!(
+        sym_line_count.is_none(),
+        "pre-existing symbols_v2.line_count should be NULL"
+    );
 }
 
 #[test]
@@ -244,7 +276,11 @@ fn milestone90_indexer_populates_symbol_line_count() {
         main_line_count.is_some(),
         "symbols_v2.line_count should be populated for main function"
     );
-    assert_eq!(main_line_count.unwrap(), 3, "main function should span 3 lines (1 to 3)");
+    assert_eq!(
+        main_line_count.unwrap(),
+        3,
+        "main function should span 3 lines (1 to 3)"
+    );
 
     let helper_line_count: Option<i64> = connection
         .query_row(
@@ -257,7 +293,11 @@ fn milestone90_indexer_populates_symbol_line_count() {
         helper_line_count.is_some(),
         "symbols_v2.line_count should be populated for helper function"
     );
-    assert_eq!(helper_line_count.unwrap(), 1, "helper function should span 1 line");
+    assert_eq!(
+        helper_line_count.unwrap(),
+        1,
+        "helper function should span 1 line"
+    );
 }
 
 #[test]
@@ -282,7 +322,10 @@ fn milestone90_reindex_populates_line_counts_for_existing_files() {
             |row| row.get(0),
         )
         .expect("file line_count should query");
-    assert!(file_lc.is_some(), "line_count should be populated on first index");
+    assert!(
+        file_lc.is_some(),
+        "line_count should be populated on first index"
+    );
 
     let sym_lc: Option<i64> = connection
         .query_row(
@@ -291,5 +334,8 @@ fn milestone90_reindex_populates_line_counts_for_existing_files() {
             |row| row.get(0),
         )
         .expect("symbol line_count should query");
-    assert!(sym_lc.is_some(), "symbol line_count should be populated on first index");
+    assert!(
+        sym_lc.is_some(),
+        "symbol line_count should be populated on first index"
+    );
 }
