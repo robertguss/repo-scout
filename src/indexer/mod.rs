@@ -17,7 +17,7 @@ pub mod text;
 #[derive(Debug)]
 pub struct IndexSummary {
     pub indexed_files: usize,
-    pub skipped_files: usize,
+    pub non_source_files: usize,
 }
 
 type DeferredEdge = (
@@ -63,7 +63,7 @@ struct PreparedFileData {
 /// let summary = index_repository(Path::new("path/to/repo"), Path::new("path/to/db.sqlite")).unwrap();
 /// // summary contains counts of processed and skipped files
 /// assert!(summary.indexed_files >= 0);
-/// assert!(summary.skipped_files >= 0);
+/// assert!(summary.non_source_files >= 0);
 /// ```
 pub fn index_repository(repo: &Path, db_path: &Path) -> anyhow::Result<IndexSummary> {
     let mut connection = Connection::open(db_path)?;
@@ -75,13 +75,13 @@ pub fn index_repository(repo: &Path, db_path: &Path) -> anyhow::Result<IndexSumm
     prune_stale_file_rows(&mut connection, &live_paths)?;
     let mut summary = IndexSummary {
         indexed_files: 0,
-        skipped_files: 0,
+        non_source_files: 0,
     };
     let mut deferred_edges = Vec::new();
     for file in source_files {
         match index_file(&mut connection, file, &mut deferred_edges)? {
             FileIndexOutcome::Indexed => summary.indexed_files += 1,
-            FileIndexOutcome::Skipped => summary.skipped_files += 1,
+            FileIndexOutcome::Skipped => summary.non_source_files += 1,
         }
     }
     replay_deferred_edges(&mut connection, deferred_edges)?;

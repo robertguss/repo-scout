@@ -1,4 +1,5 @@
 mod cli;
+mod git_utils;
 mod indexer;
 mod output;
 mod query;
@@ -12,7 +13,10 @@ use crate::query::{
     ChangedLineRange, DiffImpactChangedMode, DiffImpactImportMode, DiffImpactOptions,
     DiffImpactTestMode, QueryScope, VerifyPlanOptions, context_matches, context_matches_scoped,
     diff_impact_for_changed_files, explain_symbol, find_matches_scoped, impact_matches,
-    refs_matches_scoped, tests_for_symbol, verify_plan_for_changed_files,
+    callees_of, callers_of, file_deps, find_call_path, hotspots, outline_file,
+    refs_matches_scoped, related_symbols, repo_entry_points, snippet_for_symbol,
+    status_summary, suggest_similar_symbols, tests_for_symbol,
+    verify_plan_for_changed_files,
 };
 use crate::store::ensure_store;
 
@@ -62,6 +66,15 @@ fn run() -> anyhow::Result<()> {
         Command::VerifyPlan(args) => run_verify_plan(args),
         Command::DiffImpact(args) => run_diff_impact(args),
         Command::Explain(args) => run_explain(args),
+        Command::Snippet(args) => run_snippet(args),
+        Command::Outline(args) => run_outline(args),
+        Command::Summary(args) => run_summary_cmd(args),
+        Command::Callers(args) => run_callers(args),
+        Command::Callees(args) => run_callees(args),
+        Command::Deps(args) => run_deps(args),
+        Command::Hotspots(args) => run_hotspots(args),
+        Command::CallPath(args) => run_call_path(args),
+        Command::Related(args) => run_related(args),
     }
 }
 
@@ -72,14 +85,15 @@ fn run_index(args: crate::cli::RepoArgs) -> anyhow::Result<()> {
         &store.db_path,
         store.schema_version,
         summary.indexed_files,
-        summary.skipped_files,
+        summary.non_source_files,
     );
     Ok(())
 }
 
 fn run_status(args: crate::cli::RepoArgs) -> anyhow::Result<()> {
     let store = ensure_store(&args.repo)?;
-    output::print_status(&store.db_path, store.schema_version);
+    let summary = status_summary(&store.db_path)?;
+    output::print_status(&store.db_path, store.schema_version, &summary);
     Ok(())
 }
 
@@ -92,8 +106,17 @@ fn run_find(args: crate::cli::FindArgs) -> anyhow::Result<()> {
     }
     if args.json {
         output::print_query_json("find", &args.symbol, &matches)?;
+    } else if args.compact {
+        output::print_query_compact(&matches);
     } else {
         output::print_query("find", &args.symbol, &matches);
+        if matches.is_empty() {
+            let suggestions =
+                suggest_similar_symbols(&store.db_path, &args.symbol)?;
+            if !suggestions.is_empty() {
+                output::print_did_you_mean(&suggestions);
+            }
+        }
     }
     Ok(())
 }
@@ -130,8 +153,10 @@ fn run_refs(args: crate::cli::RefsArgs) -> anyhow::Result<()> {
     }
     if args.json {
         output::print_query_json("refs", &args.symbol, &matches)?;
+    } else if args.compact {
+        output::print_query_compact(&matches);
     } else {
-        output::print_query("refs", &args.symbol, &matches);
+        output::print_refs_grouped(&args.symbol, &matches);
     }
     Ok(())
 }
@@ -275,6 +300,19 @@ fn run_verify_plan(args: crate::cli::VerifyPlanArgs) -> anyhow::Result<()> {
         .iter()
         .map(|path| normalize_changed_file(&args.repo, path))
         .collect::<Vec<_>>();
+    if let Some(ref since) = args.since {
+        let git_files = git_utils::changed_files_since(&args.repo, since)?;
+        changed_files.extend(git_files);
+    }
+    if args.unstaged {
+        let unstaged = git_utils::unstaged_files(&args.repo)?;
+        changed_files.extend(unstaged);
+    }
+    if changed_files.is_empty() {
+        anyhow::bail!(
+            "no changed files: provide --changed-file, --since, or --unstaged"
+        );
+    }
     changed_files.sort();
     changed_files.dedup();
 
@@ -319,6 +357,19 @@ fn run_diff_impact(args: crate::cli::DiffImpactArgs) -> anyhow::Result<()> {
         .iter()
         .map(|path| normalize_changed_file(&args.repo, path))
         .collect::<Vec<_>>();
+    if let Some(ref since) = args.since {
+        let git_files = git_utils::changed_files_since(&args.repo, since)?;
+        changed_files.extend(git_files);
+    }
+    if args.unstaged {
+        let unstaged = git_utils::unstaged_files(&args.repo)?;
+        changed_files.extend(unstaged);
+    }
+    if changed_files.is_empty() {
+        anyhow::bail!(
+            "no changed files: provide --changed-file, --since, or --unstaged"
+        );
+    }
     changed_files.sort();
     changed_files.dedup();
 
@@ -362,7 +413,11 @@ fn run_diff_impact(args: crate::cli::DiffImpactArgs) -> anyhow::Result<()> {
         } else {
             DiffImpactChangedMode::IncludeChanged
         },
-        max_results: args.max_results,
+        max_results: if args.no_limit {
+            None
+        } else {
+            Some(args.max_results)
+        },
     };
     let matches = diff_impact_for_changed_files(&store.db_path, &changed_files, &options)?;
     let include_tests = matches!(options.test_mode, DiffImpactTestMode::IncludeTests);
@@ -458,8 +513,111 @@ fn run_explain(args: crate::cli::ExplainArgs) -> anyhow::Result<()> {
     let matches = explain_symbol(&store.db_path, &args.symbol, args.include_snippets)?;
     if args.json {
         output::print_explain_json(&args.symbol, args.include_snippets, &matches)?;
+    } else if args.compact {
+        output::print_explain_compact(&matches);
     } else {
         output::print_explain(&args.symbol, &matches);
+    }
+    Ok(())
+}
+
+fn run_outline(args: crate::cli::OutlineArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let entries = outline_file(&store.db_path, &args.file)?;
+    if args.json {
+        output::print_outline_json(&args.file, &entries)?;
+    } else {
+        output::print_outline(&args.file, &entries);
+    }
+    Ok(())
+}
+
+fn run_deps(args: crate::cli::DepsArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let deps = file_deps(&store.db_path, &args.file)?;
+    if args.json {
+        output::print_deps_json(&args.file, &deps)?;
+    } else {
+        output::print_deps(&args.file, &deps);
+    }
+    Ok(())
+}
+
+fn run_hotspots(args: crate::cli::HotspotsArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let entries = hotspots(&store.db_path, args.limit)?;
+    if args.json {
+        output::print_hotspots_json(&entries)?;
+    } else {
+        output::print_hotspots(&entries);
+    }
+    Ok(())
+}
+
+fn run_call_path(args: crate::cli::CallPathArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let path = find_call_path(
+        &store.db_path,
+        &args.from,
+        &args.to,
+        args.max_depth,
+    )?;
+    if args.json {
+        output::print_call_path_json(&args.from, &args.to, &path)?;
+    } else {
+        output::print_call_path(&args.from, &args.to, &path);
+    }
+    Ok(())
+}
+
+fn run_related(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let results = related_symbols(&store.db_path, &args.symbol)?;
+    if args.json {
+        output::print_related_json(&args.symbol, &results)?;
+    } else {
+        output::print_related(&args.symbol, &results);
+    }
+    Ok(())
+}
+
+fn run_callers(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let matches = callers_of(&store.db_path, &args.symbol)?;
+    if args.json {
+        output::print_edges_json("callers", &args.symbol, &matches)?;
+    } else {
+        output::print_edges("callers", &args.symbol, &matches);
+    }
+    Ok(())
+}
+
+fn run_callees(args: crate::cli::QueryArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let matches = callees_of(&store.db_path, &args.symbol)?;
+    if args.json {
+        output::print_edges_json("callees", &args.symbol, &matches)?;
+    } else {
+        output::print_edges("callees", &args.symbol, &matches);
+    }
+    Ok(())
+}
+
+fn run_summary_cmd(args: crate::cli::RepoArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let summary = status_summary(&store.db_path)?;
+    let entry_points = repo_entry_points(&store.db_path)?;
+    output::print_summary(&summary, &entry_points);
+    Ok(())
+}
+
+fn run_snippet(args: crate::cli::SnippetArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let matches = snippet_for_symbol(&store.db_path, &args.symbol, args.context)?;
+    if args.json {
+        output::print_snippet_json(&args.symbol, &matches)?;
+    } else {
+        output::print_snippet(&args.symbol, &matches);
     }
     Ok(())
 }
@@ -528,12 +686,14 @@ fn normalize_changed_file(repo_root: &std::path::Path, changed_file: &str) -> St
 #[cfg(test)]
 mod tests {
     use super::{
-        normalize_changed_file, parse_changed_line_spec, run_context, run_diff_impact, run_explain,
-        run_find, run_impact, run_index, run_refs, run_status, run_tests_for, run_verify_plan,
+        normalize_changed_file, parse_changed_line_spec, run_call_path, run_callees, run_callers,
+        run_context, run_deps, run_diff_impact, run_explain, run_find, run_hotspots, run_impact,
+        run_index, run_outline, run_refs, run_related, run_snippet, run_status, run_summary_cmd,
+        run_tests_for, run_verify_plan,
     };
     use crate::cli::{
-        ContextArgs, DiffImpactArgs, ExplainArgs, FindArgs, QueryArgs, RefsArgs, RepoArgs,
-        TestsForArgs, VerifyPlanArgs,
+        CallPathArgs, ContextArgs, DepsArgs, DiffImpactArgs, ExplainArgs, FindArgs, HotspotsArgs,
+        OutlineArgs, QueryArgs, RefsArgs, RepoArgs, SnippetArgs, TestsForArgs, VerifyPlanArgs,
     };
     use std::path::Path;
     use tempfile::TempDir;
@@ -591,6 +751,7 @@ fn integration_check() {
             code_only: true,
             exclude_tests: true,
             max_results: Some(1),
+            compact: false,
         })
         .expect("find json should succeed");
         run_find(FindArgs {
@@ -600,6 +761,7 @@ fn integration_check() {
             code_only: false,
             exclude_tests: false,
             max_results: None,
+            compact: false,
         })
         .expect("find text should succeed");
 
@@ -610,6 +772,7 @@ fn integration_check() {
             code_only: false,
             exclude_tests: false,
             max_results: Some(10),
+            compact: false,
         })
         .expect("refs json should succeed");
         run_refs(RefsArgs {
@@ -619,6 +782,7 @@ fn integration_check() {
             code_only: true,
             exclude_tests: false,
             max_results: None,
+            compact: false,
         })
         .expect("refs text should succeed");
 
@@ -687,6 +851,8 @@ fn integration_check() {
                 "run_refs".to_string(),
                 "run_find".to_string(),
             ],
+            since: None,
+            unstaged: false,
             max_targeted: Some(3),
             repo: repo_path.clone(),
             json: true,
@@ -696,6 +862,8 @@ fn integration_check() {
             changed_files: vec!["src/lib.rs".to_string()],
             changed_lines: changed_lines.clone(),
             changed_symbols: vec!["run_find".to_string()],
+            since: None,
+            unstaged: false,
             max_targeted: None,
             repo: repo_path.clone(),
             json: false,
@@ -706,8 +874,11 @@ fn integration_check() {
             changed_files: vec!["src/lib.rs".to_string(), "src/lib.rs".to_string()],
             changed_lines: changed_lines.clone(),
             changed_symbols: vec!["run_find".to_string(), "run_find".to_string()],
+            since: None,
+            unstaged: false,
             max_distance: 2,
-            max_results: Some(20),
+            max_results: 20,
+            no_limit: false,
             include_tests: false,
             exclude_tests: true,
             include_imports: true,
@@ -720,8 +891,11 @@ fn integration_check() {
             changed_files: vec!["src/lib.rs".to_string()],
             changed_lines,
             changed_symbols: vec!["run_find".to_string()],
+            since: None,
+            unstaged: false,
             max_distance: 1,
-            max_results: None,
+            max_results: 30,
+            no_limit: true,
             include_tests: true,
             exclude_tests: false,
             include_imports: false,
@@ -736,15 +910,175 @@ fn integration_check() {
             repo: repo_path.clone(),
             json: true,
             include_snippets: true,
+            compact: false,
         })
         .expect("explain json should succeed");
         run_explain(ExplainArgs {
             symbol: "run_find".to_string(),
-            repo: repo_path,
+            repo: repo_path.clone(),
             json: false,
             include_snippets: false,
+            compact: false,
         })
         .expect("explain text should succeed");
+
+        // Snippet (json + text)
+        run_snippet(SnippetArgs {
+            symbol: "run_find".into(),
+            repo: repo_path.clone(),
+            json: true,
+            context: 0,
+        })
+        .expect("snippet json");
+        run_snippet(SnippetArgs {
+            symbol: "run_find".into(),
+            repo: repo_path.clone(),
+            json: false,
+            context: 2,
+        })
+        .expect("snippet text");
+
+        // Outline (json + text)
+        run_outline(OutlineArgs {
+            file: "src/lib.rs".into(),
+            repo: repo_path.clone(),
+            json: true,
+        })
+        .expect("outline json");
+        run_outline(OutlineArgs {
+            file: "src/lib.rs".into(),
+            repo: repo_path.clone(),
+            json: false,
+        })
+        .expect("outline text");
+
+        // Summary
+        run_summary_cmd(RepoArgs {
+            repo: repo_path.clone(),
+        })
+        .expect("summary");
+
+        // Deps (json + text)
+        run_deps(DepsArgs {
+            file: "src/lib.rs".into(),
+            repo: repo_path.clone(),
+            json: true,
+        })
+        .expect("deps json");
+        run_deps(DepsArgs {
+            file: "src/lib.rs".into(),
+            repo: repo_path.clone(),
+            json: false,
+        })
+        .expect("deps text");
+
+        // Hotspots (json + text)
+        run_hotspots(HotspotsArgs {
+            repo: repo_path.clone(),
+            json: true,
+            limit: 5,
+        })
+        .expect("hotspots json");
+        run_hotspots(HotspotsArgs {
+            repo: repo_path.clone(),
+            json: false,
+            limit: 5,
+        })
+        .expect("hotspots text");
+
+        // Callers (json + text)
+        run_callers(QueryArgs {
+            symbol: "run_find".into(),
+            repo: repo_path.clone(),
+            json: true,
+        })
+        .expect("callers json");
+        run_callers(QueryArgs {
+            symbol: "run_find".into(),
+            repo: repo_path.clone(),
+            json: false,
+        })
+        .expect("callers text");
+
+        // Callees (json + text)
+        run_callees(QueryArgs {
+            symbol: "run_find".into(),
+            repo: repo_path.clone(),
+            json: true,
+        })
+        .expect("callees json");
+        run_callees(QueryArgs {
+            symbol: "run_find".into(),
+            repo: repo_path.clone(),
+            json: false,
+        })
+        .expect("callees text");
+
+        // Call-path (json + text)
+        run_call_path(CallPathArgs {
+            from: "run_find".into(),
+            to: "run_refs".into(),
+            repo: repo_path.clone(),
+            json: true,
+            max_depth: 5,
+        })
+        .expect("call-path json");
+        run_call_path(CallPathArgs {
+            from: "run_find".into(),
+            to: "run_refs".into(),
+            repo: repo_path.clone(),
+            json: false,
+            max_depth: 5,
+        })
+        .expect("call-path text");
+
+        // Related (json + text)
+        run_related(QueryArgs {
+            symbol: "run_find".into(),
+            repo: repo_path.clone(),
+            json: true,
+        })
+        .expect("related json");
+        run_related(QueryArgs {
+            symbol: "run_find".into(),
+            repo: repo_path.clone(),
+            json: false,
+        })
+        .expect("related text");
+
+        // Explain compact
+        run_explain(ExplainArgs {
+            symbol: "run_find".into(),
+            repo: repo_path.clone(),
+            json: false,
+            include_snippets: false,
+            compact: true,
+        })
+        .expect("explain compact");
+
+        // Find compact
+        run_find(FindArgs {
+            symbol: "run_find".into(),
+            repo: repo_path.clone(),
+            json: false,
+            code_only: false,
+            exclude_tests: false,
+            max_results: None,
+            compact: true,
+        })
+        .expect("find compact");
+
+        // Refs compact
+        run_refs(RefsArgs {
+            symbol: "run_find".into(),
+            repo: repo_path,
+            json: false,
+            code_only: false,
+            exclude_tests: false,
+            max_results: None,
+            compact: true,
+        })
+        .expect("refs compact");
     }
 
     #[test]

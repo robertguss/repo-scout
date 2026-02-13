@@ -34,7 +34,7 @@ fn milestone5_end_to_end_flow_and_incremental_reindex_behavior() {
         "first index should process both fixture files"
     );
     assert!(
-        first_index.contains("skipped_files: 0"),
+        first_index.contains("non_source_files: 0"),
         "first index should not skip files"
     );
 
@@ -63,7 +63,7 @@ fn milestone5_end_to_end_flow_and_incremental_reindex_behavior() {
         "second index should skip unchanged files"
     );
     assert!(
-        second_index.contains("skipped_files: 2"),
+        second_index.contains("non_source_files: 2"),
         "second index should skip both files"
     );
 
@@ -74,7 +74,7 @@ fn milestone5_end_to_end_flow_and_incremental_reindex_behavior() {
         "only modified file should be re-indexed"
     );
     assert!(
-        third_index.contains("skipped_files: 1"),
+        third_index.contains("non_source_files: 1"),
         "unchanged file should still be skipped"
     );
 }

@@ -12,16 +12,44 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
+    #[command(about = "Index a repository into the local SQLite database")]
     Index(RepoArgs),
+    #[command(about = "Show index status and health")]
     Status(RepoArgs),
+    #[command(about = "Find symbol definitions by name")]
     Find(FindArgs),
+    #[command(about = "Find all references to a symbol")]
     Refs(RefsArgs),
+    #[command(about = "Show what depends on a symbol (callers, importers)")]
     Impact(QueryArgs),
+    #[command(about = "Find code relevant to a task description")]
     Context(ContextArgs),
+    #[command(about = "Find test files that cover a symbol")]
     TestsFor(TestsForArgs),
+    #[command(about = "Suggest test commands after changing files")]
     VerifyPlan(VerifyPlanArgs),
+    #[command(about = "Analyze blast radius of file changes")]
     DiffImpact(DiffImpactArgs),
+    #[command(about = "Show symbol details: signature, call graph, source")]
     Explain(ExplainArgs),
+    #[command(about = "Extract source code for a symbol")]
+    Snippet(SnippetArgs),
+    #[command(about = "Show file structure: signatures and definitions without bodies")]
+    Outline(OutlineArgs),
+    #[command(about = "Show whole-repo structural overview")]
+    Summary(RepoArgs),
+    #[command(about = "Show what calls a symbol")]
+    Callers(QueryArgs),
+    #[command(about = "Show what a symbol calls")]
+    Callees(QueryArgs),
+    #[command(about = "Show file-level dependency graph")]
+    Deps(DepsArgs),
+    #[command(about = "Show most-connected symbols (hotspots)")]
+    Hotspots(HotspotsArgs),
+    #[command(name = "call-path", about = "Find call path between two symbols")]
+    CallPath(CallPathArgs),
+    #[command(about = "Show structurally related symbols")]
+    Related(QueryArgs),
 }
 
 #[derive(Debug, Args)]
@@ -52,6 +80,8 @@ pub struct FindArgs {
     pub exclude_tests: bool,
     #[arg(long = "max-results")]
     pub max_results: Option<u32>,
+    #[arg(long, default_value_t = false)]
+    pub compact: bool,
 }
 
 #[derive(Debug, Args)]
@@ -67,6 +97,8 @@ pub struct RefsArgs {
     pub exclude_tests: bool,
     #[arg(long = "max-results")]
     pub max_results: Option<u32>,
+    #[arg(long, default_value_t = false)]
+    pub compact: bool,
 }
 
 #[derive(Debug, Args)]
@@ -98,12 +130,16 @@ pub struct TestsForArgs {
 
 #[derive(Debug, Args)]
 pub struct VerifyPlanArgs {
-    #[arg(long = "changed-file", required = true)]
+    #[arg(long = "changed-file")]
     pub changed_files: Vec<String>,
     #[arg(long = "changed-line")]
     pub changed_lines: Vec<String>,
     #[arg(long = "changed-symbol")]
     pub changed_symbols: Vec<String>,
+    #[arg(long)]
+    pub since: Option<String>,
+    #[arg(long, default_value_t = false)]
+    pub unstaged: bool,
     #[arg(long = "max-targeted")]
     pub max_targeted: Option<u32>,
     #[arg(long)]
@@ -114,16 +150,22 @@ pub struct VerifyPlanArgs {
 
 #[derive(Debug, Args)]
 pub struct DiffImpactArgs {
-    #[arg(long = "changed-file", required = true)]
+    #[arg(long = "changed-file")]
     pub changed_files: Vec<String>,
     #[arg(long = "changed-line")]
     pub changed_lines: Vec<String>,
     #[arg(long = "changed-symbol")]
     pub changed_symbols: Vec<String>,
+    #[arg(long)]
+    pub since: Option<String>,
+    #[arg(long, default_value_t = false)]
+    pub unstaged: bool,
     #[arg(long, default_value_t = 2)]
     pub max_distance: u32,
-    #[arg(long = "max-results")]
-    pub max_results: Option<u32>,
+    #[arg(long = "max-results", default_value_t = 30)]
+    pub max_results: u32,
+    #[arg(long, default_value_t = false)]
+    pub no_limit: bool,
     #[arg(long, default_value_t = false, conflicts_with = "exclude_tests")]
     pub include_tests: bool,
     #[arg(long, default_value_t = false, conflicts_with = "include_tests")]
@@ -139,6 +181,35 @@ pub struct DiffImpactArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct DepsArgs {
+    pub file: String,
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct OutlineArgs {
+    pub file: String,
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct SnippetArgs {
+    pub symbol: String,
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long, default_value_t = 0)]
+    pub context: u32,
+}
+
+#[derive(Debug, Args)]
 pub struct ExplainArgs {
     pub symbol: String,
     #[arg(long)]
@@ -147,4 +218,28 @@ pub struct ExplainArgs {
     pub json: bool,
     #[arg(long, default_value_t = false)]
     pub include_snippets: bool,
+    #[arg(long, default_value_t = false)]
+    pub compact: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct HotspotsArgs {
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long, default_value_t = 10)]
+    pub limit: u32,
+}
+
+#[derive(Debug, Args)]
+pub struct CallPathArgs {
+    pub from: String,
+    pub to: String,
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long, default_value_t = 10)]
+    pub max_depth: u32,
 }

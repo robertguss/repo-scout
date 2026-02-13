@@ -1038,6 +1038,23 @@ pub fn find_matches_scoped(
     ranked_text_matches(&connection, symbol, scope)
 }
 
+pub fn suggest_similar_symbols(
+    db_path: &Path,
+    symbol: &str,
+) -> anyhow::Result<Vec<String>> {
+    let connection = Connection::open(db_path)?;
+    let pattern = format!("%{symbol}%");
+    let mut stmt = connection.prepare(
+        "SELECT DISTINCT symbol FROM symbols_v2
+         WHERE symbol LIKE ?1
+         ORDER BY LENGTH(symbol) ASC
+         LIMIT 5",
+    )?;
+    let rows = stmt
+        .query_map(params![pattern], |row| row.get::<_, String>(0))?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
+
 /// Finds references to `symbol` in the database, preferring AST-derived reference matches.
 ///
 /// If any AST references are present for the symbol those matches are returned. If no AST
@@ -1429,7 +1446,7 @@ pub fn tests_for_symbol(
 ) -> anyhow::Result<Vec<TestTarget>> {
     let connection = Connection::open(db_path)?;
     let runners = RecommendationRunners::for_db_path(db_path);
-    let mut ranked_targets = test_targets_for_symbol(&connection, symbol)?
+    let mut ranked_targets = test_targets_for_symbol_with_sub_tokens(&connection, symbol)?
         .into_iter()
         .map(|(target, hit_count)| {
             let is_runnable = is_runnable_test_target(&target, &runners);
@@ -2248,6 +2265,21 @@ fn test_targets_for_symbol(
     connection: &Connection,
     symbol: &str,
 ) -> anyhow::Result<Vec<(String, i64)>> {
+    test_targets_for_symbol_inner(connection, symbol, false)
+}
+
+fn test_targets_for_symbol_with_sub_tokens(
+    connection: &Connection,
+    symbol: &str,
+) -> anyhow::Result<Vec<(String, i64)>> {
+    test_targets_for_symbol_inner(connection, symbol, true)
+}
+
+fn test_targets_for_symbol_inner(
+    connection: &Connection,
+    symbol: &str,
+    use_sub_tokens: bool,
+) -> anyhow::Result<Vec<(String, i64)>> {
     let mut statement = connection.prepare(
         "SELECT file_path, COUNT(*) AS hit_count
          FROM text_occurrences
@@ -2261,12 +2293,49 @@ fn test_targets_for_symbol(
     })?;
 
     let mut targets = Vec::new();
+    let mut seen_files = HashSet::new();
     for row in rows {
         let (file_path, hit_count) = row?;
         if is_test_like_path(&file_path) {
+            seen_files.insert(file_path.clone());
             targets.push((file_path, hit_count));
         }
     }
+
+    // Secondary heuristic: split symbol into sub-tokens
+    // (e.g. "index_repository" → ["index", "repository"]) and search
+    // for test files containing those tokens via text_occurrences.
+    // Only enabled for direct tests-for queries, not verify-plan.
+    if !use_sub_tokens {
+        return Ok(targets);
+    }
+    let sub_tokens: Vec<&str> = symbol
+        .split('_')
+        .filter(|t| t.len() >= 3)
+        .collect();
+    if !sub_tokens.is_empty() {
+        for token in &sub_tokens {
+            let mut sub_stmt = connection.prepare(
+                "SELECT file_path, COUNT(*) AS hit_count
+                 FROM text_occurrences
+                 WHERE symbol = ?1
+                 GROUP BY file_path
+                 ORDER BY hit_count DESC, file_path ASC",
+            )?;
+            let sub_rows = sub_stmt.query_map(params![*token], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            })?;
+            for row in sub_rows {
+                let (file_path, hit_count) = row?;
+                if is_test_like_path(&file_path) && !seen_files.contains(&file_path) {
+                    seen_files.insert(file_path.clone());
+                    // Discount sub-token matches
+                    targets.push((file_path, (hit_count.max(1) - 1).max(1)));
+                }
+            }
+        }
+    }
+
     Ok(targets)
 }
 
@@ -2513,6 +2582,525 @@ fn is_generic_changed_symbol(symbol: &str) -> bool {
 
 fn is_changed_test_target_reason(why_included: &str) -> bool {
     why_included.starts_with("changed file '") && why_included.ends_with("is itself a test target")
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct StatusSummary {
+    pub source_files: usize,
+    pub definitions: usize,
+    pub references: usize,
+    pub text_occurrences: usize,
+    pub edges: usize,
+    pub languages: Vec<(String, usize)>,
+}
+
+pub fn status_summary(db_path: &Path) -> anyhow::Result<StatusSummary> {
+    let connection = Connection::open(db_path)?;
+    let source_files: i64 = connection.query_row(
+        "SELECT COUNT(*) FROM indexed_files",
+        [],
+        |row| row.get(0),
+    )?;
+    let definitions: i64 = connection.query_row(
+        "SELECT COUNT(*) FROM symbols_v2",
+        [],
+        |row| row.get(0),
+    )?;
+    let references: i64 = connection.query_row(
+        "SELECT COUNT(*) FROM ast_references",
+        [],
+        |row| row.get(0),
+    )?;
+    let text_occurrences: i64 = connection.query_row(
+        "SELECT COUNT(*) FROM text_occurrences",
+        [],
+        |row| row.get(0),
+    )?;
+    let edges: i64 = connection.query_row(
+        "SELECT COUNT(*) FROM symbol_edges_v2",
+        [],
+        |row| row.get(0),
+    )?;
+    let mut lang_stmt = connection.prepare(
+        "SELECT language, COUNT(DISTINCT file_path) FROM symbols_v2 \
+         GROUP BY language ORDER BY language",
+    )?;
+    let languages: Vec<(String, usize)> = lang_stmt
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize))
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(StatusSummary {
+        source_files: source_files as usize,
+        definitions: definitions as usize,
+        references: references as usize,
+        text_occurrences: text_occurrences as usize,
+        edges: edges as usize,
+        languages,
+    })
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SnippetMatch {
+    pub symbol: String,
+    pub kind: String,
+    pub file_path: String,
+    pub start_line: u32,
+    pub end_line: u32,
+    pub snippet: String,
+    pub signature: Option<String>,
+}
+
+pub fn snippet_for_symbol(
+    db_path: &Path,
+    symbol: &str,
+    context_lines: u32,
+) -> anyhow::Result<Vec<SnippetMatch>> {
+    let connection = Connection::open(db_path)?;
+    let mut stmt = connection.prepare(
+        "SELECT file_path, symbol, kind, start_line, end_line, signature
+         FROM symbols_v2
+         WHERE symbol = ?1
+         ORDER BY file_path, start_line",
+    )?;
+    let rows = stmt.query_map(params![symbol], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, u32>(3)?,
+            row.get::<_, u32>(4)?,
+            row.get::<_, Option<String>>(5)?,
+        ))
+    })?;
+
+    let mut results = Vec::new();
+    for row in rows {
+        let (file_path, sym, kind, start_line, end_line, signature) = row?;
+        let adj_start = start_line.saturating_sub(context_lines);
+        let adj_end = end_line.saturating_add(context_lines);
+        if let Some(snippet) = extract_symbol_snippet(db_path, &file_path, adj_start, adj_end) {
+            results.push(SnippetMatch {
+                symbol: sym,
+                kind,
+                file_path,
+                start_line,
+                end_line,
+                snippet,
+                signature,
+            });
+        }
+    }
+    Ok(results)
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct OutlineEntry {
+    pub symbol: String,
+    pub kind: String,
+    pub line: u32,
+    pub signature: Option<String>,
+    pub visibility: String,
+}
+
+pub fn outline_file(db_path: &Path, file_path: &str) -> anyhow::Result<Vec<OutlineEntry>> {
+    let connection = Connection::open(db_path)?;
+    let mut stmt = connection.prepare(
+        "SELECT symbol, kind, start_line, signature
+         FROM symbols_v2
+         WHERE file_path = ?1
+         ORDER BY start_line",
+    )?;
+    let rows = stmt.query_map(params![file_path], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, u32>(2)?,
+            row.get::<_, Option<String>>(3)?,
+        ))
+    })?;
+    let mut entries = Vec::new();
+    for row in rows {
+        let (symbol, kind, line, signature) = row?;
+        let visibility = signature
+            .as_deref()
+            .map(|s| if s.starts_with("pub") { "pub" } else { "" })
+            .unwrap_or("")
+            .to_string();
+        entries.push(OutlineEntry {
+            symbol,
+            kind,
+            line,
+            signature,
+            visibility,
+        });
+    }
+    Ok(entries)
+}
+
+pub fn repo_entry_points(db_path: &Path) -> anyhow::Result<Vec<String>> {
+    let connection = Connection::open(db_path)?;
+    let mut stmt = connection.prepare(
+        "SELECT file_path FROM symbols_v2
+         WHERE symbol = 'main' AND kind = 'function'
+         ORDER BY file_path",
+    )?;
+    let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+    let mut entry_points = Vec::new();
+    for row in rows {
+        entry_points.push(row?);
+    }
+    Ok(entry_points)
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct EdgeMatch {
+    pub file_path: String,
+    pub symbol: String,
+    pub kind: String,
+    pub line: u32,
+    pub column: u32,
+    pub confidence: f64,
+}
+
+pub fn callers_of(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<EdgeMatch>> {
+    let connection = Connection::open(db_path)?;
+    let mut stmt = connection.prepare(
+        "SELECT s_from.file_path, s_from.symbol, s_from.kind,
+                s_from.start_line, s_from.start_column, e.confidence
+         FROM symbol_edges_v2 e
+         JOIN symbols_v2 s_from ON e.from_symbol_id = s_from.symbol_id
+         JOIN symbols_v2 s_to ON e.to_symbol_id = s_to.symbol_id
+         WHERE s_to.symbol = ?1 AND e.edge_kind = 'calls'
+         ORDER BY s_from.file_path, s_from.start_line",
+    )?;
+    let rows = stmt.query_map(params![symbol], |row| {
+        Ok(EdgeMatch {
+            file_path: row.get(0)?,
+            symbol: row.get(1)?,
+            kind: row.get(2)?,
+            line: row.get(3)?,
+            column: row.get(4)?,
+            confidence: row.get(5)?,
+        })
+    })?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+}
+
+pub fn callees_of(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<EdgeMatch>> {
+    let connection = Connection::open(db_path)?;
+    let mut stmt = connection.prepare(
+        "SELECT s_to.file_path, s_to.symbol, s_to.kind,
+                s_to.start_line, s_to.start_column, e.confidence
+         FROM symbol_edges_v2 e
+         JOIN symbols_v2 s_from ON e.from_symbol_id = s_from.symbol_id
+         JOIN symbols_v2 s_to ON e.to_symbol_id = s_to.symbol_id
+         WHERE s_from.symbol = ?1 AND e.edge_kind = 'calls'
+         ORDER BY s_to.file_path, s_to.start_line",
+    )?;
+    let rows = stmt.query_map(params![symbol], |row| {
+        Ok(EdgeMatch {
+            file_path: row.get(0)?,
+            symbol: row.get(1)?,
+            kind: row.get(2)?,
+            line: row.get(3)?,
+            column: row.get(4)?,
+            confidence: row.get(5)?,
+        })
+    })?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct FileDep {
+    pub file_path: String,
+    pub edge_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct FileDeps {
+    pub depends_on: Vec<FileDep>,
+    pub depended_on_by: Vec<FileDep>,
+}
+
+pub fn file_deps(db_path: &Path, file_path: &str) -> anyhow::Result<FileDeps> {
+    let connection = Connection::open(db_path)?;
+
+    // Files this file depends on (outgoing edges)
+    let mut depends_stmt = connection.prepare(
+        "SELECT s_to.file_path, COUNT(*) as cnt
+         FROM symbol_edges_v2 e
+         JOIN symbols_v2 s_from ON e.from_symbol_id = s_from.symbol_id
+         JOIN symbols_v2 s_to ON e.to_symbol_id = s_to.symbol_id
+         WHERE s_from.file_path = ?1 AND s_to.file_path != ?1
+         GROUP BY s_to.file_path
+         ORDER BY cnt DESC, s_to.file_path",
+    )?;
+    let depends_on: Vec<FileDep> = depends_stmt
+        .query_map(params![file_path], |row| {
+            Ok(FileDep {
+                file_path: row.get(0)?,
+                edge_count: row.get::<_, i64>(1)? as usize,
+            })
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    // Files that depend on this file (incoming edges)
+    let mut depended_stmt = connection.prepare(
+        "SELECT s_from.file_path, COUNT(*) as cnt
+         FROM symbol_edges_v2 e
+         JOIN symbols_v2 s_from ON e.from_symbol_id = s_from.symbol_id
+         JOIN symbols_v2 s_to ON e.to_symbol_id = s_to.symbol_id
+         WHERE s_to.file_path = ?1 AND s_from.file_path != ?1
+         GROUP BY s_from.file_path
+         ORDER BY cnt DESC, s_from.file_path",
+    )?;
+    let depended_on_by: Vec<FileDep> = depended_stmt
+        .query_map(params![file_path], |row| {
+            Ok(FileDep {
+                file_path: row.get(0)?,
+                edge_count: row.get::<_, i64>(1)? as usize,
+            })
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(FileDeps {
+        depends_on,
+        depended_on_by,
+    })
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct RelatedSymbol {
+    pub symbol: String,
+    pub file_path: String,
+    pub kind: String,
+    pub relationship: String,
+}
+
+pub fn related_symbols(
+    db_path: &Path,
+    symbol: &str,
+) -> anyhow::Result<Vec<RelatedSymbol>> {
+    let connection = Connection::open(db_path)?;
+    let mut results: Vec<RelatedSymbol> = Vec::new();
+    let mut seen = HashSet::new();
+
+    // Find the target symbol's file_path and symbol_id
+    let mut sym_stmt = connection.prepare(
+        "SELECT symbol_id, file_path FROM symbols_v2
+         WHERE symbol = ?1
+         ORDER BY file_path, symbol_id LIMIT 1",
+    )?;
+    let sym_info: Option<(i64, String)> = sym_stmt
+        .query_map(params![symbol], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })?
+        .filter_map(|r| r.ok())
+        .next();
+
+    let (symbol_id, file_path) = match sym_info {
+        Some(v) => v,
+        None => return Ok(results),
+    };
+    seen.insert(symbol.to_string());
+
+    // 1. Siblings: same file, different symbol
+    let mut sib_stmt = connection.prepare(
+        "SELECT symbol, file_path, kind FROM symbols_v2
+         WHERE file_path = ?1 AND symbol != ?2
+         ORDER BY symbol",
+    )?;
+    let siblings = sib_stmt
+        .query_map(params![&file_path, symbol], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })?
+        .filter_map(|r| r.ok());
+    for (s, fp, k) in siblings {
+        if seen.insert(s.clone()) {
+            results.push(RelatedSymbol {
+                symbol: s,
+                file_path: fp,
+                kind: k,
+                relationship: "sibling".to_string(),
+            });
+        }
+    }
+
+    // 2. Shared callers: symbols called by the same caller
+    let mut shared_stmt = connection.prepare(
+        "SELECT DISTINCT s2.symbol, s2.file_path, s2.kind
+         FROM symbol_edges_v2 e1
+         JOIN symbol_edges_v2 e2
+           ON e1.from_symbol_id = e2.from_symbol_id
+         JOIN symbols_v2 s2
+           ON s2.symbol_id = e2.to_symbol_id
+         WHERE e1.to_symbol_id = ?1
+           AND e2.to_symbol_id != ?1
+           AND e1.edge_kind = 'calls'
+           AND e2.edge_kind = 'calls'
+         ORDER BY s2.symbol",
+    )?;
+    let shared = shared_stmt
+        .query_map(params![symbol_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })?
+        .filter_map(|r| r.ok());
+    for (s, fp, k) in shared {
+        if seen.insert(s.clone()) {
+            results.push(RelatedSymbol {
+                symbol: s,
+                file_path: fp,
+                kind: k,
+                relationship: "shared_caller".to_string(),
+            });
+        }
+    }
+
+    Ok(results)
+}
+
+pub fn find_call_path(
+    db_path: &Path,
+    from: &str,
+    to: &str,
+    max_depth: u32,
+) -> anyhow::Result<Option<Vec<String>>> {
+    let connection = Connection::open(db_path)?;
+
+    let mut from_stmt = connection.prepare(
+        "SELECT symbol_id, symbol FROM symbols_v2
+         WHERE symbol = ?1
+         ORDER BY file_path, symbol_id LIMIT 1",
+    )?;
+    let from_id: Option<(i64, String)> = from_stmt
+        .query_map(params![from], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })?
+        .filter_map(|r| r.ok())
+        .next();
+
+    let (start_id, start_name) = match from_id {
+        Some(v) => v,
+        None => return Ok(None),
+    };
+
+    let mut visited: HashMap<i64, (i64, String)> = HashMap::new();
+    visited.insert(start_id, (-1, start_name));
+    let mut queue: VecDeque<(i64, u32)> = VecDeque::new();
+    queue.push_back((start_id, 0));
+
+    let mut found_id: Option<i64> = None;
+
+    while let Some((current_id, depth)) = queue.pop_front() {
+        if depth >= max_depth {
+            continue;
+        }
+        let mut edge_stmt = connection.prepare(
+            "SELECT e.to_symbol_id, s.symbol
+             FROM symbol_edges_v2 e
+             JOIN symbols_v2 s
+               ON s.symbol_id = e.to_symbol_id
+             WHERE e.from_symbol_id = ?1
+               AND e.edge_kind = 'calls'
+             ORDER BY s.symbol, s.file_path",
+        )?;
+        let neighbors: Vec<(i64, String)> = edge_stmt
+            .query_map(params![current_id], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        for (neighbor_id, neighbor_name) in neighbors {
+            if visited.contains_key(&neighbor_id) {
+                continue;
+            }
+            visited.insert(
+                neighbor_id,
+                (current_id, neighbor_name.clone()),
+            );
+            if neighbor_name == to {
+                found_id = Some(neighbor_id);
+                break;
+            }
+            queue.push_back((neighbor_id, depth + 1));
+        }
+        if found_id.is_some() {
+            break;
+        }
+    }
+
+    match found_id {
+        None => Ok(None),
+        Some(end_id) => {
+            let mut path = Vec::new();
+            let mut cur = end_id;
+            while cur != -1 {
+                if let Some((prev, name)) = visited.get(&cur) {
+                    path.push(name.clone());
+                    cur = *prev;
+                } else {
+                    break;
+                }
+            }
+            path.reverse();
+            Ok(Some(path))
+        }
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct HotspotEntry {
+    pub symbol: String,
+    pub file_path: String,
+    pub kind: String,
+    pub fan_in: i64,
+    pub fan_out: i64,
+    pub total: i64,
+}
+
+pub fn hotspots(db_path: &Path, limit: u32) -> anyhow::Result<Vec<HotspotEntry>> {
+    let connection = Connection::open(db_path)?;
+    let mut stmt = connection.prepare(
+        "SELECT s.symbol, s.file_path, s.kind,
+                COUNT(DISTINCT e_in.from_symbol_id) as fan_in,
+                COUNT(DISTINCT e_out.to_symbol_id) as fan_out,
+                (COUNT(DISTINCT e_in.from_symbol_id) + COUNT(DISTINCT e_out.to_symbol_id)) as total
+         FROM symbols_v2 s
+         LEFT JOIN symbol_edges_v2 e_in ON e_in.to_symbol_id = s.symbol_id
+         LEFT JOIN symbol_edges_v2 e_out ON e_out.from_symbol_id = s.symbol_id
+         GROUP BY s.symbol_id
+         HAVING total > 0
+         ORDER BY total DESC, s.file_path ASC, s.symbol ASC
+         LIMIT ?1",
+    )?;
+    let entries = stmt
+        .query_map([limit], |row| {
+            Ok(HotspotEntry {
+                symbol: row.get(0)?,
+                file_path: row.get(1)?,
+                kind: row.get(2)?,
+                fan_in: row.get(3)?,
+                fan_out: row.get(4)?,
+                total: row.get(5)?,
+            })
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(entries)
 }
 
 #[cfg(test)]

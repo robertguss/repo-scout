@@ -1,8 +1,9 @@
 use std::path::Path;
 
 use crate::query::{
-    ContextMatch, DiffImpactMatch, ExplainMatch, ImpactMatch, QueryMatch, TestTarget,
-    VerificationStep,
+    ContextMatch, DiffImpactMatch, EdgeMatch, ExplainMatch, FileDeps, HotspotEntry,
+    ImpactMatch, OutlineEntry, QueryMatch, RelatedSymbol, SnippetMatch, StatusSummary,
+    TestTarget, VerificationStep,
 };
 use serde::Serialize;
 
@@ -73,7 +74,7 @@ struct JsonExplainOutput<'a> {
 /// Prints index metadata (path, schema version, and file counts) to stdout.
 ///
 /// This writes four lines showing:
-/// `index_path`, `schema_version`, `indexed_files`, and `skipped_files`.
+/// `index_path`, `schema_version`, `indexed_files`, and `non_source_files`.
 ///
 /// # Examples
 ///
@@ -85,17 +86,32 @@ pub fn print_index(
     index_path: &Path,
     schema_version: i64,
     indexed_files: usize,
-    skipped_files: usize,
+    non_source_files: usize,
 ) {
     println!("index_path: {}", index_path.display());
     println!("schema_version: {schema_version}");
     println!("indexed_files: {indexed_files}");
-    println!("skipped_files: {skipped_files}");
+    println!("non_source_files: {non_source_files}");
 }
 
-pub fn print_status(index_path: &Path, schema_version: i64) {
+pub fn print_status(
+    index_path: &Path,
+    schema_version: i64,
+    summary: &StatusSummary,
+) {
     println!("index_path: {}", index_path.display());
     println!("schema_version: {schema_version}");
+    println!("source_files: {}", summary.source_files);
+    println!("definitions: {}", summary.definitions);
+    println!("references: {}", summary.references);
+    println!("text_occurrences: {}", summary.text_occurrences);
+    println!("edges: {}", summary.edges);
+    if !summary.languages.is_empty() {
+        println!("languages:");
+        for (lang, count) in &summary.languages {
+            println!("  {lang}: {count}");
+        }
+    }
 }
 
 pub fn print_query(command: &str, symbol: &str, matches: &[QueryMatch]) {
@@ -111,6 +127,22 @@ pub fn print_query(command: &str, symbol: &str, matches: &[QueryMatch]) {
             result.symbol,
             result.why_matched,
             result.confidence
+        );
+    }
+}
+
+pub fn print_did_you_mean(suggestions: &[String]) {
+    println!("\ndid you mean:");
+    for s in suggestions {
+        println!("  {s}");
+    }
+}
+
+pub fn print_query_compact(matches: &[QueryMatch]) {
+    for result in matches {
+        println!(
+            "{}:{} {}",
+            result.file_path, result.line, result.symbol
         );
     }
 }
@@ -501,6 +533,21 @@ pub fn print_explain(symbol: &str, matches: &[ExplainMatch]) {
             result.outbound.implements,
             result.outbound.contains
         );
+        if let Some(snippet) = &result.snippet {
+            println!("snippet:");
+            for line in snippet.lines() {
+                println!("  {line}");
+            }
+        }
+    }
+}
+
+pub fn print_explain_compact(matches: &[ExplainMatch]) {
+    for result in matches {
+        println!(
+            "{}:{} {}",
+            result.file_path, result.start_line, result.symbol
+        );
     }
 }
 
@@ -515,6 +562,381 @@ pub fn print_explain_json(
         query: symbol,
         include_snippets,
         results: matches,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}
+
+#[derive(Debug, Serialize)]
+struct JsonSnippetOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    query: &'a str,
+    results: &'a [SnippetMatch],
+}
+
+pub fn print_snippet(symbol: &str, matches: &[SnippetMatch]) {
+    println!("command: snippet");
+    println!("query: {symbol}");
+    println!("results: {}", matches.len());
+    for result in matches {
+        println!(
+            "{}:{}-{} {} ({})",
+            result.file_path, result.start_line, result.end_line, result.symbol, result.kind,
+        );
+        for line in result.snippet.lines() {
+            println!("  {line}");
+        }
+    }
+}
+
+pub fn print_snippet_json(symbol: &str, matches: &[SnippetMatch]) -> anyhow::Result<()> {
+    let payload = JsonSnippetOutput {
+        schema_version: JSON_SCHEMA_VERSION_V2,
+        command: "snippet",
+        query: symbol,
+        results: matches,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}
+
+#[derive(Debug, Serialize)]
+struct JsonOutlineOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    file: &'a str,
+    results: &'a [OutlineEntry],
+}
+
+pub fn print_outline(file: &str, entries: &[OutlineEntry]) {
+    println!("command: outline");
+    println!("file: {file}");
+    println!("results: {}", entries.len());
+    for entry in entries {
+        let vis = if entry.visibility.is_empty() {
+            String::new()
+        } else {
+            format!("{} ", entry.visibility)
+        };
+        let sig = entry
+            .signature
+            .as_deref()
+            .unwrap_or(&entry.symbol);
+        println!("  L{} {}{} ({})", entry.line, vis, sig, entry.kind);
+    }
+}
+
+pub fn print_outline_json(file: &str, entries: &[OutlineEntry]) -> anyhow::Result<()> {
+    let payload = JsonOutlineOutput {
+        schema_version: JSON_SCHEMA_VERSION_V2,
+        command: "outline",
+        file,
+        results: entries,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}
+
+pub fn print_summary(summary: &StatusSummary, entry_points: &[String]) {
+    println!("command: summary");
+    println!("source_files: {}", summary.source_files);
+    println!("definitions: {}", summary.definitions);
+    println!("references: {}", summary.references);
+    println!("text_occurrences: {}", summary.text_occurrences);
+    println!("edges: {}", summary.edges);
+    if !summary.languages.is_empty() {
+        println!("languages:");
+        for (lang, count) in &summary.languages {
+            println!("  {lang}: {count}");
+        }
+    }
+    if !entry_points.is_empty() {
+        println!("entry_points:");
+        for ep in entry_points {
+            println!("  {ep}");
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct JsonSummaryOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    summary: &'a StatusSummary,
+    entry_points: &'a [String],
+}
+
+pub fn print_summary_json(
+    summary: &StatusSummary,
+    entry_points: &[String],
+) -> anyhow::Result<()> {
+    let payload = JsonSummaryOutput {
+        schema_version: JSON_SCHEMA_VERSION_V2,
+        command: "summary",
+        summary,
+        entry_points,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}
+
+pub fn print_edges(command: &str, symbol: &str, matches: &[EdgeMatch]) {
+    println!("command: {command}");
+    println!("query: {symbol}");
+    println!("results: {}", matches.len());
+    for result in matches {
+        println!(
+            "{}:{}:{} {} ({}) [{:.2}]",
+            result.file_path, result.line, result.column, result.symbol, result.kind,
+            result.confidence,
+        );
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct JsonEdgeOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    query: &'a str,
+    results: &'a [EdgeMatch],
+}
+
+pub fn print_edges_json(
+    command: &str,
+    symbol: &str,
+    matches: &[EdgeMatch],
+) -> anyhow::Result<()> {
+    let payload = JsonEdgeOutput {
+        schema_version: JSON_SCHEMA_VERSION_V2,
+        command,
+        query: symbol,
+        results: matches,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}
+
+pub fn print_deps(file: &str, deps: &FileDeps) {
+    println!("command: deps");
+    println!("file: {file}");
+    if !deps.depends_on.is_empty() {
+        println!("depends_on:");
+        for dep in &deps.depends_on {
+            println!("  {} ({})", dep.file_path, dep.edge_count);
+        }
+    }
+    if !deps.depended_on_by.is_empty() {
+        println!("depended_on_by:");
+        for dep in &deps.depended_on_by {
+            println!("  {} ({})", dep.file_path, dep.edge_count);
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct JsonDepsOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    file: &'a str,
+    depends_on: &'a [crate::query::FileDep],
+    depended_on_by: &'a [crate::query::FileDep],
+}
+
+pub fn print_deps_json(file: &str, deps: &FileDeps) -> anyhow::Result<()> {
+    let payload = JsonDepsOutput {
+        schema_version: JSON_SCHEMA_VERSION_V2,
+        command: "deps",
+        file,
+        depends_on: &deps.depends_on,
+        depended_on_by: &deps.depended_on_by,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}
+
+pub fn print_hotspots(entries: &[HotspotEntry]) {
+    if entries.is_empty() {
+        println!("No hotspots found.");
+        return;
+    }
+    println!("hotspots:");
+    for (i, e) in entries.iter().enumerate() {
+        println!(
+            "  #{}: {} ({}) in {} — fan_in: {}, fan_out: {}, total: {}",
+            i + 1,
+            e.symbol,
+            e.kind,
+            e.file_path,
+            e.fan_in,
+            e.fan_out,
+            e.total
+        );
+    }
+}
+
+#[derive(Serialize)]
+struct JsonHotspotOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    results: &'a [HotspotEntry],
+}
+
+pub fn print_hotspots_json(entries: &[HotspotEntry]) -> anyhow::Result<()> {
+    let payload = JsonHotspotOutput {
+        schema_version: JSON_SCHEMA_VERSION_V2,
+        command: "hotspots",
+        results: entries,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}
+
+pub fn print_refs_grouped(
+    symbol: &str,
+    matches: &[QueryMatch],
+) {
+    println!("command: refs");
+    println!("query: {symbol}");
+    println!("results: {}", matches.len());
+
+    let mut definitions = Vec::new();
+    let mut source = Vec::new();
+    let mut tests = Vec::new();
+    let mut docs = Vec::new();
+    let mut other = Vec::new();
+
+    for m in matches {
+        if m.why_matched.contains("ast_definition") {
+            definitions.push(m);
+        } else if m.file_path.ends_with(".md") {
+            docs.push(m);
+        } else if m.file_path.starts_with("tests/")
+            || m.file_path.contains("_test.")
+            || m.file_path.contains(".test.")
+        {
+            tests.push(m);
+        } else if m.file_path.starts_with("src/") {
+            source.push(m);
+        } else {
+            other.push(m);
+        }
+    }
+
+    let sections: &[(&str, &[&QueryMatch])] = &[
+        ("Definitions", &definitions),
+        ("Source", &source),
+        ("Test", &tests),
+        ("Documentation", &docs),
+        ("Other", &other),
+    ];
+
+    for (label, items) in sections {
+        if items.is_empty() {
+            continue;
+        }
+        println!("\n{label}:");
+        for r in *items {
+            println!(
+                "  {}:{}:{} {} [{} {}]",
+                r.file_path,
+                r.line,
+                r.column,
+                r.symbol,
+                r.why_matched,
+                r.confidence,
+            );
+        }
+    }
+}
+
+pub fn print_call_path(
+    from: &str,
+    to: &str,
+    path: &Option<Vec<String>>,
+) {
+    println!("command: call-path");
+    println!("from: {from}");
+    println!("to: {to}");
+    match path {
+        Some(steps) => {
+            println!("path_length: {}", steps.len());
+            println!(
+                "path: {}",
+                steps.join(" -> ")
+            );
+        }
+        None => {
+            println!("path: none (no call path found)");
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct JsonCallPathOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    from: &'a str,
+    to: &'a str,
+    path: &'a Option<Vec<String>>,
+}
+
+pub fn print_call_path_json(
+    from: &str,
+    to: &str,
+    path: &Option<Vec<String>>,
+) -> anyhow::Result<()> {
+    let payload = JsonCallPathOutput {
+        schema_version: JSON_SCHEMA_VERSION_V2,
+        command: "call-path",
+        from,
+        to,
+        path,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}
+
+pub fn print_related(
+    symbol: &str,
+    results: &[RelatedSymbol],
+) {
+    println!("command: related");
+    println!("query: {symbol}");
+    println!("results: {}", results.len());
+    for r in results {
+        println!(
+            "  {} ({}) in {} [{}]",
+            r.symbol, r.kind, r.file_path, r.relationship,
+        );
+    }
+}
+
+#[derive(Serialize)]
+struct JsonRelatedOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    query: &'a str,
+    results: &'a [RelatedSymbol],
+}
+
+pub fn print_related_json(
+    symbol: &str,
+    results: &[RelatedSymbol],
+) -> anyhow::Result<()> {
+    let payload = JsonRelatedOutput {
+        schema_version: JSON_SCHEMA_VERSION_V2,
+        command: "related",
+        query: symbol,
+        results,
     };
     let serialized = serde_json::to_string_pretty(&payload)?;
     println!("{serialized}");
