@@ -1429,7 +1429,7 @@ pub fn tests_for_symbol(
 ) -> anyhow::Result<Vec<TestTarget>> {
     let connection = Connection::open(db_path)?;
     let runners = RecommendationRunners::for_db_path(db_path);
-    let mut ranked_targets = test_targets_for_symbol(&connection, symbol)?
+    let mut ranked_targets = test_targets_for_symbol_with_sub_tokens(&connection, symbol)?
         .into_iter()
         .map(|(target, hit_count)| {
             let is_runnable = is_runnable_test_target(&target, &runners);
@@ -2248,6 +2248,21 @@ fn test_targets_for_symbol(
     connection: &Connection,
     symbol: &str,
 ) -> anyhow::Result<Vec<(String, i64)>> {
+    test_targets_for_symbol_inner(connection, symbol, false)
+}
+
+fn test_targets_for_symbol_with_sub_tokens(
+    connection: &Connection,
+    symbol: &str,
+) -> anyhow::Result<Vec<(String, i64)>> {
+    test_targets_for_symbol_inner(connection, symbol, true)
+}
+
+fn test_targets_for_symbol_inner(
+    connection: &Connection,
+    symbol: &str,
+    use_sub_tokens: bool,
+) -> anyhow::Result<Vec<(String, i64)>> {
     let mut statement = connection.prepare(
         "SELECT file_path, COUNT(*) AS hit_count
          FROM text_occurrences
@@ -2261,12 +2276,49 @@ fn test_targets_for_symbol(
     })?;
 
     let mut targets = Vec::new();
+    let mut seen_files = HashSet::new();
     for row in rows {
         let (file_path, hit_count) = row?;
         if is_test_like_path(&file_path) {
+            seen_files.insert(file_path.clone());
             targets.push((file_path, hit_count));
         }
     }
+
+    // Secondary heuristic: split symbol into sub-tokens
+    // (e.g. "index_repository" → ["index", "repository"]) and search
+    // for test files containing those tokens via text_occurrences.
+    // Only enabled for direct tests-for queries, not verify-plan.
+    if !use_sub_tokens {
+        return Ok(targets);
+    }
+    let sub_tokens: Vec<&str> = symbol
+        .split('_')
+        .filter(|t| t.len() >= 3)
+        .collect();
+    if !sub_tokens.is_empty() {
+        for token in &sub_tokens {
+            let mut sub_stmt = connection.prepare(
+                "SELECT file_path, COUNT(*) AS hit_count
+                 FROM text_occurrences
+                 WHERE symbol = ?1
+                 GROUP BY file_path
+                 ORDER BY hit_count DESC, file_path ASC",
+            )?;
+            let sub_rows = sub_stmt.query_map(params![*token], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            })?;
+            for row in sub_rows {
+                let (file_path, hit_count) = row?;
+                if is_test_like_path(&file_path) && !seen_files.contains(&file_path) {
+                    seen_files.insert(file_path.clone());
+                    // Discount sub-token matches
+                    targets.push((file_path, (hit_count.max(1) - 1).max(1)));
+                }
+            }
+        }
+    }
+
     Ok(targets)
 }
 
