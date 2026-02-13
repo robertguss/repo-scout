@@ -114,12 +114,16 @@ pub struct TestsForArgs {
 
 #[derive(Debug, Args)]
 pub struct VerifyPlanArgs {
-    #[arg(long = "changed-file", required = true)]
+    #[arg(long = "changed-file")]
     pub changed_files: Vec<String>,
     #[arg(long = "changed-line")]
     pub changed_lines: Vec<String>,
     #[arg(long = "changed-symbol")]
     pub changed_symbols: Vec<String>,
+    #[arg(long)]
+    pub since: Option<String>,
+    #[arg(long, default_value_t = false)]
+    pub unstaged: bool,
     #[arg(long = "max-targeted")]
     pub max_targeted: Option<u32>,
     #[arg(long)]
@@ -130,12 +134,16 @@ pub struct VerifyPlanArgs {
 
 #[derive(Debug, Args)]
 pub struct DiffImpactArgs {
-    #[arg(long = "changed-file", required = true)]
+    #[arg(long = "changed-file")]
     pub changed_files: Vec<String>,
     #[arg(long = "changed-line")]
     pub changed_lines: Vec<String>,
     #[arg(long = "changed-symbol")]
     pub changed_symbols: Vec<String>,
+    #[arg(long)]
+    pub since: Option<String>,
+    #[arg(long, default_value_t = false)]
+    pub unstaged: bool,
     #[arg(long, default_value_t = 2)]
     pub max_distance: u32,
     #[arg(long = "max-results", default_value_t = 30)]

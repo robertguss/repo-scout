@@ -1,4 +1,5 @@
 mod cli;
+mod git_utils;
 mod indexer;
 mod output;
 mod query;
@@ -280,6 +281,19 @@ fn run_verify_plan(args: crate::cli::VerifyPlanArgs) -> anyhow::Result<()> {
         .iter()
         .map(|path| normalize_changed_file(&args.repo, path))
         .collect::<Vec<_>>();
+    if let Some(ref since) = args.since {
+        let git_files = git_utils::changed_files_since(&args.repo, since)?;
+        changed_files.extend(git_files);
+    }
+    if args.unstaged {
+        let unstaged = git_utils::unstaged_files(&args.repo)?;
+        changed_files.extend(unstaged);
+    }
+    if changed_files.is_empty() {
+        anyhow::bail!(
+            "no changed files: provide --changed-file, --since, or --unstaged"
+        );
+    }
     changed_files.sort();
     changed_files.dedup();
 
@@ -324,6 +338,19 @@ fn run_diff_impact(args: crate::cli::DiffImpactArgs) -> anyhow::Result<()> {
         .iter()
         .map(|path| normalize_changed_file(&args.repo, path))
         .collect::<Vec<_>>();
+    if let Some(ref since) = args.since {
+        let git_files = git_utils::changed_files_since(&args.repo, since)?;
+        changed_files.extend(git_files);
+    }
+    if args.unstaged {
+        let unstaged = git_utils::unstaged_files(&args.repo)?;
+        changed_files.extend(unstaged);
+    }
+    if changed_files.is_empty() {
+        anyhow::bail!(
+            "no changed files: provide --changed-file, --since, or --unstaged"
+        );
+    }
     changed_files.sort();
     changed_files.dedup();
 
@@ -726,6 +753,8 @@ fn integration_check() {
                 "run_refs".to_string(),
                 "run_find".to_string(),
             ],
+            since: None,
+            unstaged: false,
             max_targeted: Some(3),
             repo: repo_path.clone(),
             json: true,
@@ -735,6 +764,8 @@ fn integration_check() {
             changed_files: vec!["src/lib.rs".to_string()],
             changed_lines: changed_lines.clone(),
             changed_symbols: vec!["run_find".to_string()],
+            since: None,
+            unstaged: false,
             max_targeted: None,
             repo: repo_path.clone(),
             json: false,
@@ -745,6 +776,8 @@ fn integration_check() {
             changed_files: vec!["src/lib.rs".to_string(), "src/lib.rs".to_string()],
             changed_lines: changed_lines.clone(),
             changed_symbols: vec!["run_find".to_string(), "run_find".to_string()],
+            since: None,
+            unstaged: false,
             max_distance: 2,
             max_results: 20,
             no_limit: false,
@@ -760,6 +793,8 @@ fn integration_check() {
             changed_files: vec!["src/lib.rs".to_string()],
             changed_lines,
             changed_symbols: vec!["run_find".to_string()],
+            since: None,
+            unstaged: false,
             max_distance: 1,
             max_results: 30,
             no_limit: true,
