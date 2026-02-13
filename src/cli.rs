@@ -38,6 +38,10 @@ pub enum Command {
     Outline(OutlineArgs),
     #[command(about = "Show whole-repo structural overview")]
     Summary(RepoArgs),
+    #[command(about = "Show what calls a symbol")]
+    Callers(QueryArgs),
+    #[command(about = "Show what a symbol calls")]
+    Callees(QueryArgs),
 }
 
 #[derive(Debug, Args)]

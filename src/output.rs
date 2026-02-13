@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use crate::query::{
-    ContextMatch, DiffImpactMatch, ExplainMatch, ImpactMatch, OutlineEntry, QueryMatch,
-    SnippetMatch, StatusSummary, TestTarget, VerificationStep,
+    ContextMatch, DiffImpactMatch, EdgeMatch, ExplainMatch, ImpactMatch, OutlineEntry,
+    QueryMatch, SnippetMatch, StatusSummary, TestTarget, VerificationStep,
 };
 use serde::Serialize;
 
@@ -653,6 +653,43 @@ pub fn print_summary_json(
         command: "summary",
         summary,
         entry_points,
+    };
+    let serialized = serde_json::to_string_pretty(&payload)?;
+    println!("{serialized}");
+    Ok(())
+}
+
+pub fn print_edges(command: &str, symbol: &str, matches: &[EdgeMatch]) {
+    println!("command: {command}");
+    println!("query: {symbol}");
+    println!("results: {}", matches.len());
+    for result in matches {
+        println!(
+            "{}:{}:{} {} ({}) [{:.2}]",
+            result.file_path, result.line, result.column, result.symbol, result.kind,
+            result.confidence,
+        );
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct JsonEdgeOutput<'a> {
+    schema_version: u32,
+    command: &'a str,
+    query: &'a str,
+    results: &'a [EdgeMatch],
+}
+
+pub fn print_edges_json(
+    command: &str,
+    symbol: &str,
+    matches: &[EdgeMatch],
+) -> anyhow::Result<()> {
+    let payload = JsonEdgeOutput {
+        schema_version: JSON_SCHEMA_VERSION_V2,
+        command,
+        query: symbol,
+        results: matches,
     };
     let serialized = serde_json::to_string_pretty(&payload)?;
     println!("{serialized}");

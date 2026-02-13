@@ -2686,6 +2686,64 @@ pub fn repo_entry_points(db_path: &Path) -> anyhow::Result<Vec<String>> {
     Ok(entry_points)
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct EdgeMatch {
+    pub file_path: String,
+    pub symbol: String,
+    pub kind: String,
+    pub line: u32,
+    pub column: u32,
+    pub confidence: f64,
+}
+
+pub fn callers_of(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<EdgeMatch>> {
+    let connection = Connection::open(db_path)?;
+    let mut stmt = connection.prepare(
+        "SELECT s_from.file_path, s_from.symbol, s_from.kind,
+                s_from.start_line, s_from.start_column, e.confidence
+         FROM symbol_edges_v2 e
+         JOIN symbols_v2 s_from ON e.from_symbol_id = s_from.symbol_id
+         JOIN symbols_v2 s_to ON e.to_symbol_id = s_to.symbol_id
+         WHERE s_to.symbol = ?1 AND e.edge_kind = 'calls'
+         ORDER BY s_from.file_path, s_from.start_line",
+    )?;
+    let rows = stmt.query_map(params![symbol], |row| {
+        Ok(EdgeMatch {
+            file_path: row.get(0)?,
+            symbol: row.get(1)?,
+            kind: row.get(2)?,
+            line: row.get(3)?,
+            column: row.get(4)?,
+            confidence: row.get(5)?,
+        })
+    })?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+}
+
+pub fn callees_of(db_path: &Path, symbol: &str) -> anyhow::Result<Vec<EdgeMatch>> {
+    let connection = Connection::open(db_path)?;
+    let mut stmt = connection.prepare(
+        "SELECT s_to.file_path, s_to.symbol, s_to.kind,
+                s_to.start_line, s_to.start_column, e.confidence
+         FROM symbol_edges_v2 e
+         JOIN symbols_v2 s_from ON e.from_symbol_id = s_from.symbol_id
+         JOIN symbols_v2 s_to ON e.to_symbol_id = s_to.symbol_id
+         WHERE s_from.symbol = ?1 AND e.edge_kind = 'calls'
+         ORDER BY s_to.file_path, s_to.start_line",
+    )?;
+    let rows = stmt.query_map(params![symbol], |row| {
+        Ok(EdgeMatch {
+            file_path: row.get(0)?,
+            symbol: row.get(1)?,
+            kind: row.get(2)?,
+            line: row.get(3)?,
+            column: row.get(4)?,
+            confidence: row.get(5)?,
+        })
+    })?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
