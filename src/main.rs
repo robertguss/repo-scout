@@ -1150,7 +1150,15 @@ fn run_anatomy(_args: crate::cli::AnatomyArgs) -> anyhow::Result<()> {
 fn run_coupling(_args: crate::cli::CouplingArgs) -> anyhow::Result<()> {
     let args = _args;
     let store = ensure_store(&args.repo)?;
-    let entries = crate::query::diagnostics::coupling_report(&store.db_path, args.limit)?;
+    let include_tests = args.include_tests || args.include_fixtures;
+    let entries = crate::query::diagnostics::coupling_report(
+        &store.db_path,
+        args.limit,
+        crate::query::diagnostics::CouplingScope {
+            include_tests,
+            include_fixtures: args.include_fixtures,
+        },
+    )?;
     if args.json {
         output::print_coupling_json(&entries)?;
     } else {
@@ -1162,7 +1170,7 @@ fn run_coupling(_args: crate::cli::CouplingArgs) -> anyhow::Result<()> {
 fn run_dead(_args: crate::cli::DeadArgs) -> anyhow::Result<()> {
     let args = _args;
     let store = ensure_store(&args.repo)?;
-    let mut entries = crate::query::diagnostics::dead_symbols(&store.db_path)?;
+    let mut entries = crate::query::diagnostics::dead_symbols(&store.db_path, args.aggressive)?;
     entries.retain(|entry| path_passes_filters(&entry.file_path, &args.filters));
     if args.json {
         output::print_dead_json(&entries)?;
@@ -1178,6 +1186,10 @@ fn run_test_gaps(_args: crate::cli::TestGapsArgs) -> anyhow::Result<()> {
     let mut report = crate::query::diagnostics::test_gap_analysis(&store.db_path, &args.target)?;
     if let Some(min_risk) = args.min_risk {
         report.uncovered.retain(|entry| entry.risk >= min_risk);
+        report.analysis_state = crate::query::diagnostics::derive_test_gap_analysis_state(
+            report.covered.len(),
+            report.uncovered.len(),
+        );
     }
     if args.json {
         output::print_test_gaps_json(&report)?;
@@ -1207,7 +1219,10 @@ fn run_suggest(_args: crate::cli::SuggestArgs) -> anyhow::Result<()> {
 fn run_boundary(_args: crate::cli::BoundaryArgs) -> anyhow::Result<()> {
     let args = _args;
     let store = ensure_store(&args.repo)?;
-    let report = crate::query::planning::boundary_analysis(&store.db_path, &args.file)?;
+    let mut report = crate::query::planning::boundary_analysis(&store.db_path, &args.file)?;
+    if args.public_only {
+        report.internal_symbols.clear();
+    }
     if args.json {
         output::print_boundary_json(&report)?;
     } else {
@@ -1290,28 +1305,73 @@ fn run_rename_check(_args: crate::cli::RenameCheckArgs) -> anyhow::Result<()> {
     let args = _args;
     let store = ensure_store(&args.repo)?;
     let refs = refs_matches_scoped(&store.db_path, &args.symbol, &QueryScope::default())?;
+    let include_tests = args.include_tests || args.include_fixtures;
+    let semantic_reported = refs
+        .iter()
+        .filter(|entry| {
+            include_path_for_rename_check(&entry.file_path, include_tests, args.include_fixtures)
+        })
+        .count();
     let connection = Connection::open(&store.db_path)?;
-    let text_hits: u32 = connection.query_row(
-        "SELECT COUNT(*) FROM text_occurrences WHERE symbol = ?1",
-        [args.symbol.as_str()],
-        |row| row.get(0),
+    let mut lexical_total: u32 = 0;
+    let mut lexical_reported: u32 = 0;
+    let mut stmt = connection.prepare(
+        "SELECT file_path, COUNT(*) AS cnt
+         FROM text_occurrences
+         WHERE symbol = ?1
+         GROUP BY file_path",
     )?;
+    let rows = stmt.query_map([args.symbol.as_str()], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, u32>(1)?))
+    })?;
+    for row in rows {
+        let (file_path, count) = row?;
+        lexical_total = lexical_total.saturating_add(count);
+        if include_path_for_rename_check(&file_path, include_tests, args.include_fixtures) {
+            lexical_reported = lexical_reported.saturating_add(count);
+        }
+    }
     if args.json {
         let payload = serde_json::json!({
             "schema_version": output::JSON_SCHEMA_VERSION_V2,
             "command": "rename-check",
             "symbol": args.symbol,
             "new_name": args.to,
-            "ast_reference_count": refs.len(),
-            "text_occurrence_count": text_hits,
+            "ast_reference_count": semantic_reported,
+            "text_occurrence_count": lexical_reported,
+            "semantic_impacts": {
+                "total": refs.len(),
+                "reported": semantic_reported,
+            },
+            "lexical_impacts": {
+                "total": lexical_total,
+                "reported": lexical_reported,
+            },
         });
         println!("{}", serde_json::to_string_pretty(&payload)?);
     } else {
         println!("Rename check for {} -> {}", args.symbol, args.to);
-        println!("  AST references: {}", refs.len());
-        println!("  text occurrences: {text_hits}");
+        println!(
+            "  semantic impacts: {} ({} total before scope filters)",
+            semantic_reported,
+            refs.len()
+        );
+        println!(
+            "  lexical impacts: {} ({} total before scope filters)",
+            lexical_reported, lexical_total
+        );
     }
     Ok(())
+}
+
+fn include_path_for_rename_check(path: &str, include_tests: bool, include_fixtures: bool) -> bool {
+    if !include_fixtures && is_fixture_path(path) {
+        return false;
+    }
+    if !include_tests && is_test_like_path(path) {
+        return false;
+    }
+    true
 }
 
 fn run_split_check(_args: crate::cli::SplitCheckArgs) -> anyhow::Result<()> {

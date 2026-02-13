@@ -133,7 +133,17 @@ pub struct CouplingEntry {
     pub total_edges: u32,
 }
 
-pub fn coupling_report(db_path: &Path, limit: u32) -> anyhow::Result<Vec<CouplingEntry>> {
+#[derive(Debug, Clone, Copy)]
+pub struct CouplingScope {
+    pub include_tests: bool,
+    pub include_fixtures: bool,
+}
+
+pub fn coupling_report(
+    db_path: &Path,
+    limit: u32,
+    scope: CouplingScope,
+) -> anyhow::Result<Vec<CouplingEntry>> {
     let connection = Connection::open(db_path)?;
     let mut stmt = connection.prepare(
         "WITH file_edges AS (
@@ -166,7 +176,11 @@ pub fn coupling_report(db_path: &Path, limit: u32) -> anyhow::Result<Vec<Couplin
             total_edges: a_to_b_edges.saturating_add(b_to_a_edges),
         })
     })?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+    let mut entries = rows.collect::<Result<Vec<_>, _>>()?;
+    entries.retain(|entry| {
+        include_path_for_scope(&entry.file_a, scope) && include_path_for_scope(&entry.file_b, scope)
+    });
+    Ok(entries)
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -175,27 +189,80 @@ pub struct DeadSymbol {
     pub symbol: String,
     pub kind: String,
     pub line: u32,
+    pub confidence: String,
+    pub reason: String,
 }
 
-pub fn dead_symbols(db_path: &Path) -> anyhow::Result<Vec<DeadSymbol>> {
+pub fn dead_symbols(db_path: &Path, aggressive: bool) -> anyhow::Result<Vec<DeadSymbol>> {
     let connection = Connection::open(db_path)?;
     let mut stmt = connection.prepare(
-        "SELECT s.file_path, s.symbol, s.kind, s.start_line
+        "SELECT s.file_path,
+                s.symbol,
+                s.kind,
+                s.start_line,
+                CASE
+                    WHEN s.visibility IN ('public', 'pub', 'export') THEN 1
+                    WHEN s.signature LIKE 'pub %' OR s.signature LIKE 'pub(%' THEN 1
+                    ELSE 0
+                END AS is_public,
+                (SELECT COUNT(*) FROM symbol_edges_v2 e_in WHERE e_in.to_symbol_id = s.symbol_id) AS inbound_refs,
+                (SELECT COUNT(*) FROM symbol_edges_v2 e_out WHERE e_out.from_symbol_id = s.symbol_id) AS outbound_refs
          FROM symbols_v2 s
-         LEFT JOIN symbol_edges_v2 e ON e.to_symbol_id = s.symbol_id
-         WHERE e.to_symbol_id IS NULL
-           AND s.kind IN ('function', 'struct', 'enum', 'trait')
+         WHERE s.kind IN ('function', 'struct', 'enum', 'trait')
          ORDER BY s.file_path ASC, s.start_line ASC, s.symbol ASC",
     )?;
     let rows = stmt.query_map([], |row| {
-        Ok(DeadSymbol {
-            file_path: row.get(0)?,
-            symbol: row.get(1)?,
-            kind: row.get(2)?,
-            line: row.get(3)?,
-        })
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, u32>(3)?,
+            row.get::<_, u32>(4)? > 0,
+            row.get::<_, u32>(5)?,
+            row.get::<_, u32>(6)?,
+        ))
     })?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+
+    let mut entries = Vec::new();
+    for row in rows {
+        let (file_path, symbol, kind, line, is_public, inbound_refs, outbound_refs) = row?;
+        if inbound_refs > 0 {
+            continue;
+        }
+
+        let conservative_candidate = !is_public && kind == "function" && outbound_refs == 0;
+        if !aggressive && !conservative_candidate {
+            continue;
+        }
+
+        let (confidence, reason) = if conservative_candidate {
+            (
+                "high".to_string(),
+                "private leaf function has no inbound or outbound symbol edges".to_string(),
+            )
+        } else if !is_public {
+            (
+                "medium".to_string(),
+                "private symbol has no inbound symbol edges".to_string(),
+            )
+        } else {
+            (
+                "low".to_string(),
+                "public/exported symbol has no inbound symbol edges in indexed scope".to_string(),
+            )
+        };
+
+        entries.push(DeadSymbol {
+            file_path,
+            symbol,
+            kind,
+            line,
+            confidence,
+            reason,
+        });
+    }
+
+    Ok(entries)
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -204,11 +271,13 @@ pub struct TestGapEntry {
     pub line_count: u32,
     pub test_hits: u32,
     pub risk: String,
+    pub coverage_status: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct TestGapReport {
     pub target: String,
+    pub analysis_state: String,
     pub covered: Vec<TestGapEntry>,
     pub uncovered: Vec<TestGapEntry>,
 }
@@ -247,6 +316,7 @@ pub fn test_gap_analysis(db_path: &Path, target: &str) -> anyhow::Result<TestGap
             line_count,
             test_hits: row.get(2)?,
             risk: risk.to_string(),
+            coverage_status: String::new(),
         })
     })?;
     for row in rows {
@@ -255,19 +325,61 @@ pub fn test_gap_analysis(db_path: &Path, target: &str) -> anyhow::Result<TestGap
 
     let mut covered = Vec::new();
     let mut uncovered = Vec::new();
-    for entry in entries {
+    for mut entry in entries {
         if entry.test_hits > 0 {
+            entry.coverage_status = "covered".to_string();
             covered.push(entry);
         } else {
+            entry.coverage_status = "uncovered".to_string();
             uncovered.push(entry);
         }
     }
 
     Ok(TestGapReport {
         target: target.to_string(),
+        analysis_state: derive_test_gap_analysis_state(covered.len(), uncovered.len()),
         covered,
         uncovered,
     })
+}
+
+pub fn derive_test_gap_analysis_state(covered: usize, uncovered: usize) -> String {
+    match (covered, uncovered) {
+        (0, 0) => "unknown",
+        (_, 0) => "covered",
+        (0, _) => "uncovered",
+        _ => "mixed",
+    }
+    .to_string()
+}
+
+fn include_path_for_scope(path: &str, scope: CouplingScope) -> bool {
+    if !scope.include_fixtures && is_fixture_path(path) {
+        return false;
+    }
+    if !scope.include_tests && is_test_path(path) {
+        return false;
+    }
+    true
+}
+
+fn is_test_path(file_path: &str) -> bool {
+    let normalized = file_path.replace('\\', "/");
+    let file_name = normalized.rsplit('/').next().unwrap_or(normalized.as_str());
+
+    normalized.starts_with("tests/")
+        || normalized.contains("/tests/")
+        || normalized.ends_with("_test.rs")
+        || normalized.ends_with(".test.ts")
+        || normalized.ends_with(".spec.ts")
+        || normalized.ends_with("_test.py")
+        || normalized.ends_with("_tests.py")
+        || file_name.starts_with("test_")
+}
+
+fn is_fixture_path(file_path: &str) -> bool {
+    let normalized = file_path.replace('\\', "/");
+    normalized.starts_with("tests/fixtures/") || normalized.contains("/tests/fixtures/")
 }
 
 #[derive(Debug, Clone, Serialize)]

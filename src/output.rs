@@ -1092,8 +1092,8 @@ pub fn print_dead(entries: &[DeadSymbol]) {
     }
     for entry in entries {
         println!(
-            "  {} ({}) in {}:{}",
-            entry.symbol, entry.kind, entry.file_path, entry.line
+            "  {} ({}) in {}:{} [{}] {}",
+            entry.symbol, entry.kind, entry.file_path, entry.line, entry.confidence, entry.reason
         );
     }
 }
@@ -1118,20 +1118,21 @@ struct JsonTestGapsOutput<'a> {
 
 pub fn print_test_gaps(report: &TestGapReport) {
     println!("Test gap analysis for {}:", report.target);
+    println!("  STATUS: {}", report.analysis_state);
     println!();
     println!("  COVERED: {}", report.covered.len());
     for entry in &report.covered {
         println!(
-            "    {} ({} lines, {} test hits)",
-            entry.symbol, entry.line_count, entry.test_hits
+            "    {} ({}, {} lines, {} test hits)",
+            entry.symbol, entry.coverage_status, entry.line_count, entry.test_hits
         );
     }
     println!();
     println!("  UNCOVERED: {}", report.uncovered.len());
     for entry in &report.uncovered {
         println!(
-            "    {} ({}, {} lines)",
-            entry.symbol, entry.risk, entry.line_count
+            "    {} ({}, {}, {} lines)",
+            entry.symbol, entry.coverage_status, entry.risk, entry.line_count
         );
     }
     let total = report.covered.len() + report.uncovered.len();

@@ -407,6 +407,10 @@ pub struct CouplingArgs {
     pub json: bool,
     #[arg(long, default_value_t = 20)]
     pub limit: u32,
+    #[arg(long, default_value_t = false)]
+    pub include_tests: bool,
+    #[arg(long, default_value_t = false)]
+    pub include_fixtures: bool,
 }
 
 #[derive(Debug, Args)]
@@ -415,6 +419,8 @@ pub struct DeadArgs {
     pub repo: PathBuf,
     #[arg(long)]
     pub json: bool,
+    #[arg(long, default_value_t = false)]
+    pub aggressive: bool,
     #[command(flatten)]
     pub filters: SymbolFilterArgs,
 }
@@ -486,6 +492,10 @@ pub struct RenameCheckArgs {
     pub repo: PathBuf,
     #[arg(long)]
     pub json: bool,
+    #[arg(long, default_value_t = false)]
+    pub include_tests: bool,
+    #[arg(long, default_value_t = false)]
+    pub include_fixtures: bool,
 }
 
 #[derive(Debug, Args)]
