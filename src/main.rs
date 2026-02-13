@@ -363,7 +363,11 @@ fn run_diff_impact(args: crate::cli::DiffImpactArgs) -> anyhow::Result<()> {
         } else {
             DiffImpactChangedMode::IncludeChanged
         },
-        max_results: args.max_results,
+        max_results: if args.no_limit {
+            None
+        } else {
+            Some(args.max_results)
+        },
     };
     let matches = diff_impact_for_changed_files(&store.db_path, &changed_files, &options)?;
     let include_tests = matches!(options.test_mode, DiffImpactTestMode::IncludeTests);
@@ -708,7 +712,8 @@ fn integration_check() {
             changed_lines: changed_lines.clone(),
             changed_symbols: vec!["run_find".to_string(), "run_find".to_string()],
             max_distance: 2,
-            max_results: Some(20),
+            max_results: 20,
+            no_limit: false,
             include_tests: false,
             exclude_tests: true,
             include_imports: true,
@@ -722,7 +727,8 @@ fn integration_check() {
             changed_lines,
             changed_symbols: vec!["run_find".to_string()],
             max_distance: 1,
-            max_results: None,
+            max_results: 30,
+            no_limit: true,
             include_tests: true,
             exclude_tests: false,
             include_imports: false,

@@ -132,8 +132,10 @@ pub struct DiffImpactArgs {
     pub changed_symbols: Vec<String>,
     #[arg(long, default_value_t = 2)]
     pub max_distance: u32,
-    #[arg(long = "max-results")]
-    pub max_results: Option<u32>,
+    #[arg(long = "max-results", default_value_t = 30)]
+    pub max_results: u32,
+    #[arg(long, default_value_t = false)]
+    pub no_limit: bool,
     #[arg(long, default_value_t = false, conflicts_with = "exclude_tests")]
     pub include_tests: bool,
     #[arg(long, default_value_t = false, conflicts_with = "include_tests")]
