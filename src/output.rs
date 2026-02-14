@@ -1081,6 +1081,7 @@ pub fn print_coupling_json(entries: &[CouplingEntry]) -> anyhow::Result<()> {
 struct JsonDeadOutput<'a> {
     schema_version: u32,
     command: &'a str,
+    mode: &'a str,
     results: &'a [DeadSymbol],
 }
 
@@ -1098,10 +1099,11 @@ pub fn print_dead(entries: &[DeadSymbol]) {
     }
 }
 
-pub fn print_dead_json(entries: &[DeadSymbol]) -> anyhow::Result<()> {
+pub fn print_dead_json(entries: &[DeadSymbol], mode: &str) -> anyhow::Result<()> {
     let payload = JsonDeadOutput {
         schema_version: JSON_SCHEMA_VERSION_V2,
         command: "dead",
+        mode,
         results: entries,
     };
     let serialized = serde_json::to_string_pretty(&payload)?;

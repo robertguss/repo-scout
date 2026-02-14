@@ -377,12 +377,12 @@ Rollback is required if:
 
 - [x] (2026-02-13) Reviewed agent-first spec and prior phase plans.
 - [x] (2026-02-13) Authored Phase 20 ExecPlan with contract-first milestones.
-- [ ] Milestone 1 implementation and tests.
-- [ ] Milestone 2 implementation and tests.
-- [ ] Milestone 3 implementation and tests.
-- [ ] Milestone 4 implementation and tests.
-- [ ] Milestone 5 implementation and tests.
-- [ ] Milestone 6 closure and validators.
+- [x] (2026-02-13) Milestone 1 implementation and tests.
+- [x] (2026-02-13) Milestone 2 implementation and tests.
+- [x] (2026-02-13) Milestone 3 implementation and tests.
+- [x] (2026-02-13) Milestone 4 implementation and tests.
+- [x] (2026-02-13) Milestone 5 implementation and tests.
+- [x] (2026-02-13) Milestone 6 closure and validators.
 
 ## Surprises & Discoveries
 
@@ -407,8 +407,26 @@ Rollback is required if:
 
 ## Outcomes & Retrospective
 
-Not started. Must be updated at completion with:
+Delivered outcomes:
 
-1. delivered contract and command outcomes,
-2. evidence/validator results,
-3. residual gaps and proposed follow-up phases.
+1. Added agent envelopes for `status`, `find`, and `refs` with schema IDs and index metadata.
+2. Added deterministic error envelope/exit mapping (`2|3|4|5`) for usage/index/internal/partial
+   states where applicable.
+3. Added `schema`, `resolve`, `query`, and `refactor-plan` commands with integration tests.
+4. Added index freshness semantics with `--require-index-fresh` and `--auto-index` on read flows.
+5. Carried forward precision contracts for `dead`, `test-gaps`, `boundary`, `coupling`, and
+   `rename-check`.
+6. Updated agent-facing docs (`docs/cli-reference.md`, `docs/json-output.md`,
+   `docs/agent-playbook-codex.md`).
+
+Evidence and validators:
+
+1. Added and passed milestone tests `110` through `120`.
+2. Executed required dogfooding commands pre-implementation and at closure.
+3. Executed `cargo test` and contract validators at closure.
+
+Residual gaps and follow-ups:
+
+1. Legacy JSON printers still exist for commands not yet migrated to envelope format.
+2. `query` batch currently supports `find`/`refs` request types only; extend in next phase.
+3. Global trace/timeout/strict flags are still command-local; unify in a follow-up contract phase.

@@ -44,3 +44,17 @@ pub fn unstaged_files(repo: &Path) -> anyhow::Result<Vec<String>> {
         .collect();
     Ok(files)
 }
+
+pub fn head_sha(repo: &Path) -> anyhow::Result<String> {
+    let output = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(repo)
+        .output()?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "git rev-parse failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    Ok(String::from_utf8(output.stdout)?.trim().to_string())
+}

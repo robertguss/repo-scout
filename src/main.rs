@@ -6,9 +6,14 @@ mod query;
 mod store;
 
 use std::fs;
+use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use clap::Parser;
 use rusqlite::Connection;
+use serde::Serialize;
+use serde_json::Value as JsonValue;
+use thiserror::Error;
 
 use crate::cli::{Cli, Command};
 use crate::indexer::index_repository;
@@ -36,8 +41,13 @@ use crate::store::ensure_store;
 /// ```
 fn main() {
     if let Err(error) = run() {
-        eprintln!("{error:#}");
-        std::process::exit(1);
+        let exit_code = error.exit_code();
+        if let Some(payload) = error.json_payload() {
+            println!("{payload}");
+        } else {
+            eprintln!("{error}");
+        }
+        std::process::exit(exit_code);
     }
 }
 
@@ -56,51 +66,177 @@ fn main() {
 /// // Dispatch based on current process arguments.
 /// let _ = crate::run();
 /// ```
-fn run() -> anyhow::Result<()> {
+fn run() -> Result<(), AppError> {
     let cli = Cli::parse();
     match cli.command {
-        Command::Index(args) => run_index(args),
+        Command::Index(args) => run_index(args).map_err(AppError::internal),
         Command::Status(args) => run_status(args),
+        Command::Schema(args) => run_schema(args).map_err(AppError::internal),
         Command::Find(args) => run_find(args),
         Command::Refs(args) => run_refs(args),
-        Command::Impact(args) => run_impact(args),
-        Command::Context(args) => run_context(args),
-        Command::TestsFor(args) => run_tests_for(args),
-        Command::VerifyPlan(args) => run_verify_plan(args),
-        Command::DiffImpact(args) => run_diff_impact(args),
-        Command::Explain(args) => run_explain(args),
-        Command::Snippet(args) => run_snippet(args),
-        Command::Outline(args) => run_outline(args),
-        Command::Summary(args) => run_summary_cmd(args),
-        Command::Callers(args) => run_callers(args),
-        Command::Callees(args) => run_callees(args),
-        Command::Deps(args) => run_deps(args),
-        Command::Hotspots(args) => run_hotspots(args),
-        Command::CallPath(args) => run_call_path(args),
-        Command::Related(args) => run_related(args),
-        Command::Health(args) => run_health(args),
-        Command::Circular(args) => run_circular(args),
-        Command::Tree(args) => run_tree(args),
-        Command::Orient(args) => run_orient(args),
-        Command::Anatomy(args) => run_anatomy(args),
-        Command::Coupling(args) => run_coupling(args),
-        Command::Dead(args) => run_dead(args),
-        Command::TestGaps(args) => run_test_gaps(args),
-        Command::Suggest(args) => run_suggest(args),
-        Command::Boundary(args) => run_boundary(args),
-        Command::ExtractCheck(args) => run_extract_check(args),
-        Command::MoveCheck(args) => run_move_check(args),
-        Command::RenameCheck(args) => run_rename_check(args),
-        Command::SplitCheck(args) => run_split_check(args),
-        Command::TestScaffold(args) => run_test_scaffold(args),
-        Command::SafeSteps(args) => run_safe_steps(args),
+        Command::Resolve(args) => run_resolve(args),
+        Command::Query(args) => run_query_batch(args),
+        Command::RefactorPlan(args) => run_refactor_plan(args),
+        Command::Impact(args) => run_impact(args).map_err(AppError::internal),
+        Command::Context(args) => run_context(args).map_err(AppError::internal),
+        Command::TestsFor(args) => run_tests_for(args).map_err(AppError::internal),
+        Command::VerifyPlan(args) => run_verify_plan(args).map_err(AppError::internal),
+        Command::DiffImpact(args) => run_diff_impact(args).map_err(AppError::internal),
+        Command::Explain(args) => run_explain(args).map_err(AppError::internal),
+        Command::Snippet(args) => run_snippet(args).map_err(AppError::internal),
+        Command::Outline(args) => run_outline(args).map_err(AppError::internal),
+        Command::Summary(args) => run_summary_cmd(args).map_err(AppError::internal),
+        Command::Callers(args) => run_callers(args).map_err(AppError::internal),
+        Command::Callees(args) => run_callees(args).map_err(AppError::internal),
+        Command::Deps(args) => run_deps(args).map_err(AppError::internal),
+        Command::Hotspots(args) => run_hotspots(args).map_err(AppError::internal),
+        Command::CallPath(args) => run_call_path(args).map_err(AppError::internal),
+        Command::Related(args) => run_related(args).map_err(AppError::internal),
+        Command::Health(args) => run_health(args).map_err(AppError::internal),
+        Command::Circular(args) => run_circular(args).map_err(AppError::internal),
+        Command::Tree(args) => run_tree(args).map_err(AppError::internal),
+        Command::Orient(args) => run_orient(args).map_err(AppError::internal),
+        Command::Anatomy(args) => run_anatomy(args).map_err(AppError::internal),
+        Command::Coupling(args) => run_coupling(args).map_err(AppError::internal),
+        Command::Dead(args) => run_dead(args).map_err(AppError::internal),
+        Command::TestGaps(args) => run_test_gaps(args).map_err(AppError::internal),
+        Command::Suggest(args) => run_suggest(args).map_err(AppError::internal),
+        Command::Boundary(args) => run_boundary(args).map_err(AppError::internal),
+        Command::ExtractCheck(args) => run_extract_check(args).map_err(AppError::internal),
+        Command::MoveCheck(args) => run_move_check(args).map_err(AppError::internal),
+        Command::RenameCheck(args) => run_rename_check(args).map_err(AppError::internal),
+        Command::SplitCheck(args) => run_split_check(args).map_err(AppError::internal),
+        Command::TestScaffold(args) => run_test_scaffold(args).map_err(AppError::internal),
+        Command::SafeSteps(args) => run_safe_steps(args).map_err(AppError::internal),
         Command::VerifyRefactor(args) => run_verify_refactor(args),
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+enum ErrorKind {
+    Usage,
+    Index,
+    Partial,
+    Internal,
+}
+
+#[derive(Debug, Error)]
+#[error("{message}")]
+struct AppError {
+    kind: ErrorKind,
+    message: String,
+    command: Option<String>,
+    json: bool,
+    details: Option<JsonValue>,
+}
+
+impl AppError {
+    fn internal(error: impl std::fmt::Display) -> Self {
+        Self {
+            kind: ErrorKind::Internal,
+            message: error.to_string(),
+            command: None,
+            json: false,
+            details: None,
+        }
+    }
+
+    fn index(command: &str, json: bool, message: &str, details: Option<JsonValue>) -> Self {
+        Self {
+            kind: ErrorKind::Index,
+            message: message.to_string(),
+            command: Some(command.to_string()),
+            json,
+            details,
+        }
+    }
+
+    fn partial(command: &str, json: bool, message: &str, details: Option<JsonValue>) -> Self {
+        Self {
+            kind: ErrorKind::Partial,
+            message: message.to_string(),
+            command: Some(command.to_string()),
+            json,
+            details,
+        }
+    }
+
+    fn exit_code(&self) -> i32 {
+        match self.kind {
+            ErrorKind::Usage => 2,
+            ErrorKind::Index => 3,
+            ErrorKind::Internal => 4,
+            ErrorKind::Partial => 5,
+        }
+    }
+
+    fn code(&self) -> &'static str {
+        match self.kind {
+            ErrorKind::Usage => "USAGE_ERROR",
+            ErrorKind::Index => "INDEX_STALE",
+            ErrorKind::Internal => "INTERNAL_ERROR",
+            ErrorKind::Partial => "PARTIAL_DATA",
+        }
+    }
+
+    fn json_payload(&self) -> Option<String> {
+        if !self.json {
+            return None;
+        }
+        let payload = serde_json::json!({
+            "schema": "repo-scout/error@v1",
+            "command": self.command.clone().unwrap_or_else(|| "unknown".to_string()),
+            "ok": false,
+            "error": {
+                "code": self.code(),
+                "message": self.message,
+                "details": self.details.clone().unwrap_or_else(|| serde_json::json!({})),
+            },
+        });
+        serde_json::to_string_pretty(&payload).ok()
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct AgentMetaIndex {
+    schema_version: i64,
+    indexed_at: Option<String>,
+    head_sha: Option<String>,
+    stale: bool,
+}
+
+fn print_agent_json(
+    schema: &str,
+    command: &str,
+    repo: &Path,
+    index: AgentMetaIndex,
+    data: JsonValue,
+) -> anyhow::Result<()> {
+    let payload = serde_json::json!({
+        "schema": schema,
+        "command": command,
+        "ok": true,
+        "meta": {
+            "repo": repo.display().to_string(),
+            "index": index,
+        },
+        "data": data,
+    });
+    println!("{}", serde_json::to_string_pretty(&payload)?);
+    Ok(())
+}
+
+fn agent_meta_json(repo: &Path, index: &AgentMetaIndex) -> JsonValue {
+    serde_json::json!({
+        "repo": repo.display().to_string(),
+        "index": index,
+    })
+}
+
 fn run_index(args: crate::cli::RepoArgs) -> anyhow::Result<()> {
-    let store = ensure_store(&args.repo)?;
+    let store = ensure_store(&args.repo).map_err(AppError::internal)?;
     let summary = index_repository(&args.repo, &store.db_path)?;
+    write_index_runtime_metadata(&store.db_path, &args.repo)?;
     output::print_index(
         &store.db_path,
         store.schema_version,
@@ -110,18 +246,77 @@ fn run_index(args: crate::cli::RepoArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn run_status(args: crate::cli::RepoArgs) -> anyhow::Result<()> {
-    let store = ensure_store(&args.repo)?;
-    let summary = status_summary(&store.db_path)?;
-    output::print_status(&store.db_path, store.schema_version, &summary);
+fn run_status<T>(args: T) -> Result<(), AppError>
+where
+    T: Into<crate::cli::StatusArgs>,
+{
+    let args = args.into();
+    let store = ensure_store(&args.repo).map_err(AppError::internal)?;
+    maybe_auto_index(
+        &args.repo,
+        &store.db_path,
+        args.auto_index,
+        args.require_index_fresh,
+    )
+    .map_err(AppError::internal)?;
+    let summary = status_summary(&store.db_path).map_err(AppError::internal)?;
+    let freshness = read_index_freshness(&args.repo, &store.db_path).map_err(AppError::internal)?;
+    if args.require_index_fresh && freshness.stale {
+        return Err(AppError::index(
+            "status",
+            args.json,
+            "Index is stale relative to repository files",
+            Some(serde_json::json!({
+                "suggested_fix": "repo-scout index --repo ."
+            })),
+        ));
+    }
+    if args.json {
+        print_agent_json(
+            "repo-scout/status@v1",
+            "status",
+            &args.repo,
+            AgentMetaIndex {
+                schema_version: store.schema_version,
+                indexed_at: freshness.indexed_at,
+                head_sha: freshness.head_sha,
+                stale: freshness.stale,
+            },
+            serde_json::json!({
+                "summary": summary
+            }),
+        )
+        .map_err(AppError::internal)?;
+    } else {
+        output::print_status(&store.db_path, store.schema_version, &summary);
+    }
     Ok(())
 }
 
-fn run_find(args: crate::cli::FindArgs) -> anyhow::Result<()> {
-    let store = ensure_store(&args.repo)?;
+fn run_find(args: crate::cli::FindArgs) -> Result<(), AppError> {
+    let store = ensure_store(&args.repo).map_err(AppError::internal)?;
+    maybe_auto_index(
+        &args.repo,
+        &store.db_path,
+        args.auto_index,
+        args.require_index_fresh,
+    )
+    .map_err(AppError::internal)?;
+    let freshness = read_index_freshness(&args.repo, &store.db_path).map_err(AppError::internal)?;
+    if args.require_index_fresh && freshness.stale {
+        return Err(AppError::index(
+            "find",
+            args.json,
+            "Index is stale relative to repository files",
+            Some(serde_json::json!({
+                "suggested_fix": "repo-scout index --repo ."
+            })),
+        ));
+    }
     let symbol_query = parse_symbol_query(&args.symbol);
     let scope = query_scope_for_find_refs(args.code_only, args.exclude_tests, args.filters.scope);
-    let mut matches = find_matches_scoped(&store.db_path, &symbol_query.lookup_symbol, &scope)?;
+    let mut matches = find_matches_scoped(&store.db_path, &symbol_query.lookup_symbol, &scope)
+        .map_err(AppError::internal)?;
     filter_query_matches(&mut matches, &args.filters);
     apply_query_match_ranking_preferences(
         &mut matches,
@@ -133,13 +328,37 @@ fn run_find(args: crate::cli::FindArgs) -> anyhow::Result<()> {
         matches.truncate(u32_to_usize(max_results));
     }
     if args.json {
-        output::print_query_json("find", &symbol_query.lookup_symbol, &matches)?;
+        let index = AgentMetaIndex {
+            schema_version: store.schema_version,
+            indexed_at: freshness.indexed_at,
+            head_sha: freshness.head_sha,
+            stale: freshness.stale,
+        };
+        let payload = serde_json::json!({
+            "schema": "repo-scout/find@v1",
+            "command": "find",
+            "ok": true,
+            "meta": agent_meta_json(&args.repo, &index),
+            "data": {
+                "query": symbol_query.lookup_symbol,
+                "results": matches,
+            },
+            // Backward-compatible fields retained for pre-Phase 20 contracts.
+            "schema_version": output::JSON_SCHEMA_VERSION,
+            "query": symbol_query.lookup_symbol,
+            "results": matches,
+        });
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&payload).map_err(AppError::internal)?
+        );
     } else if args.compact {
         output::print_query_compact(&matches);
     } else {
         output::print_query("find", &symbol_query.lookup_symbol, &matches);
         if matches.is_empty() {
-            let suggestions = suggest_similar_symbols(&store.db_path, &symbol_query.lookup_symbol)?;
+            let suggestions = suggest_similar_symbols(&store.db_path, &symbol_query.lookup_symbol)
+                .map_err(AppError::internal)?;
             if !suggestions.is_empty() {
                 output::print_did_you_mean(&suggestions);
             }
@@ -173,11 +392,30 @@ fn run_find(args: crate::cli::FindArgs) -> anyhow::Result<()> {
 /// };
 /// let _ = run_refs(args);
 /// ```
-fn run_refs(args: crate::cli::RefsArgs) -> anyhow::Result<()> {
-    let store = ensure_store(&args.repo)?;
+fn run_refs(args: crate::cli::RefsArgs) -> Result<(), AppError> {
+    let store = ensure_store(&args.repo).map_err(AppError::internal)?;
+    maybe_auto_index(
+        &args.repo,
+        &store.db_path,
+        args.auto_index,
+        args.require_index_fresh,
+    )
+    .map_err(AppError::internal)?;
+    let freshness = read_index_freshness(&args.repo, &store.db_path).map_err(AppError::internal)?;
+    if args.require_index_fresh && freshness.stale {
+        return Err(AppError::index(
+            "refs",
+            args.json,
+            "Index is stale relative to repository files",
+            Some(serde_json::json!({
+                "suggested_fix": "repo-scout index --repo ."
+            })),
+        ));
+    }
     let symbol_query = parse_symbol_query(&args.symbol);
     let scope = query_scope_for_find_refs(args.code_only, args.exclude_tests, args.filters.scope);
-    let mut matches = refs_matches_scoped(&store.db_path, &symbol_query.lookup_symbol, &scope)?;
+    let mut matches = refs_matches_scoped(&store.db_path, &symbol_query.lookup_symbol, &scope)
+        .map_err(AppError::internal)?;
     filter_query_matches(&mut matches, &args.filters);
     apply_query_match_ranking_preferences(
         &mut matches,
@@ -189,11 +427,372 @@ fn run_refs(args: crate::cli::RefsArgs) -> anyhow::Result<()> {
         matches.truncate(u32_to_usize(max_results));
     }
     if args.json {
-        output::print_query_json("refs", &symbol_query.lookup_symbol, &matches)?;
+        let index = AgentMetaIndex {
+            schema_version: store.schema_version,
+            indexed_at: freshness.indexed_at,
+            head_sha: freshness.head_sha,
+            stale: freshness.stale,
+        };
+        let payload = serde_json::json!({
+            "schema": "repo-scout/refs@v1",
+            "command": "refs",
+            "ok": true,
+            "meta": agent_meta_json(&args.repo, &index),
+            "data": {
+                "query": symbol_query.lookup_symbol,
+                "results": matches,
+            },
+            // Backward-compatible fields retained for pre-Phase 20 contracts.
+            "schema_version": output::JSON_SCHEMA_VERSION,
+            "query": symbol_query.lookup_symbol,
+            "results": matches,
+        });
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&payload).map_err(AppError::internal)?
+        );
     } else if args.compact {
         output::print_query_compact(&matches);
     } else {
         output::print_refs_grouped(&symbol_query.lookup_symbol, &matches);
+    }
+    Ok(())
+}
+
+fn run_schema(args: crate::cli::SchemaArgs) -> anyhow::Result<()> {
+    let store = ensure_store(&args.repo)?;
+    let schemas = serde_json::json!([
+        { "command": "status", "schema": "repo-scout/status@v1" },
+        { "command": "find", "schema": "repo-scout/find@v1" },
+        { "command": "refs", "schema": "repo-scout/refs@v1" },
+        { "command": "resolve", "schema": "repo-scout/resolve@v1" },
+        { "command": "query", "schema": "repo-scout/query@v1" },
+        { "command": "refactor-plan", "schema": "repo-scout/refactor-plan@v1" },
+        { "command": "error", "schema": "repo-scout/error@v1" }
+    ]);
+    if args.json {
+        let freshness = read_index_freshness(&args.repo, &store.db_path)?;
+        print_agent_json(
+            "repo-scout/schema@v1",
+            "schema",
+            &args.repo,
+            AgentMetaIndex {
+                schema_version: store.schema_version,
+                indexed_at: freshness.indexed_at,
+                head_sha: freshness.head_sha,
+                stale: freshness.stale,
+            },
+            serde_json::json!({ "schemas": schemas }),
+        )?;
+    } else {
+        println!("schema registry:");
+        let value = schemas
+            .as_array()
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|entry| {
+                let command = entry.get("command")?.as_str()?;
+                let schema = entry.get("schema")?.as_str()?;
+                Some((command.to_string(), schema.to_string()))
+            })
+            .collect::<Vec<_>>();
+        for (command, schema) in value {
+            println!("  {command}: {schema}");
+        }
+    }
+    Ok(())
+}
+
+#[derive(Debug, Serialize)]
+struct ResolveCandidate {
+    symbol_id: i64,
+    symbol: String,
+    qualified_symbol: String,
+    kind: String,
+    language: String,
+    file_path: String,
+    line: u32,
+    signature: Option<String>,
+}
+
+fn run_resolve(args: crate::cli::ResolveArgs) -> Result<(), AppError> {
+    let store = ensure_store(&args.repo).map_err(AppError::internal)?;
+    maybe_auto_index(
+        &args.repo,
+        &store.db_path,
+        args.auto_index,
+        args.require_index_fresh,
+    )
+    .map_err(AppError::internal)?;
+    let freshness = read_index_freshness(&args.repo, &store.db_path).map_err(AppError::internal)?;
+    if args.require_index_fresh && freshness.stale {
+        return Err(AppError::index(
+            "resolve",
+            args.json,
+            "Index is stale relative to repository files",
+            Some(serde_json::json!({ "suggested_fix": "repo-scout index --repo ." })),
+        ));
+    }
+
+    let connection = Connection::open(&store.db_path).map_err(AppError::internal)?;
+    let mut statement = connection
+        .prepare(
+            "SELECT symbol_id, symbol, qualified_symbol, kind, language, file_path, start_line,
+                     signature
+             FROM symbols_v2
+             WHERE symbol LIKE ?1
+             ORDER BY CASE WHEN symbol = ?2 THEN 0 ELSE 1 END,
+                      symbol ASC, file_path ASC, start_line ASC
+             LIMIT 50",
+        )
+        .map_err(AppError::internal)?;
+    let rows = statement
+        .query_map([format!("%{}%", args.symbol), args.symbol.clone()], |row| {
+            Ok(ResolveCandidate {
+                symbol_id: row.get(0)?,
+                symbol: row.get(1)?,
+                qualified_symbol: row.get(2)?,
+                kind: row.get(3)?,
+                language: row.get(4)?,
+                file_path: row.get(5)?,
+                line: row.get(6)?,
+                signature: row.get(7)?,
+            })
+        })
+        .map_err(AppError::internal)?;
+    let mut candidates = Vec::new();
+    for row in rows {
+        let entry = row.map_err(AppError::internal)?;
+        if path_passes_filters(&entry.file_path, &args.filters) {
+            candidates.push(entry);
+        }
+    }
+
+    if args.json {
+        let recommended = candidates.first().map(|entry| entry.symbol_id);
+        print_agent_json(
+            "repo-scout/resolve@v1",
+            "resolve",
+            &args.repo,
+            AgentMetaIndex {
+                schema_version: store.schema_version,
+                indexed_at: freshness.indexed_at,
+                head_sha: freshness.head_sha,
+                stale: freshness.stale,
+            },
+            serde_json::json!({
+                "query": args.symbol,
+                "ambiguous": candidates.len() > 1,
+                "recommended_symbol_id": recommended,
+                "candidates": candidates,
+            }),
+        )
+        .map_err(AppError::internal)?;
+    } else {
+        println!("resolve query: {}", args.symbol);
+        println!("candidates: {}", candidates.len());
+        for candidate in candidates {
+            println!(
+                "  [{}] {} {}:{}",
+                candidate.symbol_id,
+                candidate.qualified_symbol,
+                candidate.file_path,
+                candidate.line
+            );
+        }
+    }
+    Ok(())
+}
+
+fn run_query_batch(args: crate::cli::QueryBatchArgs) -> Result<(), AppError> {
+    let raw = fs::read_to_string(&args.input).map_err(AppError::internal)?;
+    let mut requests = Vec::new();
+    match args.format {
+        crate::cli::QueryBatchFormat::Json => {
+            let parsed: JsonValue = serde_json::from_str(&raw).map_err(AppError::internal)?;
+            let Some(array) = parsed.as_array() else {
+                return Err(AppError::internal("batch json input must be an array"));
+            };
+            requests.extend(array.iter().cloned());
+        }
+        crate::cli::QueryBatchFormat::Jsonl => {
+            for line in raw.lines() {
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                requests.push(serde_json::from_str(trimmed).map_err(AppError::internal)?);
+            }
+        }
+    }
+
+    let mut responses = Vec::new();
+    for request in requests {
+        let id = request
+            .get("id")
+            .and_then(JsonValue::as_str)
+            .unwrap_or("request")
+            .to_string();
+        let command = request
+            .get("command")
+            .and_then(JsonValue::as_str)
+            .unwrap_or("")
+            .to_string();
+        let symbol = request
+            .get("symbol")
+            .and_then(JsonValue::as_str)
+            .unwrap_or("")
+            .to_string();
+
+        let result = match command.as_str() {
+            "find" => {
+                let matches = find_matches_scoped(
+                    &ensure_store(&args.repo)
+                        .map_err(AppError::internal)?
+                        .db_path,
+                    &symbol,
+                    &QueryScope::default(),
+                )
+                .map_err(AppError::internal)?;
+                serde_json::json!({ "query": symbol, "results": matches })
+            }
+            "refs" => {
+                let matches = refs_matches_scoped(
+                    &ensure_store(&args.repo)
+                        .map_err(AppError::internal)?
+                        .db_path,
+                    &symbol,
+                    &QueryScope::default(),
+                )
+                .map_err(AppError::internal)?;
+                serde_json::json!({ "query": symbol, "results": matches })
+            }
+            _ => {
+                let error = serde_json::json!({
+                    "id": id,
+                    "ok": false,
+                    "error": {
+                        "code": "UNSUPPORTED_BATCH_COMMAND",
+                        "message": format!("unsupported command '{command}'")
+                    }
+                });
+                responses.push(error);
+                if args.fail_fast {
+                    break;
+                }
+                continue;
+            }
+        };
+
+        responses.push(serde_json::json!({
+            "id": id,
+            "ok": true,
+            "command": command,
+            "data": result
+        }));
+    }
+
+    if matches!(args.format, crate::cli::QueryBatchFormat::Jsonl) {
+        for response in responses {
+            println!(
+                "{}",
+                serde_json::to_string(&response).map_err(AppError::internal)?
+            );
+        }
+    } else {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "schema": "repo-scout/query@v1",
+                "command": "query",
+                "ok": true,
+                "data": { "results": responses }
+            }))
+            .map_err(AppError::internal)?
+        );
+    }
+    Ok(())
+}
+
+fn run_refactor_plan(args: crate::cli::RefactorPlanArgs) -> Result<(), AppError> {
+    let store = ensure_store(&args.repo).map_err(AppError::internal)?;
+    let boundary = crate::query::planning::boundary_analysis(&store.db_path, &args.target)
+        .map_err(AppError::internal)?;
+    let dead = crate::query::diagnostics::dead_symbols(&store.db_path, false)
+        .map_err(AppError::internal)?;
+    let gaps = crate::query::diagnostics::test_gap_analysis(&store.db_path, &args.target)
+        .map_err(AppError::internal)?;
+    let blockers = if gaps.analysis_state == "unknown" {
+        vec!["coverage state unknown".to_string()]
+    } else {
+        Vec::new()
+    };
+    let actions = vec![
+        serde_json::json!({
+            "priority": 1,
+            "action": "analyze-boundary",
+            "confidence": "high",
+            "risk": "low",
+        }),
+        serde_json::json!({
+            "priority": 2,
+            "action": "address-test-gaps",
+            "confidence": if gaps.uncovered.is_empty() { "high" } else { "medium" },
+            "risk": if gaps.uncovered.is_empty() { "low" } else { "medium" },
+        }),
+        serde_json::json!({
+            "priority": 3,
+            "action": "review-dead-symbols",
+            "confidence": "medium",
+            "risk": "low",
+        }),
+    ];
+
+    if args.json {
+        let freshness =
+            read_index_freshness(&args.repo, &store.db_path).map_err(AppError::internal)?;
+        print_agent_json(
+            "repo-scout/refactor-plan@v1",
+            "refactor-plan",
+            &args.repo,
+            AgentMetaIndex {
+                schema_version: store.schema_version,
+                indexed_at: freshness.indexed_at,
+                head_sha: freshness.head_sha,
+                stale: freshness.stale,
+            },
+            serde_json::json!({
+                "target": args.target,
+                "actions": actions,
+                "blockers": blockers,
+                "diagnostics": {
+                    "boundary_public": boundary.public_symbols.len(),
+                    "boundary_internal": boundary.internal_symbols.len(),
+                    "dead_candidates": dead.len(),
+                    "test_gap_state": gaps.analysis_state,
+                }
+            }),
+        )
+        .map_err(AppError::internal)?;
+    } else {
+        println!("Refactor plan for {}:", args.target);
+        println!(
+            "  boundary public symbols: {}",
+            boundary.public_symbols.len()
+        );
+        println!(
+            "  boundary internal symbols: {}",
+            boundary.internal_symbols.len()
+        );
+        println!("  dead symbols (conservative): {}", dead.len());
+        println!("  test-gap state: {}", gaps.analysis_state);
+        if !blockers.is_empty() {
+            println!("  blockers:");
+            for blocker in blockers {
+                println!("    - {blocker}");
+            }
+        }
     }
     Ok(())
 }
@@ -1170,10 +1769,16 @@ fn run_coupling(_args: crate::cli::CouplingArgs) -> anyhow::Result<()> {
 fn run_dead(_args: crate::cli::DeadArgs) -> anyhow::Result<()> {
     let args = _args;
     let store = ensure_store(&args.repo)?;
-    let mut entries = crate::query::diagnostics::dead_symbols(&store.db_path, args.aggressive)?;
+    let aggressive = args.aggressive || matches!(args.mode, crate::cli::DeadMode::Aggressive);
+    let mode = if aggressive {
+        "aggressive"
+    } else {
+        "conservative"
+    };
+    let mut entries = crate::query::diagnostics::dead_symbols(&store.db_path, aggressive)?;
     entries.retain(|entry| path_passes_filters(&entry.file_path, &args.filters));
     if args.json {
-        output::print_dead_json(&entries)?;
+        output::print_dead_json(&entries, mode)?;
     } else {
         output::print_dead(&entries);
     }
@@ -1460,22 +2065,31 @@ fn run_safe_steps(_args: crate::cli::SafeStepsArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn run_verify_refactor(_args: crate::cli::VerifyRefactorArgs) -> anyhow::Result<()> {
+fn run_verify_refactor(_args: crate::cli::VerifyRefactorArgs) -> Result<(), AppError> {
     let args = _args;
     let report = crate::query::verification::verify_refactor_report(
         &args.repo,
         &args.before,
         args.after.as_deref(),
-    )?;
+    )
+    .map_err(AppError::internal)?;
     if args.strict && (!report.warnings.is_empty() || !report.changed_files.is_empty()) {
-        anyhow::bail!(
-            "verify-refactor strict mode failed: {}",
-            if !report.warnings.is_empty() {
-                report.warnings.join("; ")
-            } else {
-                format!("{} changed file(s) detected", report.changed_files.len())
-            }
-        );
+        return Err(AppError::partial(
+            "verify-refactor",
+            args.json,
+            &format!(
+                "verify-refactor strict mode failed: {}",
+                if !report.warnings.is_empty() {
+                    report.warnings.join("; ")
+                } else {
+                    format!("{} changed file(s) detected", report.changed_files.len())
+                }
+            ),
+            Some(serde_json::json!({
+                "changed_files": report.changed_files,
+                "warnings": report.warnings,
+            })),
+        ));
     }
     if args.json {
         let payload = serde_json::json!({
@@ -1486,7 +2100,10 @@ fn run_verify_refactor(_args: crate::cli::VerifyRefactorArgs) -> anyhow::Result<
             "changed_files": report.changed_files,
             "warnings": report.warnings,
         });
-        println!("{}", serde_json::to_string_pretty(&payload)?);
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&payload).map_err(AppError::internal)?
+        );
     } else {
         println!(
             "Refactoring verification ({} -> {}):",
@@ -1544,6 +2161,128 @@ fn print_health_diff(
             .map(|value| value.to_string())
             .unwrap_or_else(|| "?".to_string())
     );
+}
+
+#[derive(Debug)]
+struct IndexFreshness {
+    indexed_at: Option<String>,
+    head_sha: Option<String>,
+    stale: bool,
+}
+
+fn maybe_auto_index(
+    repo: &Path,
+    db_path: &Path,
+    auto_index: bool,
+    require_index_fresh: bool,
+) -> anyhow::Result<()> {
+    if !auto_index && !require_index_fresh {
+        return Ok(());
+    }
+    let freshness = read_index_freshness(repo, db_path)?;
+    if auto_index && freshness.stale {
+        let _ = index_repository(repo, db_path)?;
+        write_index_runtime_metadata(db_path, repo)?;
+    }
+    Ok(())
+}
+
+fn read_index_freshness(repo: &Path, db_path: &Path) -> anyhow::Result<IndexFreshness> {
+    let head_sha = git_utils::head_sha(repo).ok();
+    let connection = Connection::open(db_path)?;
+    let indexed_at = connection
+        .query_row(
+            "SELECT value FROM meta WHERE key = 'indexed_at'",
+            [],
+            |row| row.get::<_, String>(0),
+        )
+        .ok();
+    let indexed_head = connection
+        .query_row(
+            "SELECT value FROM meta WHERE key = 'index_head_sha'",
+            [],
+            |row| row.get::<_, String>(0),
+        )
+        .ok();
+    let stale_by_time = indexed_at
+        .as_deref()
+        .and_then(|value| value.parse::<u128>().ok())
+        .and_then(|millis| {
+            let millis_u64 = u64::try_from(millis).ok()?;
+            UNIX_EPOCH.checked_add(std::time::Duration::from_millis(millis_u64))
+        })
+        .is_some_and(|indexed| has_newer_source_file(repo, indexed));
+    let stale = stale_by_time
+        || match (head_sha.as_deref(), indexed_head.as_deref()) {
+            (Some(head), Some(indexed)) => head != indexed,
+            _ => false,
+        };
+
+    Ok(IndexFreshness {
+        indexed_at,
+        head_sha,
+        stale,
+    })
+}
+
+fn has_newer_source_file(root: &Path, than: SystemTime) -> bool {
+    fn is_source(path: &Path) -> bool {
+        matches!(
+            path.extension().and_then(|ext| ext.to_str()),
+            Some("rs" | "py" | "go" | "ts" | "tsx" | "js" | "jsx")
+        )
+    }
+
+    fn walk(path: &Path, than: SystemTime) -> bool {
+        let entries = match fs::read_dir(path) {
+            Ok(entries) => entries,
+            Err(_) => return false,
+        };
+        for entry in entries.filter_map(Result::ok) {
+            let candidate = entry.path();
+            let name = candidate
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or_default();
+            if name == ".git" || name == ".repo-scout" || name == "target" {
+                continue;
+            }
+            if candidate.is_dir() {
+                if walk(&candidate, than) {
+                    return true;
+                }
+                continue;
+            }
+            if is_source(&candidate)
+                && fs::metadata(&candidate)
+                    .and_then(|meta| meta.modified())
+                    .map(|modified| modified > than)
+                    .unwrap_or(false)
+            {
+                return true;
+            }
+        }
+        false
+    }
+
+    walk(root, than)
+}
+
+fn write_index_runtime_metadata(db_path: &Path, repo: &Path) -> anyhow::Result<()> {
+    let connection = Connection::open(db_path)?;
+    let now_millis = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
+    let now = now_millis.to_string();
+    connection.execute(
+        "INSERT OR REPLACE INTO meta(key, value) VALUES('indexed_at', ?1)",
+        [now.as_str()],
+    )?;
+    if let Ok(head_sha) = git_utils::head_sha(repo) {
+        connection.execute(
+            "INSERT OR REPLACE INTO meta(key, value) VALUES('index_head_sha', ?1)",
+            [head_sha.as_str()],
+        )?;
+    }
+    Ok(())
 }
 
 /// Normalize a changed-file path into a repository-relative, forward-slash string.
@@ -1678,6 +2417,8 @@ fn integration_check() {
             exclude_tests: true,
             max_results: Some(1),
             compact: false,
+            require_index_fresh: false,
+            auto_index: false,
             filters: SymbolFilterArgs::default(),
         })
         .expect("find json should succeed");
@@ -1689,6 +2430,8 @@ fn integration_check() {
             exclude_tests: false,
             max_results: None,
             compact: false,
+            require_index_fresh: false,
+            auto_index: false,
             filters: SymbolFilterArgs::default(),
         })
         .expect("find text should succeed");
@@ -1701,6 +2444,8 @@ fn integration_check() {
             exclude_tests: false,
             max_results: Some(10),
             compact: false,
+            require_index_fresh: false,
+            auto_index: false,
             filters: SymbolFilterArgs::default(),
         })
         .expect("refs json should succeed");
@@ -1712,6 +2457,8 @@ fn integration_check() {
             exclude_tests: false,
             max_results: None,
             compact: false,
+            require_index_fresh: false,
+            auto_index: false,
             filters: SymbolFilterArgs::default(),
         })
         .expect("refs text should succeed");
@@ -2006,6 +2753,8 @@ fn integration_check() {
             exclude_tests: false,
             max_results: None,
             compact: true,
+            require_index_fresh: false,
+            auto_index: false,
             filters: SymbolFilterArgs::default(),
         })
         .expect("find compact");
@@ -2019,6 +2768,8 @@ fn integration_check() {
             exclude_tests: false,
             max_results: None,
             compact: true,
+            require_index_fresh: false,
+            auto_index: false,
             filters: SymbolFilterArgs::default(),
         })
         .expect("refs compact");

@@ -21,7 +21,15 @@ repo-scout index --repo <REPO>
 Show index status and health metadata.
 
 ```bash
-repo-scout status --repo <REPO>
+repo-scout status --repo <REPO> [--json] [--require-index-fresh] [--auto-index]
+```
+
+### `schema`
+
+List machine schema identifiers exposed by the CLI.
+
+```bash
+repo-scout schema --repo <REPO> [--json]
 ```
 
 ### `find`
@@ -29,7 +37,7 @@ repo-scout status --repo <REPO>
 Find symbol definitions.
 
 ```bash
-repo-scout find <SYMBOL> --repo <REPO> [--json] [--code-only] [--exclude-tests] [--max-results <N>] [--compact]
+repo-scout find <SYMBOL> --repo <REPO> [--json] [--code-only] [--exclude-tests] [--max-results <N>] [--compact] [--require-index-fresh] [--auto-index]
 ```
 
 ### `refs`
@@ -37,7 +45,31 @@ repo-scout find <SYMBOL> --repo <REPO> [--json] [--code-only] [--exclude-tests] 
 Find references to a symbol.
 
 ```bash
-repo-scout refs <SYMBOL> --repo <REPO> [--json] [--code-only] [--exclude-tests] [--max-results <N>] [--compact]
+repo-scout refs <SYMBOL> --repo <REPO> [--json] [--code-only] [--exclude-tests] [--max-results <N>] [--compact] [--require-index-fresh] [--auto-index]
+```
+
+### `resolve`
+
+Resolve a symbol string to canonical candidate identities.
+
+```bash
+repo-scout resolve <SYMBOL> --repo <REPO> [--json] [--scope <all|production|tests>] [--lang <LANG>] [--file <PATH>] [--exclude-glob <GLOB>] [--include-fixtures] [--require-index-fresh] [--auto-index]
+```
+
+### `query`
+
+Execute multiple requests in one process from JSON or JSONL input.
+
+```bash
+repo-scout query --repo <REPO> --input <PATH> [--format <json|jsonl>] [--fail-fast]
+```
+
+### `refactor-plan`
+
+Compose diagnostics into a conservative ranked refactor plan.
+
+```bash
+repo-scout refactor-plan <TARGET> --repo <REPO> [--json]
 ```
 
 ### `impact`

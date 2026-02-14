@@ -15,11 +15,22 @@ pub enum Command {
     #[command(about = "Index a repository into the local SQLite database")]
     Index(RepoArgs),
     #[command(about = "Show index status and health")]
-    Status(RepoArgs),
+    Status(StatusArgs),
+    #[command(about = "List JSON schemas exposed by repo-scout commands")]
+    Schema(SchemaArgs),
     #[command(about = "Find symbol definitions by name")]
     Find(FindArgs),
     #[command(about = "Find all references to a symbol")]
     Refs(RefsArgs),
+    #[command(about = "Resolve a symbol to canonical candidates")]
+    Resolve(ResolveArgs),
+    #[command(about = "Execute batch requests in one process")]
+    Query(QueryBatchArgs),
+    #[command(
+        name = "refactor-plan",
+        about = "Compose diagnostics into a conservative refactor plan"
+    )]
+    RefactorPlan(RefactorPlanArgs),
     #[command(about = "Show what depends on a symbol (callers, importers)")]
     Impact(QueryArgs),
     #[command(about = "Find code relevant to a task description")]
@@ -169,6 +180,37 @@ pub struct RepoArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct StatusArgs {
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long, default_value_t = false)]
+    pub json: bool,
+    #[arg(long = "require-index-fresh", default_value_t = false)]
+    pub require_index_fresh: bool,
+    #[arg(long = "auto-index", default_value_t = false)]
+    pub auto_index: bool,
+}
+
+impl From<RepoArgs> for StatusArgs {
+    fn from(value: RepoArgs) -> Self {
+        Self {
+            repo: value.repo,
+            json: false,
+            require_index_fresh: false,
+            auto_index: false,
+        }
+    }
+}
+
+#[derive(Debug, Args)]
+pub struct SchemaArgs {
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long, default_value_t = false)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
 pub struct QueryArgs {
     pub symbol: String,
     #[arg(long)]
@@ -216,6 +258,10 @@ pub struct FindArgs {
     pub max_results: Option<u32>,
     #[arg(long, default_value_t = false)]
     pub compact: bool,
+    #[arg(long = "require-index-fresh", default_value_t = false)]
+    pub require_index_fresh: bool,
+    #[arg(long = "auto-index", default_value_t = false)]
+    pub auto_index: bool,
     #[command(flatten)]
     pub filters: SymbolFilterArgs,
 }
@@ -235,8 +281,54 @@ pub struct RefsArgs {
     pub max_results: Option<u32>,
     #[arg(long, default_value_t = false)]
     pub compact: bool,
+    #[arg(long = "require-index-fresh", default_value_t = false)]
+    pub require_index_fresh: bool,
+    #[arg(long = "auto-index", default_value_t = false)]
+    pub auto_index: bool,
     #[command(flatten)]
     pub filters: SymbolFilterArgs,
+}
+
+#[derive(Debug, Clone, ValueEnum)]
+pub enum QueryBatchFormat {
+    Json,
+    Jsonl,
+}
+
+#[derive(Debug, Args)]
+pub struct ResolveArgs {
+    pub symbol: String,
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long = "require-index-fresh", default_value_t = false)]
+    pub require_index_fresh: bool,
+    #[arg(long = "auto-index", default_value_t = false)]
+    pub auto_index: bool,
+    #[command(flatten)]
+    pub filters: SymbolFilterArgs,
+}
+
+#[derive(Debug, Args)]
+pub struct QueryBatchArgs {
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub input: PathBuf,
+    #[arg(long, value_enum, default_value_t = QueryBatchFormat::Json)]
+    pub format: QueryBatchFormat,
+    #[arg(long = "fail-fast", default_value_t = false)]
+    pub fail_fast: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct RefactorPlanArgs {
+    pub target: String,
+    #[arg(long)]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub json: bool,
 }
 
 #[derive(Debug, Args)]
@@ -419,10 +511,18 @@ pub struct DeadArgs {
     pub repo: PathBuf,
     #[arg(long)]
     pub json: bool,
+    #[arg(long, value_enum, default_value_t = DeadMode::Conservative)]
+    pub mode: DeadMode,
     #[arg(long, default_value_t = false)]
     pub aggressive: bool,
     #[command(flatten)]
     pub filters: SymbolFilterArgs,
+}
+
+#[derive(Debug, Clone, ValueEnum, PartialEq, Eq)]
+pub enum DeadMode {
+    Conservative,
+    Aggressive,
 }
 
 #[derive(Debug, Args)]
