@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.4.4",
+  "checkpoint_id": "5ec13950104a",
+  "session_id": "eb42c0ee-31cc-4dcb-97bf-81fd6d2aa11a",
+  "strategy": "manual-commit",
+  "created_at": "2026-02-14T01:41:35.793213Z",
+  "branch": "claude-code-golang",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "CLAUDE.md"
+  ],
+  "agent": "Claude Code",
+  "token_usage": {
+    "input_tokens": 15,
+    "cache_creation_tokens": 46299,
+    "cache_read_tokens": 336360,
+    "output_tokens": 394,
+    "api_call_count": 9
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-02-14T01:41:35.689242Z",
+    "agent_lines": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 170,
+    "total_committed": 68,
+    "agent_percentage": 0
+  },
+  "transcript_path": ".claude/projects/-Users-robertguss-Projects-startups-repo-scout/eb42c0ee-31cc-4dcb-97bf-81fd6d2aa11a.jsonl"
+}
